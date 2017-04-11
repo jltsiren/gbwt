@@ -1,0 +1,6 @@
+*.o
+*.a
+
+prepare_text
+
+.DS_Store
