@@ -103,9 +103,9 @@ GBWTHeader::swap(GBWTHeader& another)
 
 std::ostream& operator<<(std::ostream& stream, const GBWTHeader& header)
 {
-  return stream << "GBWT version " << header.version << ": "
+  return stream << "GBWT v" << header.version << ": "
                 << header.sequences << " sequences of total length " << header.total_length
-                << ", alphabet size " << header.alphabet_size << " with " << header.nodes << " real nodes";
+                << ", alphabet size " << header.alphabet_size << " with " << header.nodes << " nodes";
 }
 
 //------------------------------------------------------------------------------

@@ -152,7 +152,7 @@ main(int argc, char** argv)
   double seconds = readTimer() - start;
   size_type data_size = header.sequences + header.total_length;
 
-  std::cout << "Processed " << data_size << " nodes in " << seconds << " (" << (data_size / seconds) << " nodes/second)" << std::endl;
+  std::cout << "Processed " << data_size << " nodes in " << seconds << " seconds (" << (data_size / seconds) << " nodes/second)" << std::endl;
   std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;
   std::cout << std::endl;
 

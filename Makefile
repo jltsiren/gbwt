@@ -4,9 +4,6 @@ SDSL_DIR=../sdsl-lite
 # In Linux, the value is in kilobytes, so this line should be commented out.
 #RUSAGE_FLAGS=-DRUSAGE_IN_BYTES
 
-# This enables various debugging options in build_gcsa.
-#VERIFY_FLAGS=-DVERIFY_CONSTRUCTION
-
 # Multithreading with OpenMP and libstdc++ Parallel Mode.
 PARALLEL_FLAGS=-fopenmp -pthread
 # Turn off libstdc++ parallel mode for clang
@@ -14,7 +11,7 @@ ifneq (clang,$(findstring clang,$(shell $(CXX) --version)))
 PARALLEL_FLAGS+=-D_GLIBCXX_PARALLEL
 endif
 
-OTHER_FLAGS=$(RUSAGE_FLAGS) $(VERIFY_FLAGS) $(PARALLEL_FLAGS)
+OTHER_FLAGS=$(RUSAGE_FLAGS) $(PARALLEL_FLAGS)
 
 include $(SDSL_DIR)/Make.helper
 CXX_FLAGS=$(MY_CXX_FLAGS) $(OTHER_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(INC_DIR)

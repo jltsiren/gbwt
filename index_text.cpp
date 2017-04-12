@@ -30,10 +30,14 @@ using namespace gbwt;
 
 //------------------------------------------------------------------------------
 
+size_type buildBWT(sdsl::cache_config& config, GBWTHeader& header);
+
+//------------------------------------------------------------------------------
+
 int
 main(int argc, char** argv)
 {
-  if(argc < 3)
+  if(argc < 2)
   {
     std::cerr << "Usage: index_text base_name" << std::endl;
     std::cerr << std::endl;
@@ -71,18 +75,45 @@ main(int argc, char** argv)
   std::cout << "Suffix array built" << std::endl;
 
   config.file_map[sdsl::conf::KEY_BWT_INT] = bwt_name;
-  sdsl::construct_bwt<0>(config); // FIXME should use 0 for all terminators and ignore the global terminator
-  std::cout << "BWT built" << std::endl;
+  size_type runs = buildBWT(config, header);
+  std::cout << "BWT built, " << runs << " runs" << std::endl;
 
   std::cout << std::endl;
   double seconds = readTimer() - start;
   size_type data_size = header.sequences + header.total_length;
 
-  std::cout << "Indexed " << data_size << " nodes in " << seconds << " (" << (data_size / seconds) << " nodes/second)" << std::endl;
+  std::cout << "Indexed " << data_size << " nodes in " << seconds << " seconds (" << (data_size / seconds) << " nodes/second)" << std::endl;
   std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;
   std::cout << std::endl;
 
   return 0;
+}
+
+//------------------------------------------------------------------------------
+
+size_type
+buildBWT(sdsl::cache_config& config, GBWTHeader& header)
+{
+  text_type text;
+  sdsl::load_from_cache(text, sdsl::conf::KEY_TEXT_INT, config);
+
+  sdsl::int_vector_buffer<0> sa(cache_file_name(sdsl::conf::KEY_SA, config), std::ios::in);
+  text_buffer_type bwt(cache_file_name(sdsl::conf::KEY_BWT_INT, config), std::ios::out, MEGABYTE, text.width());
+
+  // Return to the original alphabet, where each terminator is 0.
+  // We skip the global terminator at SA[0].
+  size_type to_add[2] = { ~(size_type)0, text.size() - 1 };
+  size_type runs = 0; value_type prev = ~(value_type)0;
+  for(size_type i = 1; i < text.size(); i++)
+  {
+    value_type value = text[sa[i] + to_add[sa[i] == 0]];
+    value = (value > header.sequences ? value - header.sequences : 0);
+    if(value != prev) { runs++; prev = value; }
+    bwt.push_back(value);
+  }
+
+  sa.close(); bwt.close();
+  return runs;
 }
 
 //------------------------------------------------------------------------------
