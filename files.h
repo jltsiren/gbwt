@@ -38,8 +38,10 @@ namespace gbwt
 
 extern const std::string TEXT_EXTENSION;     // .text
 extern const std::string HEADER_EXTENSION;   // .header
-extern const std::string ALPHABET_EXTENSION; // .C
-extern const std::string DOCUMENT_EXTENSION; // .D
+extern const std::string ALPHABET_EXTENSION; // .alphabet
+extern const std::string DOCUMENT_EXTENSION; // .documents
+extern const std::string SA_EXTENSION;       // .sa
+extern const std::string BWT_EXTENSION;      // .bwt
 
 //------------------------------------------------------------------------------
 

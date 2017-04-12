@@ -31,9 +31,11 @@ namespace gbwt
 
 const std::string TEXT_EXTENSION     = ".text";
 const std::string HEADER_EXTENSION   = ".header";
-const std::string ALPHABET_EXTENSION = ".C";
-const std::string DOCUMENT_EXTENSION = ".D";
-  
+const std::string ALPHABET_EXTENSION = ".alphabet";
+const std::string DOCUMENT_EXTENSION = ".documents";
+const std::string SA_EXTENSION       = ".sa";
+const std::string BWT_EXTENSION      = ".bwt";
+
 //------------------------------------------------------------------------------
 
 GBWTHeader::GBWTHeader() :
@@ -101,7 +103,7 @@ GBWTHeader::swap(GBWTHeader& another)
 
 std::ostream& operator<<(std::ostream& stream, const GBWTHeader& header)
 {
-  return stream << "GBWT header version " << header.version << ": "
+  return stream << "GBWT version " << header.version << ": "
                 << header.sequences << " sequences of total length " << header.total_length
                 << ", alphabet size " << header.alphabet_size << " with " << header.nodes << " real nodes";
 }

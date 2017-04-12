@@ -2,5 +2,6 @@
 *.a
 
 prepare_text
+index_text
 
 .DS_Store

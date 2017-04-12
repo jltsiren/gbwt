@@ -47,13 +47,15 @@ namespace gbwt
 
 typedef std::uint64_t size_type;
 typedef std::uint64_t value_type;
+typedef std::uint32_t node_type;
 typedef std::uint8_t  byte_type;
 
-typedef sdsl::int_vector<32>        text_type;
-typedef sdsl::int_vector_buffer<32> text_buffer_type;
+typedef sdsl::int_vector<0>        text_type;
+typedef sdsl::int_vector_buffer<0> text_buffer_type;
 
 const size_type BYTE_BITS = 8;
 const size_type WORD_BITS = 64;
+const size_type NODE_BITS = 32;
 
 const size_type KILOBYTE     = 1024;
 const size_type MILLION      = 1000000;

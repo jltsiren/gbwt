@@ -24,7 +24,7 @@ HEADERS=$(wildcard *.h)
 OBJS=$(SOURCES:.cpp=.o)
 LIBS=-L$(LIB_DIR) -lsdsl -ldivsufsort -ldivsufsort64
 LIBRARY=libgbwt.a
-PROGRAMS=prepare_text
+PROGRAMS=prepare_text index_text
 
 all: $(LIBRARY) $(PROGRAMS)
 
@@ -35,6 +35,9 @@ $(LIBRARY):$(LIBOBJS)
 	ar rcs $@ $(LIBOBJS)
 
 prepare_text:prepare_text.o $(LIBRARY)
+	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+
+index_text:index_text.o $(LIBRARY)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 clean:
