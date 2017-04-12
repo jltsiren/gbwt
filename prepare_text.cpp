@@ -94,8 +94,12 @@ main(int argc, char** argv)
   std::cout << std::endl;
 
   // Sanity checks.
-  size_type limit = std::numeric_limits<node_type>::max();
-  if(header.alphabet_size >= limit || header.sequences >= limit || header.alphabet_size + header.sequences > limit)
+  if(header.sequences == 0 || header.total_length == 0)
+  {
+    std::cerr << "prepare_text: The input is empty" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if(header.sequences > MAX_SEQUENCES || header.alphabet_size >= MAX_NODES)
   {
     std::cerr << "prepare_text: The alphabet is too large" << std::endl;
     std::exit(EXIT_FAILURE);
@@ -119,7 +123,7 @@ main(int argc, char** argv)
 
   // Second pass: Determine the number of nodes that are present.
   std::vector<size_type> counts(header.alphabet_size, 0);
-  text_buffer_type output(text_name, std::ios::out, MEGABYTE, NODE_BITS);
+  text_buffer_type output(text_name, std::ios::out, MEGABYTE, bit_length(header.alphabet_size + header.sequences - 1));
   size_type current = 0;
   for(value_type value : input)
   {
@@ -168,7 +172,7 @@ printUsage(int exit_code)
   std::cerr << "  -m N  Read up to N sequences" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Reads null-terminated sequences of 64-bit integers and writes the sequences as" << std::endl;
-  std::cerr << "sdsl::int_vector<32>, where the entire file is null-terminated and the sequences" << std::endl;
+  std::cerr << "sdsl::int_vector<0>, where the entire file is null-terminated and the sequences" << std::endl;
   std::cerr << "have distinct terminators. Also writes a header file." << std::endl;
   std::cerr << std::endl;
 

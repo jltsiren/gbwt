@@ -98,7 +98,7 @@ buildBWT(sdsl::cache_config& config, GBWTHeader& header)
   sdsl::load_from_cache(text, sdsl::conf::KEY_TEXT_INT, config);
 
   sdsl::int_vector_buffer<0> sa(cache_file_name(sdsl::conf::KEY_SA, config), std::ios::in);
-  text_buffer_type bwt(cache_file_name(sdsl::conf::KEY_BWT_INT, config), std::ios::out, MEGABYTE, text.width());
+  text_buffer_type bwt(cache_file_name(sdsl::conf::KEY_BWT_INT, config), std::ios::out, MEGABYTE, bit_length(header.alphabet_size - 1));
 
   // Return to the original alphabet, where each terminator is 0.
   // We skip the global terminator at SA[0].
