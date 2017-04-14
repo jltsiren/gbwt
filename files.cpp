@@ -35,6 +35,8 @@ const std::string ALPHABET_EXTENSION = ".alphabet";
 const std::string DOCUMENT_EXTENSION = ".documents";
 const std::string SA_EXTENSION       = ".sa";
 const std::string BWT_EXTENSION      = ".bwt";
+const std::string GBWT_EXTENSION      = ".gbwt";
+const std::string INDEX_EXTENSION      = ".index";
 
 //------------------------------------------------------------------------------
 

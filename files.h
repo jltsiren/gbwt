@@ -42,6 +42,8 @@ extern const std::string ALPHABET_EXTENSION; // .alphabet
 extern const std::string DOCUMENT_EXTENSION; // .documents
 extern const std::string SA_EXTENSION;       // .sa
 extern const std::string BWT_EXTENSION;      // .bwt
+extern const std::string GBWT_EXTENSION;     // .gbwt
+extern const std::string INDEX_EXTENSION;     // .index
 
 //------------------------------------------------------------------------------
 

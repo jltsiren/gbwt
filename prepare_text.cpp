@@ -145,7 +145,9 @@ main(int argc, char** argv)
   std::cout << std::endl;
 
   // Transform the cumulative counts into the C array and mark bits i + C[i].
+  // Add a guard to the end to support determining C[sigma].
   size_type cumulative = 0;
+  counts.push_back(0);
   for(size_type i = 0; i < counts.size(); i++)
   {
     size_type temp = counts[i]; counts[i] = cumulative + i; cumulative += temp;

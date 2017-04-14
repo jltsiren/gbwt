@@ -3,5 +3,6 @@
 
 prepare_text
 index_text
+encode_bwt
 
 .DS_Store

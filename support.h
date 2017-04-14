@@ -105,9 +105,9 @@ struct Run
     run_continues(0)
   {
     size_type max_code = std::numeric_limits<code_type>::max();
-    if(this->alphabet_size < max_code)
+    if(this->sigma < max_code)
     {
-      this->run_continues = (max_code + 1) / this->alphabet_size;
+      this->run_continues = (max_code + 1) / this->sigma;
     }
   }
 
@@ -115,7 +115,7 @@ struct Run
     Returns (value, run length) and updates i to point past the run.
   */
   template<class ByteArray>
-  run_type read(const ByteArray& array, size_type& i)
+  run_type read(ByteArray& array, size_type& i)
   {
     run_type run;
     if(this->run_continues == 0)
@@ -156,12 +156,12 @@ struct Run
   template<class ByteArray>
   inline void write(ByteArray& array, run_type run) { this->write(array, run.first, run.second); }
 
-  inline static code_type encodeBasic(value_type value, size_type length)
+  inline code_type encodeBasic(value_type value, size_type length)
   {
     return value + this->sigma * (length - 1);
   }
 
-  inline static run_type decodeBasic(code_type code)
+  inline run_type decodeBasic(code_type code)
   {
     return run_type(code % this->sigma, code / this->sigma + 1);
   }

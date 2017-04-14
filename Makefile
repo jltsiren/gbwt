@@ -21,7 +21,7 @@ HEADERS=$(wildcard *.h)
 OBJS=$(SOURCES:.cpp=.o)
 LIBS=-L$(LIB_DIR) -lsdsl -ldivsufsort -ldivsufsort64
 LIBRARY=libgbwt.a
-PROGRAMS=prepare_text index_text
+PROGRAMS=prepare_text index_text encode_bwt
 
 all: $(LIBRARY) $(PROGRAMS)
 
@@ -35,6 +35,9 @@ prepare_text:prepare_text.o $(LIBRARY)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 index_text:index_text.o $(LIBRARY)
+	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+
+encode_bwt:encode_bwt.o $(LIBRARY)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 clean:
