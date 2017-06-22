@@ -16,6 +16,35 @@ This repository contains experiments with the construction and encoding of the G
   * Construction should be faster if we resync the paths frequently.
   * Greedy alignment based on source/sink nodes of superbubbles should be enough.
 
+## Assumptions
+
+* We store arbitrary paths in a cyclic graph.
+  * Full haplotypes in a DAG with dense node identifiers can be encoded better with the PBWT using node identifiers as positions.
+  * We need a mapping from sequence id to sample id. Does vg already provide this?
+* The input is an SDSL `int_vector_buffer<0>` containing sequences of node identitiers terminated by value `0`.
+* How do we handle reverse complements / nodes in reverse orientation?
+* Is the set of node identifiers locally dense?
+  * One dense subset for the nodes in forward orientation and another dense subset for reverse orientation?
+* We can support insertions and deletions if we add incoming edges (from, count) to each record.
+
+## Record
+
+* Incoming edges
+  * Indegree
+  * (from, path count) for each incoming edge
+* Outgoing edges
+  * Outdegree
+  * (to, path rank) for each outgoing edge
+* Body
+  * Run-length encoding of pairs (outgoing edge rank, count)
+
+## Encoding
+
+* On disk, the records are stored in a single byte array.
+* An index (`sd_vector`?) points to the beginning of each record.
+* Runs are encoded using `Run`, while other integers are encoded using `ByteCode`.
+* In-memory encoding can be the same, or we can use three `std::vector`s of pairs of integers.
+
 ## References
 
 Richard Durbin: **Efficient haplotype matching and storage using the Positional Burrows-Wheeler Transform (PBWT)**.
