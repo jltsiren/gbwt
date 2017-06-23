@@ -20,11 +20,11 @@ This repository contains experiments with the construction and encoding of the G
 
 * We store arbitrary paths in a cyclic graph.
   * Full haplotypes in a DAG with dense node identifiers can be encoded better with the PBWT using node identifiers as positions.
-  * We need a mapping from sequence id to sample id. Does vg already provide this?
+  * We need a mapping from sequence id to sample id in vg.
 * The input is an SDSL `int_vector_buffer<0>` containing sequences of node identitiers terminated by value `0`.
-* How do we handle reverse complements / nodes in reverse orientation?
-* Is the set of node identifiers locally dense?
-  * One dense subset for the nodes in forward orientation and another dense subset for reverse orientation?
+* The set of node identifiers in a chromosome is locally dense.
+  * The identifiers are dense in a range *[a,b]* containing the identifiers.
+  * The low-order bit tells the orientation, but we can ignore that in GBWT.
 * We can support insertions and deletions if we add incoming edges (from, count) to each record.
 
 ## Record
