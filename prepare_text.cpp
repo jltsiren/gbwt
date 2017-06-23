@@ -39,10 +39,11 @@ void printUsage(int exit_code = EXIT_SUCCESS);
 int
 main(int argc, char** argv)
 {
-  if(argc < 3) { printUsage(); }
+  if(argc < 2) { printUsage(); }
 
   size_type max_sequences = std::numeric_limits<size_type>::max();
   int c = 0;
+  std::string input_name;
   while((c = getopt(argc, argv, "m:")) != -1)
   {
     switch(c)
@@ -55,10 +56,9 @@ main(int argc, char** argv)
       std::exit(EXIT_FAILURE);
     }
   }
-  if(optind + 1 >= argc) { printUsage(EXIT_FAILURE); }
+  if(optind >= argc) { printUsage(EXIT_FAILURE); }
 
-  std::string input_name = argv[optind];
-  std::string base_name = argv[optind + 1];
+  std::string base_name = argv[optind];
   std::string text_name = base_name + TEXT_EXTENSION;
   std::string header_name = base_name + HEADER_EXTENSION;
   std::string alphabet_name = base_name + ALPHABET_EXTENSION;
@@ -67,29 +67,29 @@ main(int argc, char** argv)
   std::cout << "Preparing the text for indexing" << std::endl;
   std::cout << std::endl;
 
-  printHeader("Input"); std::cout << input_name << std::endl;
+  if(!(input_name.empty())) { printHeader("Input"); std::cout << input_name << std::endl; }
   printHeader("Base name"); std::cout << base_name << std::endl;
   printHeader("Max sequences"); std::cout << max_sequences << std::endl;
   std::cout << std::endl;
 
   double start = readTimer();
 
-  // First pass: Determine data size, alphabet size, and the number of sequences.
+  // Pass 1: Determine data size, alphabet size, and the number of sequences.
   GBWTHeader header;
-  sdsl::int_vector_buffer<64> input(input_name, std::ios::in, MEGABYTE, 64, true);
+  text_buffer_type text(text_name);
   std::vector<size_type> terminators;
-  for(auto iter = input.begin(); iter != input.end(); ++iter)
+  std::cout << "First pass: data size, alphabet size, number of sequences" << std::endl;
+  for(auto iter = text.begin(); iter != text.end(); ++iter)
   {
     value_type value = *iter;
     header.alphabet_size = std::max(value + 1, header.alphabet_size);
     if(value == 0)
     {
-      header.sequences++; terminators.push_back(iter - input.begin());
+      header.sequences++; terminators.push_back(iter - text.begin());
       if(header.sequences >= max_sequences) { break; }
     }
     else { header.total_length++; }
   }
-
   std::cout << header << std::endl;
   std::cout << std::endl;
 
@@ -99,7 +99,7 @@ main(int argc, char** argv)
     std::cerr << "prepare_text: The input is empty" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  if(header.sequences > MAX_SEQUENCES || header.alphabet_size >= MAX_NODES)
+  if(header.alphabet_size > MAX_NODES)
   {
     std::cerr << "prepare_text: The alphabet is too large" << std::endl;
     std::exit(EXIT_FAILURE);
@@ -121,24 +121,22 @@ main(int argc, char** argv)
   sdsl::sd_vector<> document_borders(terminators.begin(), terminators.end());
   sdsl::store_to_file(document_borders, document_name);
 
-  // Second pass: Determine the number of nodes that are present.
+  // Pass 2: Determine the node identifiers that are present.
   std::vector<size_type> counts(header.alphabet_size, 0);
-  text_buffer_type output(text_name, std::ios::out, MEGABYTE, bit_length(header.alphabet_size + header.sequences - 1));
   size_type current = 0;
-  for(value_type value : input)
+  std::cout << "Second pass: active alphabet" << std::endl;
+  for(value_type value : text)
   {
     counts[value]++;
     if(value == 0)
     {
-      output.push_back(current + 1); current++;
+      current++;
       if(current >= max_sequences) { break; }
     }
-    else { output.push_back(value + header.sequences); }
   }
-  input.close();
-  output.push_back(0); output.close();
+  text.close();
 
-  for(size_type i = 1; i < counts.size(); i++) { if(counts[i] > 0) { header.nodes++; }}
+  for(size_type i = 1; i < counts.size(); i++) { if(counts[i] > 0) { header.nodes++; } }
   sdsl::store_to_file(header, header_name);
 
   std::cout << header << std::endl;
@@ -170,12 +168,10 @@ main(int argc, char** argv)
 void
 printUsage(int exit_code)
 {
-  std::cerr << "Usage: prepare_text [options] input output" << std::endl;
+  std::cerr << "Usage: prepare_text [options] base_name" << std::endl;
   std::cerr << "  -m N  Read up to N sequences" << std::endl;
   std::cerr << std::endl;
-  std::cerr << "Reads null-terminated sequences of 64-bit integers and writes the sequences as" << std::endl;
-  std::cerr << "sdsl::int_vector<0>, where the entire file is null-terminated and the sequences" << std::endl;
-  std::cerr << "have distinct terminators. Also writes a header file." << std::endl;
+  std::cerr << "Build header, sequence borders, and alphabet from the sequences." << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);

@@ -69,8 +69,7 @@ const size_type BILLION      = 1000 * MILLION;
 typedef sdsl::int_vector<0>        text_type;
 typedef sdsl::int_vector_buffer<0> text_buffer_type;
 
-const static size_type MAX_SEQUENCES = BILLION;
-const static size_type MAX_NODES     = 10 * BILLION;
+const static size_type MAX_NODES = 10 * BILLION;
 
 //------------------------------------------------------------------------------
 

@@ -28,6 +28,10 @@
 
 using namespace gbwt;
 
+/*
+  THIS IS OBSOLETE NOW
+*/
+
 //------------------------------------------------------------------------------
 
 size_type buildBWT(sdsl::cache_config& config, GBWTHeader& header);
