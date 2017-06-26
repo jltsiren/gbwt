@@ -41,10 +41,16 @@ struct Sequence
   size_type id;
   node_type curr, next;
   size_type offset; // Offset in the current record.
-  size_type pos;    // Position in the data.
+  size_type pos;    // Position in the text.
 
   Sequence();
   Sequence(const text_type& text, size_type i, size_type seq_id);
+
+  inline bool operator< (const Sequence& another) const
+  {
+    if(this->curr != another.curr) { return (this->curr < another.curr); }
+    return (this->offset < another.offset);
+  }
 };
 
 //------------------------------------------------------------------------------

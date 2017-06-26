@@ -88,7 +88,6 @@ DynamicGBWT::LF(node_type from, size_type i, node_type to) const
   return next_from.offset_in(next_from.edge_to(to));
 }
 
-
 //------------------------------------------------------------------------------
 
 void
@@ -121,12 +120,23 @@ DynamicGBWT::insert(const text_type& text)
     if(text[i] == ENDMARKER) { insert = true; }
   }
 
+  // Invariant: Sequences are sorted by (curr, offset).
   // FIXME implement
-  // Main loop:
-  //   Determine offsets in the next position
-  //   Insert into the current position
-  //   Update incoming and outgoing edges in the current position
-  //   Advance to the next position
+  while(!(sequences.empty()))
+  {
+    // for each curr
+    //   for each sequence
+    //     insert next
+    //     set offset to rank(next) within the record
+    //     increment the count of curr in the incoming edges of next
+    // for each curr
+    //   rebuild the ranks of outgoing edges
+    //   for each sequence
+    //     add the updated rank to offset
+    // for each sequence
+    //   advance to next or remove this sequence if next is an endmarker
+    // sort by (curr, offset)
+  }
 }
 
 //------------------------------------------------------------------------------
