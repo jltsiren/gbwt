@@ -46,7 +46,7 @@ namespace gbwt
 //------------------------------------------------------------------------------
 
 typedef std::uint64_t size_type;
-typedef std::uint64_t value_type;
+typedef std::uint64_t node_type;
 typedef std::uint8_t  byte_type;
 
 const size_type BYTE_BITS    = 8;
@@ -63,6 +63,8 @@ const double GIGABYTE_DOUBLE = KILOBYTE_DOUBLE * MEGABYTE_DOUBLE;
 
 const size_type MILLION      = 1000000;
 const size_type BILLION      = 1000 * MILLION;
+
+const node_type ENDMARKER    = 0;
 
 //------------------------------------------------------------------------------
 

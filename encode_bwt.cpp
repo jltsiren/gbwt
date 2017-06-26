@@ -86,7 +86,7 @@ main(int argc, char** argv)
     // Determine the effective alphabet.
     size_type start = alphabet_select(node + 1) - node;
     size_type stop = alphabet_select(node + 2) - node - 1;
-    std::map<value_type, value_type> effective_alphabet;
+    std::map<node_type, ByteCode::value_type> effective_alphabet;
     for(size_type i = start; i < stop; i++)
     {
       effective_alphabet[bwt[i]] = 0;

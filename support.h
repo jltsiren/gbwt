@@ -44,9 +44,8 @@ namespace gbwt
 
 struct ByteCode
 {
-  typedef gbwt::size_type  size_type;
-  typedef gbwt::value_type value_type;
-  typedef gbwt::byte_type  code_type;
+  typedef gbwt::size_type value_type;
+  typedef gbwt::byte_type code_type;
 
   const static size_type DATA_BITS  = 7;
   const static code_type DATA_MASK  = 0x7F;
@@ -92,10 +91,8 @@ struct ByteCode
 
 struct Run
 {
-  typedef ByteCode::size_type  size_type;
-  typedef ByteCode::value_type value_type;
-  typedef ByteCode::code_type  code_type;
-
+  typedef ByteCode::value_type             value_type;
+  typedef ByteCode::code_type              code_type;
   typedef std::pair<value_type, size_type> run_type;
 
   size_type sigma, run_continues;

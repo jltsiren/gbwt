@@ -107,10 +107,10 @@ buildBWT(sdsl::cache_config& config, GBWTHeader& header)
   // Return to the original alphabet, where each terminator is 0.
   // We skip the global terminator at SA[0].
   size_type to_add[2] = { ~(size_type)0, text.size() - 1 };
-  size_type runs = 0; value_type prev = ~(value_type)0;
+  size_type runs = 0; node_type prev = ~(node_type)0;
   for(size_type i = 1; i < text.size(); i++)
   {
-    value_type value = text[sa[i] + to_add[sa[i] == 0]];
+    node_type value = text[sa[i] + to_add[sa[i] == 0]];
     value = (value > header.sequences ? value - header.sequences : 0);
     if(value != prev) { runs++; prev = value; }
     bwt.push_back(value);

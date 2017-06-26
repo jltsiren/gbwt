@@ -81,7 +81,7 @@ main(int argc, char** argv)
   std::cout << "First pass: data size, alphabet size, number of sequences" << std::endl;
   for(auto iter = text.begin(); iter != text.end(); ++iter)
   {
-    value_type value = *iter;
+    node_type value = *iter;
     header.alphabet_size = std::max(value + 1, header.alphabet_size);
     if(value == 0)
     {
@@ -125,7 +125,7 @@ main(int argc, char** argv)
   std::vector<size_type> counts(header.alphabet_size, 0);
   size_type current = 0;
   std::cout << "Second pass: active alphabet" << std::endl;
-  for(value_type value : text)
+  for(node_type value : text)
   {
     counts[value]++;
     if(value == 0)
