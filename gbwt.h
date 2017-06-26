@@ -46,10 +46,20 @@ struct Sequence
   Sequence();
   Sequence(const text_type& text, size_type i, size_type seq_id);
 
+  // Sort by reverse prefixes text[..pos+1].
   inline bool operator< (const Sequence& another) const
   {
+    if(this->next != another.next) { return (this->next < another.next); }
     if(this->curr != another.curr) { return (this->curr < another.curr); }
     return (this->offset < another.offset);
+  }
+
+  // Do not call if 'next' is an endmarker.
+  inline void advance(const text_type& text)
+  {
+    this->curr = this->next;
+    this->pos++;
+    this->next = text[this->pos];
   }
 };
 

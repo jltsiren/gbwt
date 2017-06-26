@@ -129,13 +129,13 @@ DynamicGBWT::insert(const text_type& text)
     //     insert next
     //     set offset to rank(next) within the record
     //     increment the count of curr in the incoming edges of next
-    // for each curr
-    //   rebuild the ranks of outgoing edges
+    // sort by (next, curr, offset) (maintains the invariant)
+    // remove the sequences where next is the endmarker
+    // for each next
+    //   rebuild the offsets of outgoing edges of each predecessor
     //   for each sequence
-    //     add the updated rank to offset
-    // for each sequence
-    //   advance to next or remove this sequence if next is an endmarker
-    // sort by (curr, offset)
+    //     add the offset of the outgoing edge (curr, next) to offset
+    //     advance to next
   }
 }
 
