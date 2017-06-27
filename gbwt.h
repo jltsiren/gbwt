@@ -65,6 +65,14 @@ struct Sequence
 
 //------------------------------------------------------------------------------
 
+/*
+  The part of the BWT corresponding to a single node (the suffixes starting with / the
+  prefixes ending with that node). Incoming edges are sorted by the source node, while
+  outgoing edges are not sorted.
+
+  FIXME Implement recoding to make outgoing edges also sorted.
+*/
+
 struct DynamicRecord
 {
   typedef gbwt::size_type                 size_type;
@@ -82,7 +90,7 @@ struct DynamicRecord
   inline size_type outdegree() const { return this->outgoing.size(); }
 
   // Map global alphabet to local alphabet.
-  inline rank_type edge_to(node_type to) const
+  inline rank_type edgeTo(node_type to) const
   {
     for(rank_type outrank = 0; outrank < this->outdegree(); outrank++)
     {
@@ -91,17 +99,15 @@ struct DynamicRecord
     return this->outdegree();
   }
 
-  // This assumes that 'outrank' is a valid outgoing edge.
-  inline size_type offset_in(rank_type outrank) const
-  {
-    return this->outgoing[outrank].second;
-  }
+  // These assume that 'outrank' is a valid outgoing edge.
+  inline size_type& offset(rank_type outrank) { return this->outgoing[outrank].second; }
+  inline size_type offset(rank_type outrank) const { return this->outgoing[outrank].second; }
 
   // This assumes that 'outrank' is a valid outgoing edge.
   size_type LF(size_type i, rank_type outrank) const;
 
   // Return the first node >= 'from' with an incoming edge to this node.
-  inline rank_type find_first(node_type from) const
+  inline rank_type findFirst(node_type from) const
   {
     for(size_type i = 0; i < this->indegree(); i++)
     {
@@ -114,6 +120,17 @@ struct DynamicRecord
   inline node_type predecessor(rank_type inrank) const
   {
     return this->incoming[inrank].first;
+  }
+
+  // Increment the count of the incoming edge from 'from'.
+  inline void increment(node_type from)
+  {
+    for(size_type i = 0; i < this->indegree(); i++)
+    {
+      if(this->incoming[i].first == from) { this->incoming[i].second++; return; }
+    }
+    incoming.push_back(edge_type(from, 1));
+    sequentialSort(this->incoming.begin(), this->incoming.end());
   }
 };
 
