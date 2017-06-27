@@ -181,6 +181,9 @@ DynamicGBWT::insert(const text_type& text)
       - Insert the 'next' node into position 'offset' in the body.
       - Set 'offset' to rank(next) within the record.
       - Update the predecessor count of 'curr' in the incoming edges of 'next'.
+
+      We do not maintain incoming edges to the endmarker, because it can be expensive
+      and because searching with the endmarker does not work in a multi-string BWT.
     */
     size_type i = 0;
     while(i < sequences.size())
@@ -209,7 +212,10 @@ DynamicGBWT::insert(const text_type& text)
         }
         sequences[i].offset = new_body.counts[outrank]; // rank(next) within the record.
         new_body.insert(outrank);
-        this->bwt[sequences[i].next].increment(curr);
+        if(sequences[i].next != ENDMARKER)  // The endmarker does not have incoming edges.
+        {
+          this->bwt[sequences[i].next].increment(curr);
+        }
         i++;
       }
       new_body.swap(current);
