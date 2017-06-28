@@ -42,7 +42,7 @@ const std::string INDEX_EXTENSION      = ".index";
 
 GBWTHeader::GBWTHeader() :
   tag(TAG), version(VERSION),
-  sequences(0), total_length(0),
+  sequences(0), size(0),
   nodes(0), alphabet_size(0),
   flags(0)
 {
@@ -56,7 +56,7 @@ GBWTHeader::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::stri
   written_bytes += sdsl::write_member(this->tag, out, child, "tag");
   written_bytes += sdsl::write_member(this->version, out, child, "version");
   written_bytes += sdsl::write_member(this->sequences, out, child, "sequences");
-  written_bytes += sdsl::write_member(this->total_length, out, child, "total_length");
+  written_bytes += sdsl::write_member(this->size, out, child, "size");
   written_bytes += sdsl::write_member(this->nodes, out, child, "nodes");
   written_bytes += sdsl::write_member(this->alphabet_size, out, child, "alphabet_size");
   written_bytes += sdsl::write_member(this->flags, out, child, "flags");
@@ -70,7 +70,7 @@ GBWTHeader::load(std::istream& in)
   sdsl::read_member(this->tag, in);
   sdsl::read_member(this->version, in);
   sdsl::read_member(this->sequences, in);
-  sdsl::read_member(this->total_length, in);
+  sdsl::read_member(this->size, in);
   sdsl::read_member(this->nodes, in);
   sdsl::read_member(this->alphabet_size, in);
   sdsl::read_member(this->flags, in);
@@ -96,7 +96,7 @@ GBWTHeader::swap(GBWTHeader& another)
     std::swap(this->tag, another.tag);
     std::swap(this->version, another.version);
     std::swap(this->sequences, another.sequences);
-    std::swap(this->total_length, another.total_length);
+    std::swap(this->size, another.size);
     std::swap(this->nodes, another.nodes);
     std::swap(this->alphabet_size, another.alphabet_size);
     std::swap(this->flags, another.flags);
@@ -106,7 +106,7 @@ GBWTHeader::swap(GBWTHeader& another)
 std::ostream& operator<<(std::ostream& stream, const GBWTHeader& header)
 {
   return stream << "GBWT v" << header.version << ": "
-                << header.sequences << " sequences of total length " << header.total_length
+                << header.sequences << " sequences of total length " << header.size
                 << ", alphabet size " << header.alphabet_size << " with " << header.nodes << " nodes";
 }
 

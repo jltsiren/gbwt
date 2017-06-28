@@ -84,9 +84,8 @@ main(int argc, char** argv)
 
   std::cout << std::endl;
   double seconds = readTimer() - start;
-  size_type data_size = header.sequences + header.total_length;
 
-  std::cout << "Indexed " << data_size << " nodes in " << seconds << " seconds (" << (data_size / seconds) << " nodes/second)" << std::endl;
+  std::cout << "Indexed " << header.size << " nodes in " << seconds << " seconds (" << (header.size / seconds) << " nodes/second)" << std::endl;
   std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;
   std::cout << std::endl;
 

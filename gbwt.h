@@ -25,6 +25,7 @@
 #ifndef _GBWT_GBWT_H
 #define _GBWT_GBWT_H
 
+#include "files.h"
 #include "support.h"
 
 namespace gbwt
@@ -32,6 +33,14 @@ namespace gbwt
 
 /*
   gbwt.h: Main GBWT structures.
+
+  FIXME Reorganize:
+    - rename old support.h to internal.h
+    - move Sequence to internal.h, DynamicRecord to support.h
+    - rename this file to dynamic_gbwt.h
+
+  FIXME We currently assume that the alphabet is dense. In a multi-chromosome graph, the
+  alphabet for an individual chromosome will be dense in range [a,b].
 */
 
 //------------------------------------------------------------------------------
@@ -47,7 +56,7 @@ struct Sequence
   Sequence(const text_type& text, size_type i, size_type seq_id);
 
   // Sort by reverse prefixes text[..pos+1].
-  inline bool operator< (const Sequence& another) const
+  inline bool operator<(const Sequence& another) const
   {
     if(this->next != another.next) { return (this->next < another.next); }
     if(this->curr != another.curr) { return (this->curr < another.curr); }
@@ -100,6 +109,7 @@ struct DynamicRecord
   }
 
   // These assume that 'outrank' is a valid outgoing edge.
+  inline node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
   inline size_type& offset(rank_type outrank) { return this->outgoing[outrank].second; }
   inline size_type offset(rank_type outrank) const { return this->outgoing[outrank].second; }
 
@@ -129,7 +139,13 @@ struct DynamicRecord
     {
       if(this->incoming[i].first == from) { this->incoming[i].second++; return; }
     }
-    incoming.push_back(edge_type(from, 1));
+    this->addIncoming(edge_type(from, 1));
+  }
+
+  // Add a new incoming edge.
+  inline void addIncoming(edge_type inedge)
+  {
+    this->incoming.push_back(inedge);
     sequentialSort(this->incoming.begin(), this->incoming.end());
   }
 };
@@ -138,21 +154,56 @@ struct DynamicRecord
 
 class DynamicGBWT
 {
-  typedef DynamicRecord::size_type  size_type;
-  typedef DynamicRecord::rank_type  rank_type;
-  typedef DynamicRecord::run_type   run_type;
-  typedef DynamicRecord::edge_type  edge_type;
+public:
+  typedef DynamicRecord::size_type size_type;
+  typedef DynamicRecord::rank_type rank_type;
+  typedef DynamicRecord::run_type  run_type;
+  typedef DynamicRecord::edge_type edge_type;
 
-  inline size_type size() const { return this->bwt_size; }
-  inline size_type sigma() const { return this->bwt.size(); }
-  inline size_type count(node_type node) const { return this->bwt[node].size(); }
+//------------------------------------------------------------------------------
+
+  DynamicGBWT();
+  DynamicGBWT(const DynamicGBWT& source);
+  DynamicGBWT(DynamicGBWT&& source);
+  ~DynamicGBWT();
+
+  void swap(DynamicGBWT& another);
+  DynamicGBWT& operator=(const DynamicGBWT& source);
+  DynamicGBWT& operator=(DynamicGBWT&& source);
+
+  size_type serialize(std::ostream& out) const;
+  void load(std::istream& in);
+
+  const static std::string EXTENSION; // .gbwt
+
+//------------------------------------------------------------------------------
+
+  explicit DynamicGBWT(size_type alphabet_size);
 
   void insert(const text_type& text);
 
+//------------------------------------------------------------------------------
+
+  inline size_type size() const { return this->header.size; }
+  inline size_type sigma() const { return this->header.alphabet_size; }
+  inline size_type count(node_type node) const { return this->bwt[node].size(); }
+
+//------------------------------------------------------------------------------
+
   size_type LF(node_type from, size_type i, node_type to) const;
 
-  size_type                  bwt_size;
+//------------------------------------------------------------------------------
+
+  GBWTHeader                 header;
   std::vector<DynamicRecord> bwt;
+
+//------------------------------------------------------------------------------
+
+private:
+  void copy(const DynamicGBWT& source);
+
+//------------------------------------------------------------------------------
+
 }; // class DynamicGBWT
 
 //------------------------------------------------------------------------------

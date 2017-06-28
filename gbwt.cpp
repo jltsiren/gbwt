@@ -63,6 +63,170 @@ DynamicRecord::LF(size_type i, rank_type outrank) const
 
 //------------------------------------------------------------------------------
 
+const std::string DynamicGBWT::EXTENSION = ".gbwt";
+
+DynamicGBWT::DynamicGBWT()
+{
+}
+
+DynamicGBWT::DynamicGBWT(const DynamicGBWT& source)
+{
+  this->copy(source);
+}
+
+DynamicGBWT::DynamicGBWT(DynamicGBWT&& source)
+{
+  *this = std::move(source);
+}
+
+DynamicGBWT::~DynamicGBWT()
+{
+}
+
+void
+DynamicGBWT::swap(DynamicGBWT& another)
+{
+  if(this != &another)
+  {
+    this->header.swap(another.header);
+    this->bwt.swap(another.bwt);
+  }
+}
+
+DynamicGBWT&
+DynamicGBWT::operator=(const DynamicGBWT& source)
+{
+  if(this != &source) { this->copy(source); }
+  return *this;
+}
+
+DynamicGBWT&
+DynamicGBWT::operator=(DynamicGBWT&& source)
+{
+  if(this != &source)
+  {
+    this->header = std::move(source.header);
+    this->bwt = std::move(source.bwt);
+  }
+  return *this;
+}
+
+DynamicGBWT::size_type
+DynamicGBWT::serialize(std::ostream& out) const
+{
+  size_type written_bytes = 0;
+
+  written_bytes += this->header.serialize(out);
+
+  std::vector<byte_type> compressed_bwt;
+  std::vector<size_type> bwt_offsets(this->sigma());
+  for(node_type node = 0; node < this->sigma(); node++)
+  {
+    bwt_offsets[node] = compressed_bwt.size();
+    const DynamicRecord& current = this->bwt[node];
+
+    // Write the outgoing edges.
+    ByteCode::write(compressed_bwt, current.outdegree());
+    for(edge_type outedge : current.outgoing)
+    {
+      ByteCode::write(compressed_bwt, outedge.first);
+      ByteCode::write(compressed_bwt, outedge.second);
+    }
+
+    // Write the body.
+    Run encoder(current.outdegree());
+    for(run_type run : current.body) { encoder.write(compressed_bwt, run); }
+  }
+
+  // Build and serialize index.
+  sdsl::sd_vector_builder builder(compressed_bwt.size(), bwt_offsets.size());
+  for(size_type offset : bwt_offsets) { builder.set(offset); }
+  sdsl::sd_vector<> node_index(builder);
+  sdsl::sd_vector<>::select_1_type node_select(&node_index);
+  written_bytes += node_index.serialize(out);
+  written_bytes += node_select.serialize(out);
+
+  // Serialize BWT.
+  out.write((char*)(compressed_bwt.data()), compressed_bwt.size());
+  written_bytes += compressed_bwt.size();
+
+  return written_bytes;
+}
+
+void
+DynamicGBWT::load(std::istream& in)
+{
+  // Read the header.
+  this->header.load(in);
+  if(!(this->header.check()))
+  {
+    std::cerr << "DynamicGBWT::load(): Invalid header: " << this->header << std::endl;
+  }
+  this->bwt.resize(this->sigma());
+
+  // Read the node index.
+  sdsl::sd_vector<> node_index; node_index.load(in);
+  sdsl::sd_vector<>::select_1_type node_select; node_select.load(in, &node_index);
+
+  for(node_type node = 0; node < this->sigma(); node++)
+  {
+    DynamicRecord& current = this->bwt[node];
+    current.incoming.clear(); // We rebuild the incoming edges later.
+
+    // Read the current node.
+    size_type start = node_select(node + 1);
+    size_type stop = (node + 1 < this->sigma() ? node_select(node + 2) : node_index.size());
+    std::vector<byte_type> node_encoding(stop - start);
+    in.read((char*)(node_encoding.data()), node_encoding.size());
+    size_type offset = 0;
+
+    // Decompress the outgoing edges.
+    current.outgoing.resize(ByteCode::read(node_encoding, offset));
+    for(edge_type& outedge : current.outgoing)
+    {
+      outedge.first = ByteCode::read(node_encoding, offset);
+      outedge.second = ByteCode::read(node_encoding, offset);
+    }
+
+    // Decompress the body.
+    current.body.clear();
+    Run decoder(current.outdegree());
+    while(offset < node_encoding.size()) { current.body.push_back(decoder.read(node_encoding, offset)); }
+  }
+
+  // Rebuild the incoming edges.
+  for(node_type node = 0; node < this->sigma(); node++)
+  {
+    DynamicRecord& current = this->bwt[node];
+    std::vector<size_type> counts(current.outdegree());
+    for(run_type run : current.body) { counts[run.first] += run.second; }
+    for(rank_type outrank = 0; outrank < current.outdegree(); outrank++)
+    {
+      if(current.successor(outrank) != ENDMARKER)
+      {
+        this->bwt[current.successor(outrank)].addIncoming(edge_type(node, counts[outrank]));
+      }
+    }
+  }
+}
+
+void
+DynamicGBWT::copy(const DynamicGBWT& source)
+{
+  this->header = source.header;
+  this->bwt = source.bwt;
+}
+
+//------------------------------------------------------------------------------
+
+DynamicGBWT::DynamicGBWT(size_type alphabet_size) :
+  bwt(alphabet_size)
+{
+  this->header.alphabet_size = alphabet_size;
+}
+
+//------------------------------------------------------------------------------
+
 /*
   A support structure for run-length encoding outrank sequences.
 */
@@ -115,33 +279,6 @@ RunMerger::swap(DynamicRecord& record)
 
 //------------------------------------------------------------------------------
 
-size_type
-DynamicGBWT::LF(node_type from, size_type i, node_type to) const
-{
-  if(to >= this->sigma()) { return this->size(); }
-  if(from >= this->sigma()) { return this->bwt[to].size(); }
-
-  const DynamicRecord& from_node = this->bwt[from];
-  rank_type outrank = from_node.edgeTo(to);
-  if(outrank < from_node.outdegree())
-  {
-    return from_node.LF(i, outrank);
-  }
-
-  /*
-    Edge (from, to) has not been observed. We find the first edge from a node >= 'from' to 'to'.
-    If 'inrank' is equal to indegree, all incoming edges are from nodes < 'from'.
-    Otherwise the result is the stored offset in the node we found.
-  */
-  const DynamicRecord& to_node = this->bwt[to];
-  rank_type inrank = to_node.findFirst(from);
-  if(inrank >= to_node.indegree()) { return to_node.size(); }
-  const DynamicRecord& next_from = this->bwt[to_node.predecessor(inrank)];
-  return next_from.offset(next_from.edgeTo(to));
-}
-
-//------------------------------------------------------------------------------
-
 void
 DynamicGBWT::insert(const text_type& text)
 {
@@ -161,16 +298,17 @@ DynamicGBWT::insert(const text_type& text)
   }
 
   std::vector<Sequence> sequences;
-  bool insert = true;
+  bool seq_start = true;
   for(size_type i = 0; i < text.size(); i++)
   {
-    if(insert)
+    if(seq_start)
     {
       Sequence temp(text, i, this->count(text[0]) + sequences.size());
-      sequences.push_back(temp); insert = false;
+      sequences.push_back(temp); seq_start = false;
     }
-    if(text[i] == ENDMARKER) { insert = true; }
+    if(text[i] == ENDMARKER) { seq_start = true; }
   }
+  this->header.sequences += sequences.size();
 
   // Invariant: Sequences are sorted by (curr, offset).
   while(true)
@@ -220,6 +358,7 @@ DynamicGBWT::insert(const text_type& text)
       }
       new_body.swap(current);
     }
+    this->header.size += sequences.size();
 
     /*
       Sort the sequences for the next iteration and remove the ones that have reached the endmarker.
@@ -265,6 +404,40 @@ DynamicGBWT::insert(const text_type& text)
       seq.advance(text);
     }
   }
+
+  // Update the effective alphabet size.
+  this->header.nodes = 0;
+  for(node_type node = 0; node < this->sigma(); node++)
+  {
+    if(this->count(node) > 0) { this->header.nodes++; }
+  }
+}
+
+//------------------------------------------------------------------------------
+
+size_type
+DynamicGBWT::LF(node_type from, size_type i, node_type to) const
+{
+  if(to >= this->sigma()) { return this->size(); }
+  if(from >= this->sigma()) { return this->count(to); }
+
+  const DynamicRecord& from_node = this->bwt[from];
+  rank_type outrank = from_node.edgeTo(to);
+  if(outrank < from_node.outdegree())
+  {
+    return from_node.LF(i, outrank);
+  }
+
+  /*
+    Edge (from, to) has not been observed. We find the first edge from a node >= 'from' to 'to'.
+    If 'inrank' is equal to indegree, all incoming edges are from nodes < 'from'.
+    Otherwise the result is the stored offset in the node we found.
+  */
+  const DynamicRecord& to_node = this->bwt[to];
+  rank_type inrank = to_node.findFirst(from);
+  if(inrank >= to_node.indegree()) { return this->count(to); }
+  const DynamicRecord& next_from = this->bwt[to_node.predecessor(inrank)];
+  return next_from.offset(next_from.edgeTo(to));
 }
 
 //------------------------------------------------------------------------------

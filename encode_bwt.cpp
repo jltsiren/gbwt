@@ -139,7 +139,6 @@ main(int argc, char** argv)
   sdsl::store_to_file(node_index, index_name);
 
   double seconds = readTimer() - start;
-  size_type data_size = header.sequences + header.total_length;
 
   std::cout << "Effective alphabet size distribution:" << std::endl;
   for(auto value : alphabet_distribution)
@@ -155,7 +154,7 @@ main(int argc, char** argv)
   }
   std::cout << std::endl;
 
-  std::cout << "Indexed " << data_size << " nodes in " << seconds << " seconds (" << (data_size / seconds) << " nodes/second)" << std::endl;
+  std::cout << "Indexed " << header.size << " nodes in " << seconds << " seconds (" << (header.size / seconds) << " nodes/second)" << std::endl;
   std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;
   std::cout << std::endl;
 

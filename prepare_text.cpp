@@ -83,18 +83,18 @@ main(int argc, char** argv)
   {
     node_type value = *iter;
     header.alphabet_size = std::max(value + 1, header.alphabet_size);
+    header.size++;
     if(value == 0)
     {
       header.sequences++; terminators.push_back(iter - text.begin());
       if(header.sequences >= max_sequences) { break; }
     }
-    else { header.total_length++; }
   }
   std::cout << header << std::endl;
   std::cout << std::endl;
 
   // Sanity checks.
-  if(header.sequences == 0 || header.total_length == 0)
+  if(header.sequences == 0 || header.size == 0)
   {
     std::cerr << "prepare_text: The input is empty" << std::endl;
     std::exit(EXIT_FAILURE);
@@ -112,7 +112,7 @@ main(int argc, char** argv)
       std::exit(EXIT_FAILURE);
     }
   }
-  if(terminators.back() + 1 != header.sequences + header.total_length)
+  if(terminators.back() + 1 != header.size)
   {
     std::cerr << "prepare_text: The input does not end with a terminator" << std::endl;
     std::exit(EXIT_FAILURE);
@@ -154,9 +154,8 @@ main(int argc, char** argv)
   sdsl::store_to_file(C, alphabet_name);
 
   double seconds = readTimer() - start;
-  size_type data_size = header.sequences + header.total_length;
 
-  std::cout << "Processed " << data_size << " nodes in " << seconds << " seconds (" << (data_size / seconds) << " nodes/second)" << std::endl;
+  std::cout << "Processed " << header.size << " nodes in " << seconds << " seconds (" << (header.size / seconds) << " nodes/second)" << std::endl;
   std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;
   std::cout << std::endl;
 
