@@ -79,12 +79,14 @@ main(int argc, char** argv)
   // Preliminary passes: Convert the input file.
   if(!(input_name.empty()))
   {
-    sdsl::int_vector_buffer<32> infile(input_name, std::ios::in, MEGABYTE, 32, true);
+    std::cout << "Preliminary: transform 64-bit integers into int_vector_buffer<0>" << std::endl;
+    sdsl::int_vector_buffer<64> infile(input_name, std::ios::in, MEGABYTE, 64, true);
     node_type max_value = 0;
     for(node_type node : infile) { if(node > max_value) { max_value = node; } }
     text_buffer_type outfile(text_name, std::ios::out, MEGABYTE, bit_length(max_value - 1));
     for(node_type node : infile) { outfile.push_back(node); }
     infile.close(); outfile.close();
+    std::cout << std::endl;
   }
 
   // Pass 1: Determine data size, alphabet size, and the number of sequences.
