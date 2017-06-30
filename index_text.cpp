@@ -24,17 +24,16 @@
 
 #include <sdsl/construct.hpp>
 
-#include "files.h"
+#include "gbwt.h"
 
 using namespace gbwt;
 
 /*
-  THIS IS OBSOLETE NOW
+  Build the GBWT of the text.
+
+  FIXME prepare_text is unnecessary, as is passing alphabet size to the constructor.
+  We can increase alphabet size during the first pass in DynamicGBWT::insert().
 */
-
-//------------------------------------------------------------------------------
-
-size_type buildBWT(sdsl::cache_config& config, GBWTHeader& header);
 
 //------------------------------------------------------------------------------
 
@@ -45,7 +44,7 @@ main(int argc, char** argv)
   {
     std::cerr << "Usage: index_text base_name" << std::endl;
     std::cerr << std::endl;
-    std::cerr << "Builds the suffix array and the BWT." << std::endl;
+    std::cerr << "Build the GBWT." << std::endl;
     std::cerr << std::endl;
     std::exit(EXIT_SUCCESS);
   }
@@ -53,10 +52,7 @@ main(int argc, char** argv)
   std::string base_name = argv[1];
   std::string header_name = base_name + HEADER_EXTENSION;
   std::string text_name = base_name + TEXT_EXTENSION;
-  std::string alphabet_name = base_name + ALPHABET_EXTENSION;
-  std::string document_name = base_name + DOCUMENT_EXTENSION;
-  std::string sa_name = base_name + SA_EXTENSION;
-  std::string bwt_name = base_name + BWT_EXTENSION;
+  std::string gbwt_name = base_name + GBWT_EXTENSION;
 
   std::cout << "Indexing the text" << std::endl;
   std::cout << std::endl;
@@ -71,18 +67,13 @@ main(int argc, char** argv)
   std::cout << header << std::endl;
   std::cout << std::endl;
 
-  sdsl::cache_config config(false);
-  config.file_map[sdsl::conf::KEY_TEXT_INT] = text_name;
+  DynamicGBWT gbwt(header.alphabet_size);
+  text_type text;
+  sdsl::load_from_file(text, text_name);
+  gbwt.insert(text);
+// FIXME crashes
+//  sdsl::store_to_file(gbwt, gbwt_name);
 
-  config.file_map[sdsl::conf::KEY_SA] = sa_name;
-  sdsl::construct_sa<0>(config);
-  std::cout << "Suffix array built" << std::endl;
-
-  config.file_map[sdsl::conf::KEY_BWT_INT] = bwt_name;
-  size_type runs = buildBWT(config, header);
-  std::cout << "BWT built, " << runs << " runs" << std::endl;
-
-  std::cout << std::endl;
   double seconds = readTimer() - start;
 
   std::cout << "Indexed " << header.size << " nodes in " << seconds << " seconds (" << (header.size / seconds) << " nodes/second)" << std::endl;
@@ -90,33 +81,6 @@ main(int argc, char** argv)
   std::cout << std::endl;
 
   return 0;
-}
-
-//------------------------------------------------------------------------------
-
-size_type
-buildBWT(sdsl::cache_config& config, GBWTHeader& header)
-{
-  text_type text;
-  sdsl::load_from_cache(text, sdsl::conf::KEY_TEXT_INT, config);
-
-  sdsl::int_vector_buffer<0> sa(cache_file_name(sdsl::conf::KEY_SA, config));
-  text_buffer_type bwt(cache_file_name(sdsl::conf::KEY_BWT_INT, config), std::ios::out, MEGABYTE, bit_length(header.alphabet_size - 1));
-
-  // Return to the original alphabet, where each terminator is 0.
-  // We skip the global terminator at SA[0].
-  size_type to_add[2] = { ~(size_type)0, text.size() - 1 };
-  size_type runs = 0; node_type prev = ~(node_type)0;
-  for(size_type i = 1; i < text.size(); i++)
-  {
-    node_type value = text[sa[i] + to_add[sa[i] == 0]];
-    value = (value > header.sequences ? value - header.sequences : 0);
-    if(value != prev) { runs++; prev = value; }
-    bwt.push_back(value);
-  }
-
-  sa.close(); bwt.close();
-  return runs;
 }
 
 //------------------------------------------------------------------------------

@@ -129,6 +129,8 @@ std::ostream& operator<<(std::ostream& stream, const std::pair<A, B>& data)
   if(Verbosity::level >= Verbosity::THRESHOLD). While the level can be set directly,
   Verbosity::set() does a few sanity checks.
 
+  FIXME These are still based on GCSA2.
+
   SILENT    no status information
   BASIC     basic progress information and statistics on the input and the final index
   EXTENDED  add intermediate statistics

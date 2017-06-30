@@ -171,7 +171,7 @@ public:
   DynamicGBWT& operator=(const DynamicGBWT& source);
   DynamicGBWT& operator=(DynamicGBWT&& source);
 
-  size_type serialize(std::ostream& out) const;
+  size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
 
   const static std::string EXTENSION; // .gbwt
@@ -185,6 +185,7 @@ public:
 //------------------------------------------------------------------------------
 
   inline size_type size() const { return this->header.size; }
+  inline size_type sequences() const { return this->header.sequences; }
   inline size_type sigma() const { return this->header.alphabet_size; }
   inline size_type count(node_type node) const { return this->bwt[node].size(); }
 

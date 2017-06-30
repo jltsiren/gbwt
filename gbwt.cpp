@@ -112,8 +112,9 @@ DynamicGBWT::operator=(DynamicGBWT&& source)
 }
 
 DynamicGBWT::size_type
-DynamicGBWT::serialize(std::ostream& out) const
+DynamicGBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
 {
+  sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
   size_type written_bytes = 0;
 
   written_bytes += this->header.serialize(out);
@@ -150,6 +151,7 @@ DynamicGBWT::serialize(std::ostream& out) const
   out.write((char*)(compressed_bwt.data()), compressed_bwt.size());
   written_bytes += compressed_bwt.size();
 
+  sdsl::structure_tree::add_size(child, written_bytes);
   return written_bytes;
 }
 
@@ -228,7 +230,7 @@ DynamicGBWT::DynamicGBWT(size_type alphabet_size) :
 //------------------------------------------------------------------------------
 
 /*
-  A support structure for run-length encoding outrank sequences.
+  A support structure for run-length encoding outrank seqs.
 */
 
 struct RunMerger
@@ -297,22 +299,34 @@ DynamicGBWT::insert(const text_type& text)
     }
   }
 
-  std::vector<Sequence> sequences;
+  std::vector<Sequence> seqs;
   bool seq_start = true;
   for(size_type i = 0; i < text.size(); i++)
   {
     if(seq_start)
     {
-      Sequence temp(text, i, this->count(text[0]) + sequences.size());
-      sequences.push_back(temp); seq_start = false;
+      Sequence temp(text, i, this->count(text[0]) + seqs.size());
+      seqs.push_back(temp); seq_start = false;
     }
     if(text[i] == ENDMARKER) { seq_start = true; }
   }
-  this->header.sequences += sequences.size();
+  this->header.sequences += seqs.size();
+  if(Verbosity::level >= Verbosity::BASIC)
+  {
+    std::cerr << "DynamicGBWT::insert(): Inserting " << seqs.size() << " sequences of total length " << text.size() << std::endl;
+  }
+
 
   // Invariant: Sequences are sorted by (curr, offset).
+  size_type iteration = 0;
   while(true)
   {
+    iteration++;  // We use 1-based iterations.
+    if(Verbosity::level >= Verbosity::FULL && iteration % 1000 == 0)
+    {
+      std::cerr << "DynamicGBWT::insert(): Iteration " << iteration << ", " << seqs.size() << " sequences" << std::endl;
+    }
+
     /*
       Process ranges of sequences sharing the same 'curr' node.
       - Add the outgoing edge (curr, next) if necessary.
@@ -324,63 +338,67 @@ DynamicGBWT::insert(const text_type& text)
       and because searching with the endmarker does not work in a multi-string BWT.
     */
     size_type i = 0;
-    while(i < sequences.size())
+    while(i < seqs.size())
     {
-      node_type curr = sequences[i].curr;
+      node_type curr = seqs[i].curr;
       DynamicRecord& current = this->bwt[curr];
       RunMerger new_body(current.outdegree());
       std::vector<run_type>::iterator iter = current.body.begin();
-      while(i < sequences.size() && sequences[i].curr == curr)
+      while(i < seqs.size() && seqs[i].curr == curr)
       {
-        rank_type outrank = current.edgeTo(sequences[i].next);
+        rank_type outrank = current.edgeTo(seqs[i].next);
         if(outrank >= current.outdegree())  // Add edge (curr, next) if it does not exist.
         {
-          current.outgoing.push_back(edge_type(sequences[i].next, 0));
+          current.outgoing.push_back(edge_type(seqs[i].next, 0));
           new_body.addEdge();
         }
-        while(new_body.size() < sequences[i].offset)  // Add old runs until 'offset'.
+        while(new_body.size() < seqs[i].offset)  // Add old runs until 'offset'.
         {
-          if(iter->second <= sequences[i].offset - new_body.size()) { new_body.insert(*iter); ++iter; }
+          if(iter->second <= seqs[i].offset - new_body.size()) { new_body.insert(*iter); ++iter; }
           else
           {
-            run_type temp(iter->first, sequences[i].offset - new_body.size());
+            run_type temp(iter->first, seqs[i].offset - new_body.size());
             new_body.insert(temp);
             iter->second -= temp.second;
           }
         }
-        sequences[i].offset = new_body.counts[outrank]; // rank(next) within the record.
+        seqs[i].offset = new_body.counts[outrank]; // rank(next) within the record.
         new_body.insert(outrank);
-        if(sequences[i].next != ENDMARKER)  // The endmarker does not have incoming edges.
+        if(seqs[i].next != ENDMARKER)  // The endmarker does not have incoming edges.
         {
-          this->bwt[sequences[i].next].increment(curr);
+          this->bwt[seqs[i].next].increment(curr);
         }
         i++;
       }
+      while(iter != current.body.end()) // Add the rest of the old body.
+      {
+        new_body.insert(*iter); ++iter;
+      }
       new_body.swap(current);
     }
-    this->header.size += sequences.size();
+    this->header.size += seqs.size();
 
     /*
       Sort the sequences for the next iteration and remove the ones that have reached the endmarker.
       Note that sorting by (next, curr, offset) now is equivalent to sorting by (curr, offset) in the
       next interation.
     */
-    std::sort(sequences.begin(), sequences.end());
+    std::sort(seqs.begin(), seqs.end());
     size_type head = 0;
-    while(head < sequences.size() && sequences[head].next == ENDMARKER) { head++; }
+    while(head < seqs.size() && seqs[head].next == ENDMARKER) { head++; }
     if(head > 0)
     {
-      for(size_type j = 0; head + j < sequences.size(); j++) { sequences[j] = sequences[head + j]; }
-      sequences.resize(sequences.size() - head);
+      for(size_type j = 0; head + j < seqs.size(); j++) { seqs[j] = seqs[head + j]; }
+      seqs.resize(seqs.size() - head);
     }
-    if(sequences.empty()) { break; }
+    if(seqs.empty()) { break; }
 
     /*
       Rebuild the edge offsets in the outgoing edges to each 'next' node. The offsets will be
       valid after the insertions in the next iteration.
     */
     node_type next = this->sigma();
-    for(Sequence& seq : sequences)
+    for(Sequence& seq : seqs)
     {
       if(seq.next == next) { continue; }
       next = seq.next;
@@ -397,12 +415,17 @@ DynamicGBWT::insert(const text_type& text)
       Until now sequence offsets have been rank(next) within the record. We add edge offsets
       to them to get valid offsets in the next record and then advance the text position.
     */
-    for(Sequence& seq : sequences)
+    for(Sequence& seq : seqs)
     {
       const DynamicRecord& current = this->bwt[seq.curr];
       seq.offset += current.offset(current.edgeTo(seq.next));
       seq.advance(text);
     }
+  }
+
+  if(Verbosity::level >= Verbosity::EXTENDED)
+  {
+    std::cerr << "DynamicGBWT::insert(): " << iteration << " iterations" << std::endl;
   }
 
   // Update the effective alphabet size.
