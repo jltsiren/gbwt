@@ -44,10 +44,12 @@ main(int argc, char** argv)
   size_type max_sequences = std::numeric_limits<size_type>::max();
   int c = 0;
   std::string input_name;
-  while((c = getopt(argc, argv, "m:")) != -1)
+  while((c = getopt(argc, argv, "i:m:")) != -1)
   {
     switch(c)
     {
+    case 'i':
+      input_name = optarg; break;
     case 'm':
       max_sequences = std::stoul(optarg); break;
     case '?':
@@ -73,6 +75,17 @@ main(int argc, char** argv)
   std::cout << std::endl;
 
   double start = readTimer();
+
+  // Preliminary passes: Convert the input file.
+  if(!(input_name.empty()))
+  {
+    sdsl::int_vector_buffer<32> infile(input_name, std::ios::in, MEGABYTE, 32, true);
+    node_type max_value = 0;
+    for(node_type node : infile) { if(node > max_value) { max_value = node; } }
+    text_buffer_type outfile(text_name, std::ios::out, MEGABYTE, bit_length(max_value - 1));
+    for(node_type node : infile) { outfile.push_back(node); }
+    infile.close(); outfile.close();
+  }
 
   // Pass 1: Determine data size, alphabet size, and the number of sequences.
   GBWTHeader header;
@@ -168,6 +181,7 @@ void
 printUsage(int exit_code)
 {
   std::cerr << "Usage: prepare_text [options] base_name" << std::endl;
+  std::cerr << "  -i X  Convert input file X of 32-bit integers first" << std::endl;
   std::cerr << "  -m N  Read up to N sequences" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Build header, sequence borders, and alphabet from the sequences." << std::endl;
