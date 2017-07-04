@@ -383,7 +383,7 @@ DynamicGBWT::insert(const text_type& text)
       Note that sorting by (next, curr, offset) now is equivalent to sorting by (curr, offset) in the
       next interation.
     */
-    std::sort(seqs.begin(), seqs.end());
+    parallelMergeSort(seqs.begin(), seqs.end());
     size_type head = 0;
     while(head < seqs.size() && seqs[head].next == ENDMARKER) { head++; }
     if(head > 0)

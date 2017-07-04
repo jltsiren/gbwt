@@ -45,6 +45,16 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
+/*
+  We can save a lot of memory during construction by using 32-bit integers instead of
+  64-bit integers in the dynamic records. This limits the number of nodes and the number
+  of times the sequences may cross an edge to less than 2^32.
+*/
+
+#define GBWT_SAVE_MEMORY  // FIXME should use foo_type instead of std::uint32_t
+
+//------------------------------------------------------------------------------
+
 typedef std::uint64_t size_type;
 typedef std::uint64_t node_type;
 typedef std::uint8_t  byte_type;

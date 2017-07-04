@@ -84,10 +84,15 @@ struct Sequence
 
 struct DynamicRecord
 {
-  typedef gbwt::size_type                 size_type;
-  typedef Run::value_type                 rank_type;  // Rank of incoming/outgoing edge.
-  typedef Run::run_type                   run_type;
+  typedef gbwt::size_type size_type;
+  typedef Run::value_type rank_type;  // Rank of incoming/outgoing edge.
+  typedef Run::run_type   run_type;
+
+#ifdef GBWT_SAVE_MEMORY
+  typedef std::pair<std::uint32_t, std::uint32_t> edge_type;
+#else
   typedef std::pair<node_type, size_type> edge_type;
+#endif
 
   size_type              body_size;
   std::vector<edge_type> incoming, outgoing;
@@ -110,7 +115,11 @@ struct DynamicRecord
 
   // These assume that 'outrank' is a valid outgoing edge.
   inline node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
+#ifdef GBWT_SAVE_MEMORY
+  inline std::uint32_t& offset(rank_type outrank) { return this->outgoing[outrank].second; }
+#else
   inline size_type& offset(rank_type outrank) { return this->outgoing[outrank].second; }
+#endif
   inline size_type offset(rank_type outrank) const { return this->outgoing[outrank].second; }
 
   // This assumes that 'outrank' is a valid outgoing edge.

@@ -71,7 +71,7 @@ main(int argc, char** argv)
 
   // First pass: determine the largest node identifier.
   node_type max_node = 0;
-  size_type total_length;
+  size_type total_length = 0;
   sdsl::int_vector_buffer<64> infile(input_name, std::ios::in, MEGABYTE, 64, true);
   for(node_type node : infile) { max_node = std::max(node, max_node); }
   if(infile.size() > 0 && infile[infile.size() - 1] != ENDMARKER)

@@ -91,9 +91,14 @@ struct ByteCode
 
 struct Run
 {
-  typedef ByteCode::value_type             value_type;
-  typedef ByteCode::code_type              code_type;
+  typedef ByteCode::value_type value_type;
+  typedef ByteCode::code_type  code_type;
+
+#ifdef GBWT_SAVE_MEMORY
+  typedef std::pair<std::uint32_t, std::uint32_t> run_type;
+#else
   typedef std::pair<value_type, size_type> run_type;
+#endif
 
   size_type sigma, run_continues;
 
