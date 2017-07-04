@@ -2,6 +2,6 @@
 *.a
 
 prepare_text
-index_text
+build_gbwt
 
 .DS_Store

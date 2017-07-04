@@ -31,7 +31,7 @@
 #include <iostream>
 #include <vector>
 
-#include <sdsl/wavelet_trees.hpp>
+#include <sdsl/bit_vectors.hpp>
 
 #include <atomic>
 #include <omp.h>
@@ -70,8 +70,6 @@ const node_type ENDMARKER    = 0;
 
 typedef sdsl::int_vector<0>        text_type;
 typedef sdsl::int_vector_buffer<0> text_buffer_type;
-
-const static size_type MAX_NODES = 10 * BILLION;
 
 //------------------------------------------------------------------------------
 

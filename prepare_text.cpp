@@ -39,17 +39,15 @@ void printUsage(int exit_code = EXIT_SUCCESS);
 int
 main(int argc, char** argv)
 {
-  if(argc < 2) { printUsage(); }
+  if(argc < 3) { printUsage(); }
 
   size_type max_sequences = std::numeric_limits<size_type>::max();
   int c = 0;
-  std::string input_name;
-  while((c = getopt(argc, argv, "i:m:")) != -1)
+  std::string input_name, output_name;
+  while((c = getopt(argc, argv, "m:")) != -1)
   {
     switch(c)
     {
-    case 'i':
-      input_name = optarg; break;
     case 'm':
       max_sequences = std::stoul(optarg); break;
     case '?':
@@ -58,119 +56,52 @@ main(int argc, char** argv)
       std::exit(EXIT_FAILURE);
     }
   }
-  if(optind >= argc) { printUsage(EXIT_FAILURE); }
-
-  std::string base_name = argv[optind];
-  std::string text_name = base_name + TEXT_EXTENSION;
-  std::string header_name = base_name + HEADER_EXTENSION;
-  std::string alphabet_name = base_name + ALPHABET_EXTENSION;
-  std::string document_name = base_name + DOCUMENT_EXTENSION;
+  if(optind + 1 >= argc) { printUsage(EXIT_FAILURE); }
+  input_name = argv[optind]; output_name = argv[optind + 1];
 
   std::cout << "Preparing the text for indexing" << std::endl;
   std::cout << std::endl;
 
-  if(!(input_name.empty())) { printHeader("Input"); std::cout << input_name << std::endl; }
-  printHeader("Base name"); std::cout << base_name << std::endl;
+  printHeader("Input"); std::cout << input_name << std::endl;
+  printHeader("Output"); std::cout << output_name << std::endl;
   printHeader("Max sequences"); std::cout << max_sequences << std::endl;
   std::cout << std::endl;
 
   double start = readTimer();
 
-  // Preliminary passes: Convert the input file.
-  if(!(input_name.empty()))
+  // First pass: determine the largest node identifier.
+  node_type max_node = 0;
+  size_type total_length;
+  sdsl::int_vector_buffer<64> infile(input_name, std::ios::in, MEGABYTE, 64, true);
+  for(node_type node : infile) { max_node = std::max(node, max_node); }
+  if(infile.size() > 0 && infile[infile.size() - 1] != ENDMARKER)
   {
-    std::cout << "Preliminary: transform 64-bit integers into int_vector_buffer<0>" << std::endl;
-    sdsl::int_vector_buffer<64> infile(input_name, std::ios::in, MEGABYTE, 64, true);
-    node_type max_value = 0;
-    for(node_type node : infile) { if(node > max_value) { max_value = node; } }
-    text_buffer_type outfile(text_name, std::ios::out, MEGABYTE, bit_length(max_value - 1));
-    for(node_type node : infile) { outfile.push_back(node); }
-    infile.close(); outfile.close();
-    std::cout << std::endl;
-  }
-
-  // Pass 1: Determine data size, alphabet size, and the number of sequences.
-  GBWTHeader header;
-  text_buffer_type text(text_name);
-  std::vector<size_type> terminators;
-  std::cout << "First pass: data size, alphabet size, number of sequences" << std::endl;
-  for(auto iter = text.begin(); iter != text.end(); ++iter)
-  {
-    node_type value = *iter;
-    header.alphabet_size = std::max(value + 1, header.alphabet_size);
-    header.size++;
-    if(value == 0)
-    {
-      header.sequences++; terminators.push_back(iter - text.begin());
-      if(header.sequences >= max_sequences) { break; }
-    }
-  }
-  std::cout << header << std::endl;
-  std::cout << std::endl;
-
-  // Sanity checks.
-  if(header.sequences == 0 || header.size == 0)
-  {
-    std::cerr << "prepare_text: The input is empty" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if(header.alphabet_size > MAX_NODES)
-  {
-    std::cerr << "prepare_text: The alphabet is too large" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  for(size_type i = 1; i < terminators.size(); i++)
-  {
-    if(terminators[i] == terminators[i - 1] + 1)
-    {
-      std::cerr << "prepare_text: One of the sequences is empty" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-  }
-  if(terminators.back() + 1 != header.size)
-  {
-    std::cerr << "prepare_text: The input does not end with a terminator" << std::endl;
+    std::cerr << "prepare_text: The text does not end with an endmarker" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
-  sdsl::sd_vector<> document_borders(terminators.begin(), terminators.end());
-  sdsl::store_to_file(document_borders, document_name);
-
-  // Pass 2: Determine the node identifiers that are present.
-  std::vector<size_type> counts(header.alphabet_size, 0);
-  size_type current = 0;
-  std::cout << "Second pass: active alphabet" << std::endl;
-  for(node_type value : text)
+  // Second pass: transform the text.
+  size_type sequences = 0;
+  text_buffer_type outfile(output_name, std::ios::out, MEGABYTE, bit_length(max_node));
+  for(node_type node : infile)
   {
-    counts[value]++;
-    if(value == 0)
+    outfile.push_back(node); total_length++;
+    if(node == ENDMARKER)
     {
-      current++;
-      if(current >= max_sequences) { break; }
+      sequences++;
+      if(sequences >= max_sequences) { break; }
     }
   }
-  text.close();
 
-  for(size_type i = 1; i < counts.size(); i++) { if(counts[i] > 0) { header.nodes++; } }
-  sdsl::store_to_file(header, header_name);
-
-  std::cout << header << std::endl;
-  std::cout << std::endl;
-
-  // Transform the cumulative counts into the C array and mark bits i + C[i].
-  // Add a guard to the end to support determining C[sigma].
-  size_type cumulative = 0;
-  counts.push_back(0);
-  for(size_type i = 0; i < counts.size(); i++)
-  {
-    size_type temp = counts[i]; counts[i] = cumulative + i; cumulative += temp;
-  }
-  sdsl::sd_vector<> C(counts.begin(), counts.end());
-  sdsl::store_to_file(C, alphabet_name);
-
+  infile.close(); outfile.close();
   double seconds = readTimer() - start;
 
-  std::cout << "Processed " << header.size << " nodes in " << seconds << " seconds (" << (header.size / seconds) << " nodes/second)" << std::endl;
+  printHeader("Text length"); std::cout << total_length << std::endl;
+  printHeader("Alphabet size"); std::cout << (max_node + 1) << std::endl;
+  printHeader("Sequences"); std::cout << sequences << std::endl;
+  std::cout << std::endl;
+
+  std::cout << "Processed " << total_length << " nodes in " << seconds << " seconds (" << (total_length / seconds) << " nodes/second)" << std::endl;
   std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;
   std::cout << std::endl;
 
@@ -182,11 +113,10 @@ main(int argc, char** argv)
 void
 printUsage(int exit_code)
 {
-  std::cerr << "Usage: prepare_text [options] base_name" << std::endl;
-  std::cerr << "  -i X  Convert input file X of 32-bit integers first" << std::endl;
+  std::cerr << "Usage: prepare_text input output" << std::endl;
   std::cerr << "  -m N  Read up to N sequences" << std::endl;
   std::cerr << std::endl;
-  std::cerr << "Build header, sequence borders, and alphabet from the sequences." << std::endl;
+  std::cerr << "Transforms a sequence of 64-bit integers into the GBWT input format." << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);

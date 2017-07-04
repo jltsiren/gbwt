@@ -63,7 +63,7 @@ DynamicRecord::LF(size_type i, rank_type outrank) const
 
 //------------------------------------------------------------------------------
 
-const std::string DynamicGBWT::EXTENSION = ".gbwt";
+const std::string DynamicGBWT::EXTENSION = GBWT_EXTENSION;
 
 DynamicGBWT::DynamicGBWT()
 {
@@ -135,8 +135,11 @@ DynamicGBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::str
     }
 
     // Write the body.
-    Run encoder(current.outdegree());
-    for(run_type run : current.body) { encoder.write(compressed_bwt, run); }
+    if(current.outdegree() > 0)
+    {
+      Run encoder(current.outdegree());
+      for(run_type run : current.body) { encoder.write(compressed_bwt, run); }
+    }
   }
 
   // Build and serialize index.
@@ -221,14 +224,6 @@ DynamicGBWT::copy(const DynamicGBWT& source)
 
 //------------------------------------------------------------------------------
 
-DynamicGBWT::DynamicGBWT(size_type alphabet_size) :
-  bwt(alphabet_size)
-{
-  this->header.alphabet_size = alphabet_size;
-}
-
-//------------------------------------------------------------------------------
-
 /*
   A support structure for run-length encoding outrank seqs.
 */
@@ -290,22 +285,28 @@ DynamicGBWT::insert(const text_type& text)
     std::cerr << "DynamicGBWT::insert(): The text must end an endmarker" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  for(node_type node : text)
+
+  // Increase alphabet size if necessary.
+  size_type max_node = 0;
+  for(node_type node : text) { max_node = std::max(node, max_node); }
+  if(max_node >= this->sigma())
   {
-    if(node >= this->sigma())
+    if(Verbosity::level >= Verbosity::FULL)
     {
-      std::cerr << "DynamicGBWT::insert(): Cannot insert " << node << " with alphabet size " << this->sigma() << std::endl;
-      std::exit(EXIT_FAILURE);
+      std::cerr << "DynamicGBWT::insert(): Increasing alphabet size to " << (max_node + 1) << std::endl;
     }
+    this->header.alphabet_size = max_node + 1;
+    this->bwt.resize(this->sigma());
   }
 
+  // Initialize the sequences at the endmarker node.
   std::vector<Sequence> seqs;
   bool seq_start = true;
   for(size_type i = 0; i < text.size(); i++)
   {
     if(seq_start)
     {
-      Sequence temp(text, i, this->count(text[0]) + seqs.size());
+      Sequence temp(text, i, this->count(text[ENDMARKER]) + seqs.size());
       seqs.push_back(temp); seq_start = false;
     }
     if(text[i] == ENDMARKER) { seq_start = true; }
@@ -315,7 +316,6 @@ DynamicGBWT::insert(const text_type& text)
   {
     std::cerr << "DynamicGBWT::insert(): Inserting " << seqs.size() << " sequences of total length " << text.size() << std::endl;
   }
-
 
   // Invariant: Sequences are sorted by (curr, offset).
   size_type iteration = 0;

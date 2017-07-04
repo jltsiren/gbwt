@@ -28,13 +28,6 @@
 
 using namespace gbwt;
 
-/*
-  Build the GBWT of the text.
-
-  FIXME prepare_text is unnecessary, as is passing alphabet size to the constructor.
-  We can increase alphabet size during the first pass in DynamicGBWT::insert().
-*/
-
 //------------------------------------------------------------------------------
 
 int
@@ -42,19 +35,15 @@ main(int argc, char** argv)
 {
   if(argc < 2)
   {
-    std::cerr << "Usage: index_text base_name" << std::endl;
-    std::cerr << std::endl;
-    std::cerr << "Build the GBWT." << std::endl;
+    std::cerr << "Usage: build_gbwt base_name" << std::endl;
     std::cerr << std::endl;
     std::exit(EXIT_SUCCESS);
   }
 
   std::string base_name = argv[1];
-  std::string header_name = base_name + HEADER_EXTENSION;
-  std::string text_name = base_name + TEXT_EXTENSION;
-  std::string gbwt_name = base_name + GBWT_EXTENSION;
+  std::string gbwt_name = base_name + DynamicGBWT::EXTENSION;
 
-  std::cout << "Indexing the text" << std::endl;
+  std::cout << "GBWT construction" << std::endl;
   std::cout << std::endl;
 
   printHeader("Base name"); std::cout << base_name << std::endl;
@@ -62,21 +51,19 @@ main(int argc, char** argv)
 
   double start = readTimer();
 
-  GBWTHeader header;
-  sdsl::load_from_file(header, header_name);
-  std::cout << header << std::endl;
-  std::cout << std::endl;
-
-  DynamicGBWT gbwt(header.alphabet_size);
   text_type text;
-  sdsl::load_from_file(text, text_name);
+  sdsl::load_from_file(text, base_name);
+
+  DynamicGBWT gbwt;
   gbwt.insert(text);
-// FIXME crashes
-//  sdsl::store_to_file(gbwt, gbwt_name);
+  sdsl::store_to_file(gbwt, gbwt_name);
 
   double seconds = readTimer() - start;
 
-  std::cout << "Indexed " << header.size << " nodes in " << seconds << " seconds (" << (header.size / seconds) << " nodes/second)" << std::endl;
+  std::cout << gbwt.header << std::endl;
+  std::cout << std::endl;
+
+  std::cout << "Indexed " << gbwt.size() << " nodes in " << seconds << " seconds (" << (gbwt.size() / seconds) << " nodes/second)" << std::endl;
   std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;
   std::cout << std::endl;
 

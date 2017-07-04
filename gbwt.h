@@ -172,14 +172,17 @@ public:
   DynamicGBWT& operator=(DynamicGBWT&& source);
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
-  void load(std::istream& in);
+  void load(std::istream& in);  // FIXME not tested
 
   const static std::string EXTENSION; // .gbwt
 
 //------------------------------------------------------------------------------
 
-  explicit DynamicGBWT(size_type alphabet_size);
-
+  /*
+    Insert one or more sequences to the GBWT. The text must be a concatenation of sequences,
+    each of which ends with an endmarker (0). The new sequences receive identifiers starting
+    from this->sequences().
+  */
   void insert(const text_type& text);
 
 //------------------------------------------------------------------------------
