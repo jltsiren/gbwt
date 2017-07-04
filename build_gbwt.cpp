@@ -22,7 +22,7 @@
   SOFTWARE.
 */
 
-#include <sdsl/construct.hpp>
+#include <unistd.h>
 
 #include "gbwt.h"
 
@@ -30,32 +30,62 @@ using namespace gbwt;
 
 //------------------------------------------------------------------------------
 
+void printUsage(int exit_code = EXIT_SUCCESS);
+
+//------------------------------------------------------------------------------
+
 int
 main(int argc, char** argv)
 {
-  if(argc < 2)
-  {
-    std::cerr << "Usage: build_gbwt base_name" << std::endl;
-    std::cerr << std::endl;
-    std::exit(EXIT_SUCCESS);
-  }
+  if(argc < 2) { printUsage(); }
 
-  std::string base_name = argv[1];
+  size_type batch_size = 0;
+  int c = 0;
+  while((c = getopt(argc, argv, "b:")) != -1)
+  {
+    switch(c)
+    {
+    case 'b':
+      batch_size = std::stoul(optarg); break;
+    case '?':
+      std::exit(EXIT_FAILURE);
+    default:
+      std::exit(EXIT_FAILURE);
+    }
+  }
+  if(optind >= argc) { printUsage(EXIT_FAILURE); }
+  std::string base_name = argv[optind];
   std::string gbwt_name = base_name + DynamicGBWT::EXTENSION;
 
   std::cout << "GBWT construction" << std::endl;
   std::cout << std::endl;
 
   printHeader("Base name"); std::cout << base_name << std::endl;
+  if(batch_size != 0) { printHeader("Batch size"); std::cout << batch_size << " million" << std::endl; }
   std::cout << std::endl;
 
   double start = readTimer();
 
-  text_type text;
-  sdsl::load_from_file(text, base_name);
-
+  text_buffer_type input(base_name);
   DynamicGBWT gbwt;
-  gbwt.insert(text);
+  for(size_type i = 0; i < input.size(); )
+  {
+    size_type limit = (batch_size == 0 ? input.size() : std::min(input.size(), i + batch_size * MILLION));
+    while(limit > i)
+    {
+      if(input[limit - 1] == ENDMARKER) { break; }
+      limit--;
+    }
+    if(limit <= i)
+    {
+      std::cerr << "build_gbwt: Cannot find an endmarker in the batch starting from offset " << i << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    text_type batch(limit - i, 0, input.width());
+    for(size_type j = i; j < limit; j++) { batch[j - i] = input[j]; }
+    gbwt.insert(batch);
+    i = limit;
+  }
   sdsl::store_to_file(gbwt, gbwt_name);
 
   double seconds = readTimer() - start;
@@ -68,6 +98,18 @@ main(int argc, char** argv)
   std::cout << std::endl;
 
   return 0;
+}
+
+//------------------------------------------------------------------------------
+
+void
+printUsage(int exit_code)
+{
+  std::cerr << "Usage: build_gbwt [options] base_name" << std::endl;
+  std::cerr << "  -b N  Insert in batches of N million nodes" << std::endl;
+  std::cerr << std::endl;
+
+  std::exit(exit_code);
 }
 
 //------------------------------------------------------------------------------

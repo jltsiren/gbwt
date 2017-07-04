@@ -43,7 +43,6 @@ main(int argc, char** argv)
 
   size_type max_sequences = std::numeric_limits<size_type>::max();
   int c = 0;
-  std::string input_name, output_name;
   while((c = getopt(argc, argv, "m:")) != -1)
   {
     switch(c)
@@ -57,7 +56,7 @@ main(int argc, char** argv)
     }
   }
   if(optind + 1 >= argc) { printUsage(EXIT_FAILURE); }
-  input_name = argv[optind]; output_name = argv[optind + 1];
+  std::string input_name = argv[optind], output_name = argv[optind + 1];
 
   std::cout << "Preparing the text for indexing" << std::endl;
   std::cout << std::endl;

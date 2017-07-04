@@ -47,16 +47,17 @@ namespace gbwt
 
 /*
   We can save a lot of memory during construction by using 32-bit integers instead of
-  64-bit integers in the dynamic records. This limits the number of nodes and the number
-  of times the sequences may cross an edge to less than 2^32.
+  64-bit integers in the dynamic records. This limits the number of nodes and the
+  number of occurrences of each node to less than 2^32.
 */
 
-#define GBWT_SAVE_MEMORY  // FIXME should use foo_type instead of std::uint32_t
+#define GBWT_SAVE_MEMORY
 
 //------------------------------------------------------------------------------
 
 typedef std::uint64_t size_type;
 typedef std::uint64_t node_type;
+typedef std::uint32_t short_type;
 typedef std::uint8_t  byte_type;
 
 const size_type BYTE_BITS    = 8;
@@ -155,7 +156,7 @@ struct Verbosity
   const static size_type SILENT   = 0;
   const static size_type BASIC    = 1;
   const static size_type EXTENDED = 2;
-  const static size_type DEFAULT  = 3;
+  const static size_type DEFAULT  = 2;
   const static size_type FULL     = 3;
 };
 

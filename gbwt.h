@@ -89,7 +89,7 @@ struct DynamicRecord
   typedef Run::run_type   run_type;
 
 #ifdef GBWT_SAVE_MEMORY
-  typedef std::pair<std::uint32_t, std::uint32_t> edge_type;
+  typedef std::pair<short_type, short_type> edge_type;
 #else
   typedef std::pair<node_type, size_type> edge_type;
 #endif
@@ -116,7 +116,7 @@ struct DynamicRecord
   // These assume that 'outrank' is a valid outgoing edge.
   inline node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
 #ifdef GBWT_SAVE_MEMORY
-  inline std::uint32_t& offset(rank_type outrank) { return this->outgoing[outrank].second; }
+  inline short_type& offset(rank_type outrank) { return this->outgoing[outrank].second; }
 #else
   inline size_type& offset(rank_type outrank) { return this->outgoing[outrank].second; }
 #endif
