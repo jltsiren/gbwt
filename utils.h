@@ -138,9 +138,18 @@ struct Range
 };
 
 template<class A, class B>
-std::ostream& operator<<(std::ostream& stream, const std::pair<A, B>& data)
+std::ostream& operator<<(std::ostream& out, const std::pair<A, B>& data)
 {
-  return stream << "(" << data.first << ", " << data.second << ")";
+  return out << "(" << data.first << ", " << data.second << ")";
+}
+
+template<class A>
+std::ostream& operator<<(std::ostream& out, const std::vector<A>& data)
+{
+  out << "{ ";
+  for(const A& element : data) { out << element << " "; }
+  out << "}";
+  return out;
 }
 
 //------------------------------------------------------------------------------
@@ -150,12 +159,10 @@ std::ostream& operator<<(std::ostream& stream, const std::pair<A, B>& data)
   if(Verbosity::level >= Verbosity::THRESHOLD). While the level can be set directly,
   Verbosity::set() does a few sanity checks.
 
-  FIXME These are still based on GCSA2.
-
   SILENT    no status information
-  BASIC     basic progress information and statistics on the input and the final index
-  EXTENDED  add intermediate statistics
-  FULL      add technical information on processing individual files
+  BASIC     basic statistics on the input and the final index
+  EXTENDED  intermediate statistics for each batch
+  FULL      further details of each batch
 */
 
 struct Verbosity

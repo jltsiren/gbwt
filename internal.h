@@ -96,16 +96,7 @@ struct Run
 
   size_type sigma, run_continues;
 
-  Run(size_type alphabet_size) :
-    sigma(alphabet_size),
-    run_continues(0)
-  {
-    size_type max_code = std::numeric_limits<code_type>::max();
-    if(this->sigma < max_code)
-    {
-      this->run_continues = (max_code + 1) / this->sigma;
-    }
-  }
+  explicit Run(size_type alphabet_size);
 
   /*
     Returns (value, run length) and updates i to point past the run.

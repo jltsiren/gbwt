@@ -53,10 +53,15 @@ struct DynamicRecord
   std::vector<edge_type> incoming, outgoing;
   std::vector<run_type>  body;
 
+//------------------------------------------------------------------------------
+
   inline size_type size() const { return this->body_size; }
   inline size_type runs() const { return this->body.size(); }
   inline size_type indegree() const { return this->incoming.size(); }
   inline size_type outdegree() const { return this->outgoing.size(); }
+
+  bool operator==(const DynamicRecord& another) const;
+  inline bool operator!=(const DynamicRecord& another) const { return !(this->operator==(another)); }
 
 //------------------------------------------------------------------------------
 
@@ -125,6 +130,10 @@ struct DynamicRecord
     sequentialSort(this->incoming.begin(), this->incoming.end());
   }
 };
+
+//------------------------------------------------------------------------------
+
+std::ostream& operator<<(std::ostream& out, const DynamicRecord& record);
 
 //------------------------------------------------------------------------------
 

@@ -29,6 +29,33 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
+bool
+DynamicRecord::operator==(const DynamicRecord& another) const
+{
+  if(this->size() != another.size() || this->runs() != another.runs() ||
+     this->indegree() != another.indegree() || this->outdegree() != another.outdegree())
+  {
+    return false;
+  }
+
+  for(rank_type inrank = 0; inrank < this->indegree(); inrank++)
+  {
+    if(this->incoming[inrank] != another.incoming[inrank]) { return false; }
+  }
+  for(rank_type outrank = 0; outrank < this->outdegree(); outrank++)
+  {
+    if(this->outgoing[outrank] != another.outgoing[outrank]) { return false; }
+  }
+  for(size_type i = 0; i < this->runs(); i++)
+  {
+    if(this->body[i] != another.body[i]) { return false; }
+  }
+
+  return true;
+}
+
+//------------------------------------------------------------------------------
+
 void
 DynamicRecord::recode()
 {
@@ -62,6 +89,22 @@ DynamicRecord::LF(size_type i, rank_type outrank) const
     }
   }
   return res;
+}
+
+//------------------------------------------------------------------------------
+
+std::ostream&
+operator<<(std::ostream& out, const DynamicRecord& record)
+{
+  out << "(size " << record.size() << ", "
+      << record.runs() << " runs, "
+      << "indegree " << record.indegree()
+      << ", outdegree " << record.outdegree()
+      << ", incoming = " << record.incoming
+      << ", outgoing = " << record.outgoing
+      << ", body = " << record.body << ")";
+
+  return out;
 }
 
 //------------------------------------------------------------------------------

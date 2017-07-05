@@ -191,6 +191,46 @@ DynamicGBWT::copy(const DynamicGBWT& source)
 
 //------------------------------------------------------------------------------
 
+size_type
+DynamicGBWT::runs() const
+{
+  size_type total = 0;
+  for(const DynamicRecord& record : this->bwt) { total += record.runs(); }
+  return total;
+}
+
+bool
+DynamicGBWT::compare(const DynamicGBWT& another, std::ostream& out) const
+{
+  out << "Comparing dynamic GBWTs" << std::endl;
+  out << std::endl;
+
+  if(this->header != another.header)
+  {
+    out << "This:    " << this->header << std::endl;
+    out << "Another: " << another.header << std::endl;
+    out << std::endl;
+    return false;
+  }
+
+  for(node_type node = 0; node < this->sigma(); node++)
+  {
+    if(this->bwt[node] != another.bwt[node])
+    {
+      out << "This[" << node << "]:    " << this->bwt[node] << std::endl;
+      out << "Another[" << node << "]: " << another.bwt[node] << std::endl;
+      out << std::endl;
+      return false;
+    }
+  }
+
+  out << "The GBWTs are identical" << std::endl;
+  out << std::endl;
+  return true;
+}
+
+//------------------------------------------------------------------------------
+
 void
 swapBody(DynamicRecord& record, RunMerger& merger)
 {

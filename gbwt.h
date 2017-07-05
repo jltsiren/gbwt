@@ -72,6 +72,9 @@ public:
   */
   void insert(const text_type& text);
 
+  // Determine whether the GBWTs are identical.
+  bool compare(const DynamicGBWT& another, std::ostream& out) const;
+
 //------------------------------------------------------------------------------
 
   inline size_type size() const { return this->header.size; }
@@ -79,6 +82,8 @@ public:
   inline size_type sigma() const { return this->header.alphabet_size; }
   inline size_type effective() const { return this->header.nodes; }
   inline size_type count(node_type node) const { return this->bwt[node].size(); }
+
+  size_type runs() const;
 
 //------------------------------------------------------------------------------
 

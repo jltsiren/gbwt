@@ -103,6 +103,18 @@ GBWTHeader::swap(GBWTHeader& another)
   }
 }
 
+bool
+GBWTHeader::operator==(const GBWTHeader& another) const
+{
+  return (this->tag == another.tag &&
+          this->version == another.version &&
+          this->sequences == another.sequences &&
+          this->size == another.size &&
+          this->nodes == another.nodes &&
+          this->alphabet_size == another.alphabet_size &&
+          this->flags == another.flags);
+}
+
 std::ostream& operator<<(std::ostream& stream, const GBWTHeader& header)
 {
   return stream << "GBWT v" << header.version << ": "

@@ -29,6 +29,19 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
+Run::Run(size_type alphabet_size) :
+  sigma(alphabet_size),
+  run_continues(0)
+{
+  size_type max_code = std::numeric_limits<code_type>::max();
+  if(this->sigma < max_code)
+  {
+    this->run_continues = (max_code + 1) / this->sigma;
+  }
+}
+
+//------------------------------------------------------------------------------
+
 void
 RunMerger::flush()
 {
