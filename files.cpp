@@ -29,17 +29,6 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
-const std::string TEXT_EXTENSION     = ".text";
-const std::string HEADER_EXTENSION   = ".header";
-const std::string ALPHABET_EXTENSION = ".alphabet";
-const std::string DOCUMENT_EXTENSION = ".documents";
-const std::string SA_EXTENSION       = ".sa";
-const std::string BWT_EXTENSION      = ".bwt";
-const std::string GBWT_EXTENSION      = ".gbwt";
-const std::string INDEX_EXTENSION      = ".index";
-
-//------------------------------------------------------------------------------
-
 GBWTHeader::GBWTHeader() :
   tag(TAG), version(VERSION),
   sequences(0), size(0),

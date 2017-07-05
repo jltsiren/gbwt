@@ -30,7 +30,7 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
-const std::string DynamicGBWT::EXTENSION = GBWT_EXTENSION;
+const std::string DynamicGBWT::EXTENSION = ".gbwt";
 
 DynamicGBWT::DynamicGBWT()
 {
