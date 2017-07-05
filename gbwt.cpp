@@ -23,60 +23,10 @@
 */
 
 #include "gbwt.h"
+#include "internal.h"
 
 namespace gbwt
 {
-
-//------------------------------------------------------------------------------
-
-Sequence::Sequence() :
-  id(0), curr(ENDMARKER), next(ENDMARKER), offset(0), pos(0)
-{
-}
-
-Sequence::Sequence(const text_type& text, size_type i, size_type seq_id) :
-  id(seq_id), curr(ENDMARKER), next(text[i]), offset(seq_id), pos(i)
-{
-}
-
-//------------------------------------------------------------------------------
-
-void
-DynamicRecord::recode()
-{
-  bool sorted = true;
-  for(rank_type outrank = 1; outrank < this->outdegree(); outrank++)
-  {
-    if(this->successor(outrank) < this->successor(outrank - 1)) { sorted = false; break; }
-  }
-  if(sorted) { return; }
-
-  for(run_type& run : this->body) { run.first = this->successor(run.first); }
-  sequentialSort(this->outgoing.begin(), this->outgoing.end());
-  for(run_type& run : this->body) { run.first = this->edgeTo(run.first); }
-}
-
-//------------------------------------------------------------------------------
-
-size_type
-DynamicRecord::LF(size_type i, rank_type outrank) const
-{
-  size_type res = this->offset(outrank);
-  if(i == 0) { return res; }
-
-  size_type j = 0;
-  for(run_type run : this->body)
-  {
-    if(run.first == outrank) { res += run.second; }
-    j += run.second;
-    if(j + 1 >= i)
-    {
-      if(run.first == outrank) { res -= j + 1 - i; }
-      break;
-    }
-  }
-  return res;
-}
 
 //------------------------------------------------------------------------------
 
@@ -241,57 +191,13 @@ DynamicGBWT::copy(const DynamicGBWT& source)
 
 //------------------------------------------------------------------------------
 
-/*
-  A support structure for run-length encoding outrank seqs.
-*/
-
-struct RunMerger
-{
-  typedef Run::value_type value_type;
-  typedef Run::run_type   run_type;
-
-  size_type              total_size;
-  run_type               accumulator;
-  std::vector<run_type>  runs;
-  std::vector<size_type> counts;
-
-  RunMerger(size_type sigma) : total_size(0), accumulator(0, 0), counts(sigma) {}
-
-  inline size_type size() const { return this->total_size; }
-
-  inline void insert(run_type run)
-  {
-    this->total_size += run.second; counts[run.first] += run.second;
-    if(run.first == accumulator.first) { accumulator.second += run.second; }
-    else { this->flush(); this->accumulator = run; }
-  }
-
-  inline void insert(value_type value) { this->insert(run_type(value, 1)); }
-
-  inline void flush()
-  {
-    if(this->accumulator.second > 0)
-    {
-      this->runs.push_back(this->accumulator);
-      this->accumulator.second = 0;
-    }
-  }
-
-  inline void addEdge() { this->counts.push_back(0); }
-
-  // Flush the merger and swap body and size with the record. Counts are invalid after this.
-  void swap(DynamicRecord& record);
-};
-
 void
-RunMerger::swap(DynamicRecord& record)
+swapBody(DynamicRecord& record, RunMerger& merger)
 {
-  this->flush();
-  this->runs.swap(record.body);
-  std::swap(this->total_size, record.body_size);
+  merger.flush();
+  merger.runs.swap(record.body);
+  std::swap(merger.total_size, record.body_size);
 }
-
-//------------------------------------------------------------------------------
 
 void
 DynamicGBWT::insert(const text_type& text)
@@ -390,7 +296,7 @@ DynamicGBWT::insert(const text_type& text)
       {
         new_body.insert(*iter); ++iter;
       }
-      new_body.swap(current);
+      swapBody(current, new_body);
     }
     this->header.size += seqs.size();
 

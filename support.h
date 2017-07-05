@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
+  Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -31,141 +31,98 @@ namespace gbwt
 {
 
 /*
-  support.h: Support structures.
+  support.h: Public support structures.
 */
 
 //------------------------------------------------------------------------------
 
 /*
-  Encodes unsigned integers as byte sequences. Each byte contains 7 bits of data
-  and one bit telling whether the encoding continues in the next byte. The data is
-  stored in LSB order.
+  The part of the BWT corresponding to a single node (the suffixes starting with / the
+  prefixes ending with that node).
+
+  - Incoming edges are sorted by the source node.
+  - It is not necessary to have the outgoing edges sorted, but we will sort them anyway
+  after each insert.
 */
 
-struct ByteCode
+struct DynamicRecord
 {
-  typedef gbwt::size_type value_type;
-  typedef gbwt::byte_type code_type;
+  typedef gbwt::size_type size_type;
 
-  const static size_type DATA_BITS  = 7;
-  const static code_type DATA_MASK  = 0x7F;
-  const static code_type NEXT_BYTE  = 0x80;
+  size_type              body_size;
+  std::vector<edge_type> incoming, outgoing;
+  std::vector<run_type>  body;
 
-  /*
-    Reads the next value and updates i to point to the byte after the value.
-  */
-  template<class ByteArray>
-  static value_type read(ByteArray& array, size_type& i)
-  {
-    size_type offset = 0;
-    value_type res = array[i] & DATA_MASK;
-    while(array[i] & NEXT_BYTE)
-    {
-      i++; offset += DATA_BITS;
-      res += ((value_type)(array[i] & DATA_MASK)) << offset;
-    }
-    i++;
-    return res;
-  }
-
-  /*
-    Encodes the value and stores it in the array using push_back().
-  */
-  template<class ByteArray>
-  static void write(ByteArray& array, value_type value)
-  {
-    while(value > DATA_MASK)
-    {
-      array.push_back((value & DATA_MASK) | NEXT_BYTE);
-      value >>= DATA_BITS;
-    }
-    array.push_back(value);
-  }
-};
+  inline size_type size() const { return this->body_size; }
+  inline size_type runs() const { return this->body.size(); }
+  inline size_type indegree() const { return this->incoming.size(); }
+  inline size_type outdegree() const { return this->outgoing.size(); }
 
 //------------------------------------------------------------------------------
 
-/*
-  Run-length encoding using ByteCode. Run lengths and alphabet size are assumed to be > 0.
-*/
+  // Sort the outgoing edges if they are not sorted.
+  void recode();
 
-struct Run
-{
-  typedef ByteCode::value_type value_type;
-  typedef ByteCode::code_type  code_type;
+  // This assumes that 'outrank' is a valid outgoing edge.
+  size_type LF(size_type i, rank_type outrank) const;
 
+//------------------------------------------------------------------------------
+
+  // Map nodes to outranks.
+  inline rank_type edgeTo(node_type to) const
+  {
+    for(rank_type outrank = 0; outrank < this->outdegree(); outrank++)
+    {
+      if(this->successor(outrank) == to) { return outrank; }
+    }
+    return this->outdegree();
+  }
+
+  // These assume that 'outrank' is a valid outgoing edge.
+  inline node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
 #ifdef GBWT_SAVE_MEMORY
-  typedef std::pair<short_type, short_type> run_type;
+  inline short_type& offset(rank_type outrank) { return this->outgoing[outrank].second; }
 #else
-  typedef std::pair<value_type, size_type> run_type;
+  inline size_type& offset(rank_type outrank) { return this->outgoing[outrank].second; }
 #endif
+  inline size_type offset(rank_type outrank) const { return this->outgoing[outrank].second; }
 
-  size_type sigma, run_continues;
+//------------------------------------------------------------------------------
 
-  Run(size_type alphabet_size) :
-    sigma(alphabet_size),
-    run_continues(0)
+  // Return the first node >= 'from' with an incoming edge to this node.
+  inline rank_type findFirst(node_type from) const
   {
-    size_type max_code = std::numeric_limits<code_type>::max();
-    if(this->sigma < max_code)
+    for(size_type i = 0; i < this->indegree(); i++)
     {
-      this->run_continues = (max_code + 1) / this->sigma;
+      if(this->incoming[i].first >= from) { return i; }
     }
+    return this->indegree();
   }
 
-  /*
-    Returns (value, run length) and updates i to point past the run.
-  */
-  template<class ByteArray>
-  run_type read(ByteArray& array, size_type& i)
+  // These assume that 'inrank' is a valid incoming edge.
+  inline node_type predecessor(rank_type inrank) const { return this->incoming[inrank].first; }
+#ifdef GBWT_SAVE_MEMORY
+  inline short_type& count(rank_type inrank) { return this->incoming[inrank].second; }
+#else
+  inline size_type& count(rank_type inrank) { return this->incoming[inrank].second; }
+#endif
+  inline size_type count(rank_type inrank) const { return this->incoming[inrank].second; }
+
+  // Increment the count of the incoming edge from 'from'.
+  inline void increment(node_type from)
   {
-    run_type run;
-    if(this->run_continues == 0)
+    for(rank_type inrank = 0; inrank < this->indegree(); inrank++)
     {
-      run.first = ByteCode::read(array, i);
-      run.second = ByteCode::read(array, i) + 1;
+      if(this->predecessor(inrank) == from) { this->count(inrank)++; return; }
     }
-    else
-    {
-      run = this->decodeBasic(array[i]); i++;
-      if(run.second >= this->run_continues) { run.second += ByteCode::read(array, i); }
-    }
-    return run;
+    this->addIncoming(edge_type(from, 1));
   }
 
-  /*
-    Encodes the run and stores it in the array using push_back().
-  */
-  template<class ByteArray>
-  void write(ByteArray& array, value_type value, size_type length)
+  // Add a new incoming edge.
+  inline void addIncoming(edge_type inedge)
   {
-    if(this->run_continues == 0)
-    {
-      ByteCode::write(array, value);
-      ByteCode::write(array, length - 1);
-    }
-    else if(length < this->run_continues)
-    {
-      array.push_back(this->encodeBasic(value, length));
-    }
-    else
-    {
-      array.push_back(this->encodeBasic(value, this->run_continues));
-      ByteCode::write(array, length - this->run_continues);
-    }
-  }
-
-  template<class ByteArray>
-  inline void write(ByteArray& array, run_type run) { this->write(array, run.first, run.second); }
-
-  inline code_type encodeBasic(value_type value, size_type length)
-  {
-    return value + this->sigma * (length - 1);
-  }
-
-  inline run_type decodeBasic(code_type code)
-  {
-    return run_type(code % this->sigma, code / this->sigma + 1);
+    this->incoming.push_back(inedge);
+    sequentialSort(this->incoming.begin(), this->incoming.end());
   }
 };
 

@@ -34,10 +34,7 @@ namespace gbwt
 /*
   gbwt.h: Main GBWT structures.
 
-  FIXME Reorganize:
-    - rename old support.h to internal.h
-    - move Sequence to internal.h, DynamicRecord to support.h
-    - rename this file to dynamic_gbwt.h
+  FIXME Reorganize: rename this file to dynamic_gbwt.h
 
   FIXME We currently assume that the alphabet is dense. In a multi-chromosome graph, the
   alphabet for an individual chromosome will be dense in range [a,b].
@@ -45,133 +42,10 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
-struct Sequence
-{
-  size_type id;
-  node_type curr, next;
-  size_type offset; // Offset in the current record.
-  size_type pos;    // Position in the text.
-
-  Sequence();
-  Sequence(const text_type& text, size_type i, size_type seq_id);
-
-  // Sort by reverse prefixes text[..pos+1].
-  inline bool operator<(const Sequence& another) const
-  {
-    if(this->next != another.next) { return (this->next < another.next); }
-    if(this->curr != another.curr) { return (this->curr < another.curr); }
-    return (this->offset < another.offset);
-  }
-
-  // Do not call if 'next' is an endmarker.
-  inline void advance(const text_type& text)
-  {
-    this->curr = this->next;
-    this->pos++;
-    this->next = text[this->pos];
-  }
-};
-
-//------------------------------------------------------------------------------
-
-/*
-  The part of the BWT corresponding to a single node (the suffixes starting with / the
-  prefixes ending with that node).
-
-  - Incoming edges are sorted by the source node.
-  - It is not necessary to have the outgoing edges sorted, but we will sort them anyway
-  after each insert.
-*/
-
-struct DynamicRecord
-{
-  typedef gbwt::size_type size_type;
-  typedef Run::value_type rank_type;  // Rank of incoming/outgoing edge.
-  typedef Run::run_type   run_type;
-
-#ifdef GBWT_SAVE_MEMORY
-  typedef std::pair<short_type, short_type> edge_type;
-#else
-  typedef std::pair<node_type, size_type> edge_type;
-#endif
-
-  size_type              body_size;
-  std::vector<edge_type> incoming, outgoing;
-  std::vector<run_type>  body;
-
-  inline size_type size() const { return this->body_size; }
-  inline size_type runs() const { return this->body.size(); }
-  inline size_type indegree() const { return this->incoming.size(); }
-  inline size_type outdegree() const { return this->outgoing.size(); }
-
-  // Sort the outgoing edges if they are not sorted.
-  void recode();
-
-  // Map global alphabet to local alphabet.
-  inline rank_type edgeTo(node_type to) const
-  {
-    for(rank_type outrank = 0; outrank < this->outdegree(); outrank++)
-    {
-      if(this->outgoing[outrank].first == to) { return outrank; }
-    }
-    return this->outdegree();
-  }
-
-  // These assume that 'outrank' is a valid outgoing edge.
-  inline node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
-#ifdef GBWT_SAVE_MEMORY
-  inline short_type& offset(rank_type outrank) { return this->outgoing[outrank].second; }
-#else
-  inline size_type& offset(rank_type outrank) { return this->outgoing[outrank].second; }
-#endif
-  inline size_type offset(rank_type outrank) const { return this->outgoing[outrank].second; }
-
-  // This assumes that 'outrank' is a valid outgoing edge.
-  size_type LF(size_type i, rank_type outrank) const;
-
-  // Return the first node >= 'from' with an incoming edge to this node.
-  inline rank_type findFirst(node_type from) const
-  {
-    for(size_type i = 0; i < this->indegree(); i++)
-    {
-      if(this->incoming[i].first >= from) { return i; }
-    }
-    return this->indegree();
-  }
-
-  // This assumes that 'inrank' is a valid incoming edge.
-  inline node_type predecessor(rank_type inrank) const
-  {
-    return this->incoming[inrank].first;
-  }
-
-  // Increment the count of the incoming edge from 'from'.
-  inline void increment(node_type from)
-  {
-    for(size_type i = 0; i < this->indegree(); i++)
-    {
-      if(this->incoming[i].first == from) { this->incoming[i].second++; return; }
-    }
-    this->addIncoming(edge_type(from, 1));
-  }
-
-  // Add a new incoming edge.
-  inline void addIncoming(edge_type inedge)
-  {
-    this->incoming.push_back(inedge);
-    sequentialSort(this->incoming.begin(), this->incoming.end());
-  }
-};
-
-//------------------------------------------------------------------------------
-
 class DynamicGBWT
 {
 public:
   typedef DynamicRecord::size_type size_type;
-  typedef DynamicRecord::rank_type rank_type;
-  typedef DynamicRecord::run_type  run_type;
-  typedef DynamicRecord::edge_type edge_type;
 
 //------------------------------------------------------------------------------
 

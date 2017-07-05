@@ -56,9 +56,21 @@ namespace gbwt
 //------------------------------------------------------------------------------
 
 typedef std::uint64_t size_type;
-typedef std::uint64_t node_type;
 typedef std::uint32_t short_type;
 typedef std::uint8_t  byte_type;
+
+typedef size_type node_type;
+typedef size_type rank_type;  // Rank of incoming / outgoing edge.
+
+#ifdef GBWT_SAVE_MEMORY
+typedef std::pair<short_type, short_type> edge_type;
+typedef std::pair<short_type, short_type> run_type;
+#else
+typedef std::pair<node_type, size_type>   edge_type;
+typedef std::pair<rank_type, size_type>   run_type;
+#endif
+
+//------------------------------------------------------------------------------
 
 const size_type BYTE_BITS    = 8;
 const size_type WORD_BITS    = 64;
