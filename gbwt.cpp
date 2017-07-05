@@ -41,6 +41,23 @@ Sequence::Sequence(const text_type& text, size_type i, size_type seq_id) :
 
 //------------------------------------------------------------------------------
 
+void
+DynamicRecord::recode()
+{
+  bool sorted = true;
+  for(rank_type outrank = 1; outrank < this->outdegree(); outrank++)
+  {
+    if(this->successor(outrank) < this->successor(outrank - 1)) { sorted = false; break; }
+  }
+  if(sorted) { return; }
+
+  for(run_type& run : this->body) { run.first = this->successor(run.first); }
+  sequentialSort(this->outgoing.begin(), this->outgoing.end());
+  for(run_type& run : this->body) { run.first = this->edgeTo(run.first); }
+}
+
+//------------------------------------------------------------------------------
+
 size_type
 DynamicRecord::LF(size_type i, rank_type outrank) const
 {
@@ -279,6 +296,8 @@ RunMerger::swap(DynamicRecord& record)
 void
 DynamicGBWT::insert(const text_type& text)
 {
+  double start = readTimer();
+
   if(text.empty()) { return; }
   if(text[text.size() - 1] != ENDMARKER)
   {
@@ -286,9 +305,28 @@ DynamicGBWT::insert(const text_type& text)
     std::exit(EXIT_FAILURE);
   }
 
-  // Increase alphabet size if necessary.
+  /*
+    Find the start of each sequence and initialize the sequence objects at the endmarker node.
+    Increase alphabet size if necessary.
+  */
+  bool seq_start = true;
   size_type max_node = 0;
-  for(node_type node : text) { max_node = std::max(node, max_node); }
+  std::vector<Sequence> seqs;
+  for(size_type i = 0; i < text.size(); i++)
+  {
+    max_node = std::max(text[i], max_node);
+    if(seq_start)
+    {
+      Sequence temp(text, i, this->sequences());
+      seqs.push_back(temp); seq_start = false;
+      this->header.sequences++;
+    }
+    if(text[i] == ENDMARKER) { seq_start = true; }
+  }
+  if(Verbosity::level >= Verbosity::EXTENDED)
+  {
+    std::cerr << "DynamicGBWT::insert(): Inserting " << seqs.size() << " sequences of total length " << text.size() << std::endl;
+  }
   if(max_node >= this->sigma())
   {
     if(Verbosity::level >= Verbosity::FULL)
@@ -299,33 +337,11 @@ DynamicGBWT::insert(const text_type& text)
     this->bwt.resize(this->sigma());
   }
 
-  // Initialize the sequences at the endmarker node.
-  std::vector<Sequence> seqs;
-  bool seq_start = true;
-  for(size_type i = 0; i < text.size(); i++)
-  {
-    if(seq_start)
-    {
-      Sequence temp(text, i, this->count(text[ENDMARKER]) + seqs.size());
-      seqs.push_back(temp); seq_start = false;
-    }
-    if(text[i] == ENDMARKER) { seq_start = true; }
-  }
-  this->header.sequences += seqs.size();
-  if(Verbosity::level >= Verbosity::BASIC)
-  {
-    std::cerr << "DynamicGBWT::insert(): Inserting " << seqs.size() << " sequences of total length " << text.size() << std::endl;
-  }
-
   // Invariant: Sequences are sorted by (curr, offset).
   size_type iteration = 0;
   while(true)
   {
     iteration++;  // We use 1-based iterations.
-    if(Verbosity::level >= Verbosity::FULL && iteration % 1000 == 0)
-    {
-      std::cerr << "DynamicGBWT::insert(): Iteration " << iteration << ", " << seqs.size() << " sequences" << std::endl;
-    }
 
     /*
       Process ranges of sequences sharing the same 'curr' node.
@@ -423,16 +439,27 @@ DynamicGBWT::insert(const text_type& text)
     }
   }
 
-  if(Verbosity::level >= Verbosity::EXTENDED)
-  {
-    std::cerr << "DynamicGBWT::insert(): " << iteration << " iterations" << std::endl;
-  }
-
-  // Update the effective alphabet size.
-  this->header.nodes = 0;
+  // Update the effective alphabet size and sort the outgoing edges.
+  std::atomic<size_type> effective_alphabet(0);
+  #pragma omp parallel for schedule(static)
   for(node_type node = 0; node < this->sigma(); node++)
   {
-    if(this->count(node) > 0) { this->header.nodes++; }
+    if(this->count(node) > 0)
+    {
+      effective_alphabet++;
+      this->bwt[node].recode();
+    }
+  }
+  this->header.nodes = effective_alphabet;
+  if(Verbosity::level >= Verbosity::FULL)
+  {
+    std::cerr << "DynamicGBWT::insert(): Effective alphabet size " << this->effective() << std::endl;
+  }
+
+  if(Verbosity::level >= Verbosity::EXTENDED)
+  {
+    double seconds = readTimer() - start;
+    std::cerr << "DynamicGBWT::insert(): " << iteration << " iterations in " << seconds << " seconds" << std::endl;
   }
 }
 

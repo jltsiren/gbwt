@@ -156,7 +156,7 @@ struct Verbosity
   const static size_type SILENT   = 0;
   const static size_type BASIC    = 1;
   const static size_type EXTENDED = 2;
-  const static size_type DEFAULT  = 2;
+  const static size_type DEFAULT  = 3;
   const static size_type FULL     = 3;
 };
 

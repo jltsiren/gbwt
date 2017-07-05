@@ -76,10 +76,11 @@ struct Sequence
 
 /*
   The part of the BWT corresponding to a single node (the suffixes starting with / the
-  prefixes ending with that node). Incoming edges are sorted by the source node, while
-  outgoing edges are not sorted.
+  prefixes ending with that node).
 
-  FIXME Implement recoding to make outgoing edges also sorted.
+  - Incoming edges are sorted by the source node.
+  - It is not necessary to have the outgoing edges sorted, but we will sort them anyway
+  after each insert.
 */
 
 struct DynamicRecord
@@ -102,6 +103,9 @@ struct DynamicRecord
   inline size_type runs() const { return this->body.size(); }
   inline size_type indegree() const { return this->incoming.size(); }
   inline size_type outdegree() const { return this->outgoing.size(); }
+
+  // Sort the outgoing edges if they are not sorted.
+  void recode();
 
   // Map global alphabet to local alphabet.
   inline rank_type edgeTo(node_type to) const
@@ -199,6 +203,7 @@ public:
   inline size_type size() const { return this->header.size; }
   inline size_type sequences() const { return this->header.sequences; }
   inline size_type sigma() const { return this->header.alphabet_size; }
+  inline size_type effective() const { return this->header.nodes; }
   inline size_type count(node_type node) const { return this->bwt[node].size(); }
 
 //------------------------------------------------------------------------------
