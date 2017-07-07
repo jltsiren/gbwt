@@ -32,7 +32,9 @@ using namespace gbwt;
 
 void printUsage(int exit_code = EXIT_SUCCESS);
 
-double build(DynamicGBWT& gbwt, std::string& base_name, size_type batch_size);
+double build(DynamicGBWT& gbwt, const std::string& base_name, size_type batch_size);
+
+void verify(DynamicGBWT& gbwt, const std::string& base_name);
 
 //------------------------------------------------------------------------------
 
@@ -42,13 +44,16 @@ main(int argc, char** argv)
   if(argc < 2) { printUsage(); }
 
   size_type batch_size = 0;
+  bool verify_index = false;
   int c = 0;
-  while((c = getopt(argc, argv, "b:")) != -1)
+  while((c = getopt(argc, argv, "b:v")) != -1)
   {
     switch(c)
     {
     case 'b':
       batch_size = std::stoul(optarg); break;
+    case 'v':
+      verify_index = true; break;
     case '?':
       std::exit(EXIT_FAILURE);
     default:
@@ -79,6 +84,8 @@ main(int argc, char** argv)
   std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;
   std::cout << std::endl;
 
+  if(verify_index) { verify(gbwt, base_name); }
+
   return 0;
 }
 
@@ -89,6 +96,7 @@ printUsage(int exit_code)
 {
   std::cerr << "Usage: build_gbwt [options] base_name" << std::endl;
   std::cerr << "  -b N  Insert in batches of N million nodes" << std::endl;
+  std::cerr << "  -v    Verify the index after construction" << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);
@@ -97,7 +105,7 @@ printUsage(int exit_code)
 //------------------------------------------------------------------------------
 
 double
-build(DynamicGBWT& gbwt, std::string& base_name, size_type batch_size)
+build(DynamicGBWT& gbwt, const std::string& base_name, size_type batch_size)
 {
   double start = readTimer();
 
@@ -125,6 +133,62 @@ build(DynamicGBWT& gbwt, std::string& base_name, size_type batch_size)
   sdsl::store_to_file(gbwt, gbwt_name);
 
   return readTimer() - start;
+}
+
+//------------------------------------------------------------------------------
+
+void
+verify(DynamicGBWT& gbwt, const std::string& base_name)
+{
+  double start = readTimer();
+
+  // Read the input and find the starting offsets.
+  std::vector<size_type> offsets;
+  {
+    text_buffer_type text(base_name);
+    bool seq_start = true;
+    for(size_type i = 0; i < text.size(); i++)
+    {
+      if(seq_start) { offsets.push_back(i); seq_start = false; }
+      if(text[i] == ENDMARKER) { seq_start = true; }
+    }
+  }
+  if(offsets.empty()) { return; }
+  std::vector<range_type> blocks = Range::partition(range_type(0, offsets.size() - 1), 4 * omp_get_max_threads());
+
+  bool failed = false;
+  #pragma omp parallel for schedule(dynamic, 1)
+  for(size_type block = 0; block < blocks.size(); block++)
+  {
+    text_buffer_type text(base_name);
+    for(size_type sequence = blocks[block].first; sequence <= blocks[block].second; sequence++)
+    {
+      edge_type current(ENDMARKER, sequence);
+      for(size_type offset = offsets[sequence]; text[offset] != ENDMARKER; offset++)
+      {
+        edge_type next = gbwt.LF(current.first, current.second);
+        if(next.first != text[offset])
+        {
+          #pragma omp critical
+          {
+            std::cerr << "build_gbwt: Index verification failed with sequence " << sequence << ", offset "
+                      << (offset - offsets[sequence]) << std::endl;
+            std::cerr << "build_gbwt: Expected an edge from " << current.first << " to " << text[offset]
+                      << ", ended up in " << next.first << std::endl;
+            failed = true;
+          }
+          break;
+        }
+        current = next;
+      }
+    }
+  }
+
+  double seconds = readTimer() - start;
+
+  if(failed) { std::cout << "Index verification failed" << std::endl; }
+  else { std::cout << "Index verified in " << seconds << " seconds" << std::endl; }
+  std::cout << std::endl;
 }
 
 //------------------------------------------------------------------------------

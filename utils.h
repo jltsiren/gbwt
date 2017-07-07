@@ -138,6 +138,12 @@ struct Range
   {
     return range_type(1, 0);
   }
+
+  /*
+    Partition the range approximately evenly between the blocks. The actual number of
+    blocks will not be greater than the length of the range.
+  */
+  static std::vector<range_type> partition(range_type range, size_type blocks);
 };
 
 template<class A, class B>

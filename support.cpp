@@ -109,6 +109,7 @@ DynamicRecord::LF(size_type i) const
     last_edge = run.first;
     result[run.first].second += run.second;
     offset += run.second;
+    if(offset > i) { break; }
   }
 
   result[last_edge].second -= (offset - i);

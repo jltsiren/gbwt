@@ -35,6 +35,28 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
+std::vector<range_type>
+Range::partition(range_type range, size_type blocks)
+{
+  if(empty(range)) { return std::vector<range_type>(); }
+  blocks = bound(blocks, 1, length(range));
+
+  std::vector<range_type> result(blocks);
+  for(size_type block = 0, start = range.first; block < blocks; block++)
+  {
+    result[block].first = start;
+    if(start <= range.second)
+    {
+      start += std::max((size_type)1, (range.second + 1 - start) / (blocks - block));
+    }
+    result[block].second = start - 1;
+  }
+
+  return result;
+}
+
+//------------------------------------------------------------------------------
+
 size_type Verbosity::level = Verbosity::DEFAULT;
 
 void
