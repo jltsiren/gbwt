@@ -68,20 +68,18 @@ struct DynamicRecord
   // Sort the outgoing edges if they are not sorted.
   void recode();
 
-  // This assumes that 'outrank' is a valid outgoing edge.
-  size_type LF(size_type i, rank_type outrank) const;
+//------------------------------------------------------------------------------
+
+  // Returns invalid_offset() if there is no edge to the destination.
+  size_type LF(size_type i, node_type to) const;
+
+  // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
+  edge_type LF(size_type i) const;
 
 //------------------------------------------------------------------------------
 
-  // Map nodes to outranks.
-  inline rank_type edgeTo(node_type to) const
-  {
-    for(rank_type outrank = 0; outrank < this->outdegree(); outrank++)
-    {
-      if(this->successor(outrank) == to) { return outrank; }
-    }
-    return this->outdegree();
-  }
+  // Maps successor nodes to outranks.
+  rank_type edgeTo(node_type to) const;
 
   // These assume that 'outrank' is a valid outgoing edge.
   inline node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
@@ -95,14 +93,7 @@ struct DynamicRecord
 //------------------------------------------------------------------------------
 
   // Return the first node >= 'from' with an incoming edge to this node.
-  inline rank_type findFirst(node_type from) const
-  {
-    for(size_type i = 0; i < this->indegree(); i++)
-    {
-      if(this->incoming[i].first >= from) { return i; }
-    }
-    return this->indegree();
-  }
+  rank_type findFirst(node_type from) const;
 
   // These assume that 'inrank' is a valid incoming edge.
   inline node_type predecessor(rank_type inrank) const { return this->incoming[inrank].first; }
@@ -114,21 +105,10 @@ struct DynamicRecord
   inline size_type count(rank_type inrank) const { return this->incoming[inrank].second; }
 
   // Increment the count of the incoming edge from 'from'.
-  inline void increment(node_type from)
-  {
-    for(rank_type inrank = 0; inrank < this->indegree(); inrank++)
-    {
-      if(this->predecessor(inrank) == from) { this->count(inrank)++; return; }
-    }
-    this->addIncoming(edge_type(from, 1));
-  }
+  void increment(node_type from);
 
   // Add a new incoming edge.
-  inline void addIncoming(edge_type inedge)
-  {
-    this->incoming.push_back(inedge);
-    sequentialSort(this->incoming.begin(), this->incoming.end());
-  }
+  void addIncoming(edge_type inedge);
 };
 
 //------------------------------------------------------------------------------

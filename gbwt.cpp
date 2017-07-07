@@ -414,15 +414,11 @@ DynamicGBWT::insert(const text_type& text)
 size_type
 DynamicGBWT::LF(node_type from, size_type i, node_type to) const
 {
-  if(to >= this->sigma()) { return this->size(); }
+  if(to >= this->sigma()) { return invalid_offset(); }
   if(from >= this->sigma()) { return this->count(to); }
 
-  const DynamicRecord& from_node = this->bwt[from];
-  rank_type outrank = from_node.edgeTo(to);
-  if(outrank < from_node.outdegree())
-  {
-    return from_node.LF(i, outrank);
-  }
+  size_type result = this->bwt[from].LF(i, to);
+  if(result != invalid_offset()) { return result; }
 
   /*
     Edge (from, to) has not been observed. We find the first edge from a node >= 'from' to 'to'.
@@ -434,6 +430,13 @@ DynamicGBWT::LF(node_type from, size_type i, node_type to) const
   if(inrank >= to_node.indegree()) { return this->count(to); }
   const DynamicRecord& next_from = this->bwt[to_node.predecessor(inrank)];
   return next_from.offset(next_from.edgeTo(to));
+}
+
+edge_type
+DynamicGBWT::LF(node_type from, size_type i) const
+{
+  if(from >= this->sigma()) { return invalid_edge(); }
+  return this->bwt[from].LF(i);
 }
 
 //------------------------------------------------------------------------------

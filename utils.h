@@ -89,6 +89,9 @@ const size_type BILLION      = 1000 * MILLION;
 
 const node_type ENDMARKER    = 0;
 
+inline size_type invalid_offset() { return ~(size_type)0; }
+inline edge_type invalid_edge() { return edge_type(ENDMARKER, invalid_offset()); }
+
 //------------------------------------------------------------------------------
 
 typedef sdsl::int_vector<0>        text_type;

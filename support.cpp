@@ -71,24 +71,89 @@ DynamicRecord::recode()
   for(run_type& run : this->body) { run.first = this->edgeTo(run.first); }
 }
 
-size_type
-DynamicRecord::LF(size_type i, rank_type outrank) const
-{
-  size_type res = this->offset(outrank);
-  if(i == 0) { return res; }
+//------------------------------------------------------------------------------
 
-  size_type j = 0;
+size_type
+DynamicRecord::LF(size_type i, node_type to) const
+{
+  size_type outrank = this->edgeTo(to);
+  if(outrank >= this->outdegree()) { return invalid_offset(); }
+
+  size_type result = this->offset(outrank);
+  if(i == 0) { return result; }
+
+  size_type offset = 0;
   for(run_type run : this->body)
   {
-    if(run.first == outrank) { res += run.second; }
-    j += run.second;
-    if(j + 1 >= i)
+    if(run.first == outrank) { result += run.second; }
+    offset += run.second;
+    if(offset >= i)
     {
-      if(run.first == outrank) { res -= j + 1 - i; }
+      if(run.first == outrank) { result -= offset - i; }
       break;
     }
   }
-  return res;
+  return result;
+}
+
+edge_type
+DynamicRecord::LF(size_type i) const
+{
+  if(i >= this->size()) { return invalid_edge(); }
+
+  std::vector<edge_type> result(this->outgoing);
+  rank_type last_edge = 0;
+  size_type offset = 0;
+  for(run_type run : this->body)
+  {
+    last_edge = run.first;
+    result[run.first].second += run.second;
+    offset += run.second;
+  }
+
+  result[last_edge].second -= (offset - i);
+  return result[last_edge];
+}
+
+//------------------------------------------------------------------------------
+
+rank_type
+DynamicRecord::edgeTo(node_type to) const
+{
+  for(rank_type outrank = 0; outrank < this->outdegree(); outrank++)
+  {
+    if(this->successor(outrank) == to) { return outrank; }
+  }
+  return this->outdegree();
+}
+
+//------------------------------------------------------------------------------
+
+rank_type
+DynamicRecord::findFirst(node_type from) const
+{
+  for(size_type i = 0; i < this->indegree(); i++)
+  {
+    if(this->incoming[i].first >= from) { return i; }
+  }
+  return this->indegree();
+}
+
+void
+DynamicRecord::increment(node_type from)
+{
+  for(rank_type inrank = 0; inrank < this->indegree(); inrank++)
+  {
+    if(this->predecessor(inrank) == from) { this->count(inrank)++; return; }
+  }
+  this->addIncoming(edge_type(from, 1));
+}
+
+void
+DynamicRecord::addIncoming(edge_type inedge)
+{
+  this->incoming.push_back(inedge);
+  sequentialSort(this->incoming.begin(), this->incoming.end());
 }
 
 //------------------------------------------------------------------------------
