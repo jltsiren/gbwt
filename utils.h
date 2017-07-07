@@ -282,6 +282,8 @@ size_type fileSize(std::ofstream& file);
 /*
   parallelQuickSort() uses less working space than parallelMergeSort(). Calling omp_set_nested(1)
   improves the speed of parallelQuickSort().
+
+  Sequential sorting is typically better with less than 1000 elements per thread.
 */
 
 template<class Iterator, class Comparator>
@@ -356,6 +358,34 @@ sequentialSort(Iterator first, Iterator last)
 #endif
 }
 
+const size_type PARALLEL_SORT_THRESHOLD = 1024;
+
+template<class Iterator, class Comparator>
+void
+chooseBestSort(Iterator first, Iterator last, const Comparator& comp)
+{
+  size_type old_threads = omp_get_max_threads();
+  size_type new_threads = ((last - first) + PARALLEL_SORT_THRESHOLD / 2) / PARALLEL_SORT_THRESHOLD;
+  if(new_threads <= 1) { sequentialSort(first, last, comp); return; }
+
+  if(new_threads < old_threads) { omp_set_num_threads(new_threads); }
+  parallelQuickSort(first, last, comp);
+  if(new_threads < old_threads) { omp_set_num_threads(old_threads); }
+}
+
+template<class Iterator>
+void
+chooseBestSort(Iterator first, Iterator last)
+{
+  size_type old_threads = omp_get_max_threads();
+  size_type new_threads = ((last - first) + PARALLEL_SORT_THRESHOLD / 2) / PARALLEL_SORT_THRESHOLD;
+  if(new_threads <= 1) { sequentialSort(first, last); return; }
+
+  if(new_threads < old_threads) { omp_set_num_threads(new_threads); }
+  parallelQuickSort(first, last);
+  if(new_threads < old_threads) { omp_set_num_threads(old_threads); }
+}
+
 template<class Element>
 void
 removeDuplicates(std::vector<Element>& vec, bool parallel)
@@ -363,31 +393,6 @@ removeDuplicates(std::vector<Element>& vec, bool parallel)
   if(parallel) { parallelQuickSort(vec.begin(), vec.end()); }
   else         { sequentialSort(vec.begin(), vec.end()); }
   vec.resize(std::unique(vec.begin(), vec.end()) - vec.begin());
-}
-
-//------------------------------------------------------------------------------
-
-/*
-  Split the vector approximately evenly between the given number of threads. The comparator
-  should return true when it is safe to split between the first argument and the second argument.
-*/
-
-template<class Element, class Comparator>
-std::vector<range_type>
-getBounds(const std::vector<Element>& vec, size_type threads, const Comparator& comp)
-{
-  std::vector<range_type> bounds(threads);
-  for(size_type thread = 0, start = 0; thread < threads; thread++)
-  {
-    bounds[thread].first = start;
-    if(start < vec.size())
-    {
-      start += std::max((size_type)1, (vec.size() - start) / (threads - thread));
-      while(start < vec.size() && !comp(vec[start - 1], vec[start])) { start++; }
-    }
-    bounds[thread].second = start - 1;
-  }
-  return bounds;
 }
 
 //------------------------------------------------------------------------------

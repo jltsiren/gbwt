@@ -345,7 +345,7 @@ DynamicGBWT::insert(const text_type& text)
       Note that sorting by (next, curr, offset) now is equivalent to sorting by (curr, offset) in the
       next interation.
     */
-    parallelMergeSort(seqs.begin(), seqs.end());
+    chooseBestSort(seqs.begin(), seqs.end());
     size_type head = 0;
     while(head < seqs.size() && seqs[head].next == ENDMARKER) { head++; }
     if(head > 0)
