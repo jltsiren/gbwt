@@ -1,49 +1,51 @@
-# GBWT experiments
+# GBWT
 
 The gPBWT is an extension of the Positional Burrows-Wheeler Transform (PBWT) for graphs. Its purpose is to embed observed haplotypes in a [variation graph](https://github.com/vgteam/vg).
 
 Haplotypes are essentially sequences of nodes in the variation graph, and the gPBWT is best seen as the multi-string BWT of the node sequences. We call this approach the Graph BWT (GBWT) to differentiate it from the earlier gPBWT.
 
-This repository contains experiments with the construction and encoding of the GBWT.
-
-## Better construction
-
-* BWT for the reverse paths: build from left to right and search forward.
-* Similar to RopeBWT2: load a batch of paths into memory and insert them into the existing GBWT.
-* Align the paths before inserting them:
-  * Rewriting a record is expensive, so we want to insert as many paths at the same time as possible.
-  * Indels put paths out of sync. Different paths enter the same node at different times.
-  * Construction should be faster if we resync the paths frequently.
-  * Greedy alignment based on source/sink nodes of superbubbles should be enough.
+This repository should eventually become a scalable GBWT implementation.
 
 ## Assumptions
 
 * We store arbitrary paths in a cyclic graph.
   * Full haplotypes in a DAG with dense node identifiers can be encoded better with the PBWT using node identifiers as positions.
   * We need a mapping from sequence id to sample id in vg.
-* The input is an SDSL `int_vector_buffer<0>` containing sequences of node identitiers terminated by value `0`.
+* The input is an SDSL `int_vector<0>` containing sequences of node identitiers terminated by value `0`.
+  * All sequences from the input are inserted simultaneously into the existing index.
 * The set of node identifiers in a chromosome is locally dense.
   * The identifiers are dense in a range *[a,b]* containing the identifiers.
   * The low-order bit tells the orientation, but we can ignore that in GBWT.
-* We can support insertions and deletions if we add incoming edges (from, count) to each record.
+* We build BWT for the reverse sequences, as in PBWT.
+  * As a result, we support forward searching instead of backward searching.
+  * The construction proceeds forward in the sequences.
 
 ## Record
 
+* The BWT has one record for each node in the alphabet.
+  * We do not store the records in the maximal range *[1, offset]* of nodes not occurring in the input.
+  * This makes single-chromosome indexes for multi-chromosome graphs more space-efficient.
 * Incoming edges
-  * Indegree
-  * (from, path count) for each incoming edge
+  * (from, path count) for each incoming edge in sorted order
+  * Only in the dynamic record
 * Outgoing edges
-  * Outdegree
-  * (to, path rank) for each outgoing edge
+  * (to, path rank) for each outgoing edge in sorted order
 * Body
   * Run-length encoding of pairs (outgoing edge rank, count)
 
 ## Encoding
 
 * On disk, the records are stored in a single byte array.
-* An index (`sd_vector`?) points to the beginning of each record.
+* An index (`sd_vector`) points to the beginning of each record.
 * Runs are encoded using `Run`, while other integers are encoded using `ByteCode`.
-* In-memory encoding can be the same, or we can use three `std::vector`s of pairs of integers.
+* The Static in-memory encoding is the same as on disk.
+* The dynamic encoding required for construction uses three `std::vector`s of pairs of integers.
+
+## TODO
+
+* Static encoding.
+* GBWT merging (a simple modification of `DynamicGBWT::insert()`).
+* `locate()` support for determining sequence identifiers.
 
 ## References
 
