@@ -32,7 +32,7 @@ namespace gbwt
 GBWTHeader::GBWTHeader() :
   tag(TAG), version(VERSION),
   sequences(0), size(0),
-  nodes(0), alphabet_size(0),
+  offset(0), alphabet_size(0),
   flags(0)
 {
 }
@@ -46,7 +46,7 @@ GBWTHeader::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::stri
   written_bytes += sdsl::write_member(this->version, out, child, "version");
   written_bytes += sdsl::write_member(this->sequences, out, child, "sequences");
   written_bytes += sdsl::write_member(this->size, out, child, "size");
-  written_bytes += sdsl::write_member(this->nodes, out, child, "nodes");
+  written_bytes += sdsl::write_member(this->offset, out, child, "offset");
   written_bytes += sdsl::write_member(this->alphabet_size, out, child, "alphabet_size");
   written_bytes += sdsl::write_member(this->flags, out, child, "flags");
   sdsl::structure_tree::add_size(child, written_bytes);
@@ -60,7 +60,7 @@ GBWTHeader::load(std::istream& in)
   sdsl::read_member(this->version, in);
   sdsl::read_member(this->sequences, in);
   sdsl::read_member(this->size, in);
-  sdsl::read_member(this->nodes, in);
+  sdsl::read_member(this->offset, in);
   sdsl::read_member(this->alphabet_size, in);
   sdsl::read_member(this->flags, in);
 }
@@ -86,7 +86,7 @@ GBWTHeader::swap(GBWTHeader& another)
     std::swap(this->version, another.version);
     std::swap(this->sequences, another.sequences);
     std::swap(this->size, another.size);
-    std::swap(this->nodes, another.nodes);
+    std::swap(this->offset, another.offset);
     std::swap(this->alphabet_size, another.alphabet_size);
     std::swap(this->flags, another.flags);
   }
@@ -99,7 +99,7 @@ GBWTHeader::operator==(const GBWTHeader& another) const
           this->version == another.version &&
           this->sequences == another.sequences &&
           this->size == another.size &&
-          this->nodes == another.nodes &&
+          this->offset == another.offset &&
           this->alphabet_size == another.alphabet_size &&
           this->flags == another.flags);
 }
@@ -108,7 +108,7 @@ std::ostream& operator<<(std::ostream& stream, const GBWTHeader& header)
 {
   return stream << "GBWT v" << header.version << ": "
                 << header.sequences << " sequences of total length " << header.size
-                << ", alphabet size " << header.alphabet_size << " with " << header.nodes << " nodes";
+                << ", alphabet size " << header.alphabet_size << " with offset " << header.offset;
 }
 
 //------------------------------------------------------------------------------

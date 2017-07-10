@@ -56,12 +56,15 @@ struct DynamicRecord
 //------------------------------------------------------------------------------
 
   inline size_type size() const { return this->body_size; }
+  inline bool empty() const { return (this->size() == 0); }
   inline size_type runs() const { return this->body.size(); }
   inline size_type indegree() const { return this->incoming.size(); }
   inline size_type outdegree() const { return this->outgoing.size(); }
 
   bool operator==(const DynamicRecord& another) const;
   inline bool operator!=(const DynamicRecord& another) const { return !(this->operator==(another)); }
+
+  void swap(DynamicRecord& another);
 
 //------------------------------------------------------------------------------
 

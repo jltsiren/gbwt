@@ -35,9 +35,6 @@ namespace gbwt
   gbwt.h: Main GBWT structures.
 
   FIXME Reorganize: rename this file to dynamic_gbwt.h
-
-  FIXME We currently assume that the alphabet is dense. In a multi-chromosome graph, the
-  alphabet for an individual chromosome will be dense in range [a,b].
 */
 
 //------------------------------------------------------------------------------
@@ -46,6 +43,7 @@ class DynamicGBWT
 {
 public:
   typedef DynamicRecord::size_type size_type;
+  typedef node_type                comp_type; // Index of a record in this->bwt.
 
 //------------------------------------------------------------------------------
 
@@ -78,10 +76,11 @@ public:
 //------------------------------------------------------------------------------
 
   inline size_type size() const { return this->header.size; }
+  inline bool empty() const { return (this->size() == 0); }
   inline size_type sequences() const { return this->header.sequences; }
   inline size_type sigma() const { return this->header.alphabet_size; }
-  inline size_type effective() const { return this->header.nodes; }
-  inline size_type count(node_type node) const { return this->bwt[node].size(); }
+  inline size_type effective() const { return this->header.alphabet_size - this->header.offset; }
+  inline size_type count(node_type node) const { return this->record(node).size(); }
 
   size_type runs() const;
 
@@ -102,6 +101,21 @@ public:
 
 private:
   void copy(const DynamicGBWT& source);
+
+  /*
+    These functions get the BWT record for the given node. Because the alphabet is empty
+    in range [1..offset], we cannot simply access the BWT.
+  */
+
+  inline DynamicRecord& record(node_type node)
+  {
+    return this->bwt[node == 0 ? node : node - this->header.offset];
+  }
+
+  inline const DynamicRecord& record(node_type node) const
+  {
+    return this->bwt[node == 0 ? node : node - this->header.offset];
+  }
 
 //------------------------------------------------------------------------------
 

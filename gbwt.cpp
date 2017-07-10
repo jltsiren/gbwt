@@ -87,11 +87,11 @@ DynamicGBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::str
   written_bytes += this->header.serialize(out);
 
   std::vector<byte_type> compressed_bwt;
-  std::vector<size_type> bwt_offsets(this->sigma());
-  for(node_type node = 0; node < this->sigma(); node++)
+  std::vector<size_type> bwt_offsets(this->bwt.size());
+  for(comp_type comp = 0; comp < this->effective(); comp++)
   {
-    bwt_offsets[node] = compressed_bwt.size();
-    const DynamicRecord& current = this->bwt[node];
+    bwt_offsets[comp] = compressed_bwt.size();
+    const DynamicRecord& current = this->bwt[comp];
 
     // Write the outgoing edges.
     ByteCode::write(compressed_bwt, current.outdegree());
@@ -134,20 +134,20 @@ DynamicGBWT::load(std::istream& in)
   {
     std::cerr << "DynamicGBWT::load(): Invalid header: " << this->header << std::endl;
   }
-  this->bwt.resize(this->sigma());
+  this->bwt.resize(this->effective());
 
   // Read the node index.
   sdsl::sd_vector<> node_index; node_index.load(in);
   sdsl::sd_vector<>::select_1_type node_select; node_select.load(in, &node_index);
 
-  for(node_type node = 0; node < this->sigma(); node++)
+  for(comp_type comp = 0; comp < this->effective(); comp++)
   {
-    DynamicRecord& current = this->bwt[node];
+    DynamicRecord& current = this->bwt[comp];
     current.incoming.clear(); // We rebuild the incoming edges later.
 
     // Read the current node.
-    size_type start = node_select(node + 1);
-    size_type stop = (node + 1 < this->sigma() ? node_select(node + 2) : node_index.size());
+    size_type start = node_select(comp + 1);
+    size_type stop = (comp + 1 < this->effective() ? node_select(comp + 2) : node_index.size());
     std::vector<byte_type> node_encoding(stop - start);
     in.read((char*)(node_encoding.data()), node_encoding.size());
     size_type offset = 0;
@@ -167,16 +167,17 @@ DynamicGBWT::load(std::istream& in)
   }
 
   // Rebuild the incoming edges.
-  for(node_type node = 0; node < this->sigma(); node++)
+  for(comp_type comp = 0; comp < this->effective(); comp++)
   {
-    DynamicRecord& current = this->bwt[node];
+    DynamicRecord& current = this->bwt[comp];
     std::vector<size_type> counts(current.outdegree());
     for(run_type run : current.body) { counts[run.first] += run.second; }
     for(rank_type outrank = 0; outrank < current.outdegree(); outrank++)
     {
       if(current.successor(outrank) != ENDMARKER)
       {
-        this->bwt[current.successor(outrank)].addIncoming(edge_type(node, counts[outrank]));
+        DynamicRecord& successor = this->record(current.successor(outrank));
+        successor.addIncoming(edge_type(comp, counts[outrank]));
       }
     }
   }
@@ -195,7 +196,7 @@ size_type
 DynamicGBWT::runs() const
 {
   size_type total = 0;
-  for(const DynamicRecord& record : this->bwt) { total += record.runs(); }
+  for(const DynamicRecord& node : this->bwt) { total += node.runs(); }
   return total;
 }
 
@@ -213,12 +214,12 @@ DynamicGBWT::compare(const DynamicGBWT& another, std::ostream& out) const
     return false;
   }
 
-  for(node_type node = 0; node < this->sigma(); node++)
+  for(comp_type comp = 0; comp < this->effective(); comp++)
   {
-    if(this->bwt[node] != another.bwt[node])
+    if(this->bwt[comp] != another.bwt[comp])
     {
-      out << "This[" << node << "]:    " << this->bwt[node] << std::endl;
-      out << "Another[" << node << "]: " << another.bwt[node] << std::endl;
+      out << "This[" << comp << "]:    " << this->bwt[comp] << std::endl;
+      out << "Another[" << comp << "]: " << another.bwt[comp] << std::endl;
       out << std::endl;
       return false;
     }
@@ -239,6 +240,7 @@ swapBody(DynamicRecord& record, RunMerger& merger)
   std::swap(merger.total_size, record.body_size);
 }
 
+
 void
 DynamicGBWT::insert(const text_type& text)
 {
@@ -253,14 +255,14 @@ DynamicGBWT::insert(const text_type& text)
 
   /*
     Find the start of each sequence and initialize the sequence objects at the endmarker node.
-    Increase alphabet size if necessary.
+    Increase alphabet size and decrease offset if necessary.
   */
   bool seq_start = true;
-  size_type max_node = 0;
+  node_type min_node = (this->empty() ? ~(node_type)0 : this->header.offset + 1);
+  node_type max_node = (this->empty() ? 0 : this->sigma() - 1);
   std::vector<Sequence> seqs;
   for(size_type i = 0; i < text.size(); i++)
   {
-    max_node = std::max(text[i], max_node);
     if(seq_start)
     {
       Sequence temp(text, i, this->sequences());
@@ -268,10 +270,22 @@ DynamicGBWT::insert(const text_type& text)
       this->header.sequences++;
     }
     if(text[i] == ENDMARKER) { seq_start = true; }
+    else { min_node = std::min(text[i], min_node); }
+    max_node = std::max(text[i], max_node);
   }
   if(Verbosity::level >= Verbosity::EXTENDED)
   {
     std::cerr << "DynamicGBWT::insert(): Inserting " << seqs.size() << " sequences of total length " << text.size() << std::endl;
+  }
+  bool resize = false;
+  if(max_node == 0) { min_node = 1; } // No real nodes, setting offset to 0.
+  if(min_node != this->header.offset + 1)
+  {
+    if(Verbosity::level >= Verbosity::FULL)
+    {
+      std::cerr << "DynamicGBWT::insert(): Changing alphabet offset to " << (min_node - 1) << std::endl;
+    }
+    resize = true;
   }
   if(max_node >= this->sigma())
   {
@@ -279,8 +293,19 @@ DynamicGBWT::insert(const text_type& text)
     {
       std::cerr << "DynamicGBWT::insert(): Increasing alphabet size to " << (max_node + 1) << std::endl;
     }
-    this->header.alphabet_size = max_node + 1;
-    this->bwt.resize(this->sigma());
+    resize = true;
+  }
+  if(resize)
+  {
+    size_type new_offset = min_node - 1, new_sigma = max_node + 1;
+    std::vector<DynamicRecord> new_bwt(new_sigma - new_offset);
+    if(this->effective() > 0) { new_bwt[0].swap(this->bwt[0]); }
+    for(comp_type comp = 1; comp < this->effective(); comp++)
+    {
+      new_bwt[comp + this->header.offset - new_offset].swap(this->bwt[comp]);
+    }
+    this->bwt.swap(new_bwt);
+    this->header.offset = new_offset; this->header.alphabet_size = new_sigma;
   }
 
   // Invariant: Sequences are sorted by (curr, offset).
@@ -303,7 +328,7 @@ DynamicGBWT::insert(const text_type& text)
     while(i < seqs.size())
     {
       node_type curr = seqs[i].curr;
-      DynamicRecord& current = this->bwt[curr];
+      DynamicRecord& current = this->record(curr);
       RunMerger new_body(current.outdegree());
       std::vector<run_type>::iterator iter = current.body.begin();
       while(i < seqs.size() && seqs[i].curr == curr)
@@ -328,7 +353,7 @@ DynamicGBWT::insert(const text_type& text)
         new_body.insert(outrank);
         if(seqs[i].next != ENDMARKER)  // The endmarker does not have incoming edges.
         {
-          this->bwt[seqs[i].next].increment(curr);
+          this->record(seqs[i].next).increment(curr);
         }
         i++;
       }
@@ -365,9 +390,9 @@ DynamicGBWT::insert(const text_type& text)
       if(seq.next == next) { continue; }
       next = seq.next;
       size_type offset = 0;
-      for(edge_type inedge : this->bwt[next].incoming)
+      for(edge_type inedge : this->record(next).incoming)
       {
-        DynamicRecord& predecessor = this->bwt[inedge.first];
+        DynamicRecord& predecessor = this->record(inedge.first);
         predecessor.offset(predecessor.edgeTo(next)) = offset;
         offset += inedge.second;
       }
@@ -379,28 +404,15 @@ DynamicGBWT::insert(const text_type& text)
     */
     for(Sequence& seq : seqs)
     {
-      const DynamicRecord& current = this->bwt[seq.curr];
+      const DynamicRecord& current = this->record(seq.curr);
       seq.offset += current.offset(current.edgeTo(seq.next));
       seq.advance(text);
     }
   }
 
-  // Update the effective alphabet size and sort the outgoing edges.
-  std::atomic<size_type> effective_alphabet(0);
+  // Sort the outgoing edges.
   #pragma omp parallel for schedule(static)
-  for(node_type node = 0; node < this->sigma(); node++)
-  {
-    if(this->count(node) > 0)
-    {
-      effective_alphabet++;
-      this->bwt[node].recode();
-    }
-  }
-  this->header.nodes = effective_alphabet;
-  if(Verbosity::level >= Verbosity::FULL)
-  {
-    std::cerr << "DynamicGBWT::insert(): Effective alphabet size " << this->effective() << std::endl;
-  }
+  for(comp_type comp = 0; comp < this->effective(); comp++) { this->bwt[comp].recode(); }
 
   if(Verbosity::level >= Verbosity::EXTENDED)
   {
@@ -417,7 +429,7 @@ DynamicGBWT::LF(node_type from, size_type i, node_type to) const
   if(to >= this->sigma()) { return invalid_offset(); }
   if(from >= this->sigma()) { return this->count(to); }
 
-  size_type result = this->bwt[from].LF(i, to);
+  size_type result = this->record(from).LF(i, to);
   if(result != invalid_offset()) { return result; }
 
   /*
@@ -425,10 +437,10 @@ DynamicGBWT::LF(node_type from, size_type i, node_type to) const
     If 'inrank' is equal to indegree, all incoming edges are from nodes < 'from'.
     Otherwise the result is the stored offset in the node we found.
   */
-  const DynamicRecord& to_node = this->bwt[to];
+  const DynamicRecord& to_node = this->record(to);
   rank_type inrank = to_node.findFirst(from);
   if(inrank >= to_node.indegree()) { return this->count(to); }
-  const DynamicRecord& next_from = this->bwt[to_node.predecessor(inrank)];
+  const DynamicRecord& next_from = this->record(to_node.predecessor(inrank));
   return next_from.offset(next_from.edgeTo(to));
 }
 
@@ -436,7 +448,7 @@ edge_type
 DynamicGBWT::LF(node_type from, size_type i) const
 {
   if(from >= this->sigma()) { return invalid_edge(); }
-  return this->bwt[from].LF(i);
+  return this->record(from).LF(i);
 }
 
 //------------------------------------------------------------------------------

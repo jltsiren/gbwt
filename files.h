@@ -51,7 +51,7 @@ struct GBWTHeader
   std::uint32_t version;
   std::uint64_t sequences;
   std::uint64_t size;           // Including the endmarkers.
-  std::uint64_t nodes;          // Number of alphabet symbols.
+  std::uint64_t offset;         // Range [1..offset] of the alphabet is empty.
   std::uint64_t alphabet_size;  // Largest node id + 1.
   std::uint64_t flags;
 

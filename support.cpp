@@ -54,11 +54,25 @@ DynamicRecord::operator==(const DynamicRecord& another) const
   return true;
 }
 
+void
+DynamicRecord::swap(DynamicRecord& another)
+{
+  if(this != &another)
+  {
+    std::swap(this->body_size, another.body_size);
+    this->incoming.swap(another.incoming);
+    this->outgoing.swap(another.outgoing);
+    this->body.swap(another.body);
+  }
+}
+
 //------------------------------------------------------------------------------
 
 void
 DynamicRecord::recode()
 {
+  if(this->empty()) { return; }
+
   bool sorted = true;
   for(rank_type outrank = 1; outrank < this->outdegree(); outrank++)
   {
