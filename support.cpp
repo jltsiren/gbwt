@@ -55,6 +55,13 @@ DynamicRecord::operator==(const DynamicRecord& another) const
 }
 
 void
+DynamicRecord::clear()
+{
+  DynamicRecord temp;
+  this->swap(temp);
+}
+
+void
 DynamicRecord::swap(DynamicRecord& another)
 {
   if(this != &another)
@@ -128,6 +135,21 @@ DynamicRecord::LF(size_type i) const
 
   result[last_edge].second -= (offset - i);
   return result[last_edge];
+}
+
+node_type
+DynamicRecord::operator[](size_type i) const
+{
+  if(i >= this->size()) { return ENDMARKER; }
+
+  size_type offset = 0;
+  for(run_type run : this->body)
+  {
+    offset += run.second;
+    if(offset > i) { return this->successor(run.first); }
+  }
+
+  return ENDMARKER;
 }
 
 //------------------------------------------------------------------------------

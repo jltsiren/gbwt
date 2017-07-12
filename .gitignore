@@ -3,5 +3,6 @@
 
 prepare_text
 build_gbwt
+merge_gbwt
 
 .DS_Store

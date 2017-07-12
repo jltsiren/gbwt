@@ -32,9 +32,7 @@ namespace gbwt
 {
 
 /*
-  gbwt.h: Main GBWT structures.
-
-  FIXME Reorganize: rename this file to dynamic_gbwt.h
+  dynamic_gbwt.h: Dynamic GBWT structures for construction.
 */
 
 //------------------------------------------------------------------------------
@@ -70,6 +68,13 @@ public:
   */
   void insert(const text_type& text);
 
+  /*
+    Insert the sequences from the other GBWT into this.
+    FIXME Also from normal GBWT.
+    FIXME Special case when the node ids do not overlap.
+  */
+  void insert(const DynamicGBWT& source);
+
   // Determine whether the GBWTs are identical.
   bool compare(const DynamicGBWT& another, std::ostream& out) const;
 
@@ -94,14 +99,6 @@ public:
 
 //------------------------------------------------------------------------------
 
-  GBWTHeader                 header;
-  std::vector<DynamicRecord> bwt;
-
-//------------------------------------------------------------------------------
-
-private:
-  void copy(const DynamicGBWT& source);
-
   /*
     These functions get the BWT record for the given node. Because the alphabet is empty
     in range [1..offset], we cannot simply access the BWT.
@@ -116,6 +113,18 @@ private:
   {
     return this->bwt[node == 0 ? node : node - this->header.offset];
   }
+
+//------------------------------------------------------------------------------
+
+  GBWTHeader                 header;
+  std::vector<DynamicRecord> bwt;
+
+//------------------------------------------------------------------------------
+
+private:
+  void copy(const DynamicGBWT& source);
+  void resize(size_type new_offset, size_type new_sigma); // Change offset or alphabet size.
+  void recode();  // Sort the outgoing edges.
 
 //------------------------------------------------------------------------------
 

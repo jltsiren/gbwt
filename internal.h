@@ -196,10 +196,15 @@ struct Sequence
   size_type id;
   node_type curr, next;
   size_type offset; // Offset in the current record.
-  size_type pos;    // Position in the text.
+  size_type pos;    // Position in the text or offset in the source record.
 
   Sequence();
+
+  // Create a sequence starting from text[i].
   Sequence(const text_type& text, size_type i, size_type seq_id);
+
+  // Create a sequence where endmarker[source_pos] == node.
+  Sequence(node_type node, size_type seq_id, size_type source_pos);
 
   // Sort by reverse prefixes text[..pos+1].
   inline bool operator<(const Sequence& another) const
@@ -207,14 +212,6 @@ struct Sequence
     if(this->next != another.next) { return (this->next < another.next); }
     if(this->curr != another.curr) { return (this->curr < another.curr); }
     return (this->offset < another.offset);
-  }
-
-  // Do not call if 'next' is an endmarker.
-  inline void advance(const text_type& text)
-  {
-    this->curr = this->next;
-    this->pos++;
-    this->next = text[this->pos];
   }
 };
 

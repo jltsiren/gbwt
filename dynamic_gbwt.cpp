@@ -22,7 +22,7 @@
   SOFTWARE.
 */
 
-#include "gbwt.h"
+#include "dynamic_gbwt.h"
 #include "internal.h"
 
 namespace gbwt
@@ -143,7 +143,7 @@ DynamicGBWT::load(std::istream& in)
   for(comp_type comp = 0; comp < this->effective(); comp++)
   {
     DynamicRecord& current = this->bwt[comp];
-    current.incoming.clear(); // We rebuild the incoming edges later.
+    current.clear();
 
     // Read the current node.
     size_type start = node_select(comp + 1);
@@ -162,8 +162,16 @@ DynamicGBWT::load(std::istream& in)
 
     // Decompress the body.
     current.body.clear();
-    Run decoder(current.outdegree());
-    while(offset < node_encoding.size()) { current.body.push_back(decoder.read(node_encoding, offset)); }
+    if(current.outdegree() > 0)
+    {
+      Run decoder(current.outdegree());
+      while(offset < node_encoding.size())
+      {
+        run_type run = decoder.read(node_encoding, offset);
+        current.body.push_back(run);
+        current.body_size += run.second;
+      }
+    }
   }
 
   // Rebuild the incoming edges.
@@ -232,6 +240,10 @@ DynamicGBWT::compare(const DynamicGBWT& another, std::ostream& out) const
 
 //------------------------------------------------------------------------------
 
+/*
+  Support functions for index construction.
+*/
+
 void
 swapBody(DynamicRecord& record, RunMerger& merger)
 {
@@ -240,64 +252,38 @@ swapBody(DynamicRecord& record, RunMerger& merger)
   std::swap(merger.total_size, record.body_size);
 }
 
-
 void
-DynamicGBWT::insert(const text_type& text)
+DynamicGBWT::resize(size_type new_offset, size_type new_sigma)
 {
-  double start = readTimer();
-
-  if(text.empty()) { return; }
-  if(text[text.size() - 1] != ENDMARKER)
+  /*
+    Do not set the new offset, if we already have a smaller real offset or the
+    new offset is not a real one.
+  */
+  if((this->sigma() > 1 && new_offset > this->header.offset) || new_sigma <= 1)
   {
-    std::cerr << "DynamicGBWT::insert(): The text must end an endmarker" << std::endl;
+    new_offset = this->header.offset;
+  }
+  if(this->sigma() > new_sigma) { new_sigma = this->sigma(); }
+  if(new_offset > 0 && new_offset >= new_sigma)
+  {
+    std::cerr << "DynamicGBWT::resize(): Cannot set offset " << new_offset << " with alphabet size " << new_sigma << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
-  /*
-    Find the start of each sequence and initialize the sequence objects at the endmarker node.
-    Increase alphabet size and decrease offset if necessary.
-  */
-  bool seq_start = true;
-  node_type min_node = (this->empty() ? ~(node_type)0 : this->header.offset + 1);
-  node_type max_node = (this->empty() ? 0 : this->sigma() - 1);
-  std::vector<Sequence> seqs;
-  for(size_type i = 0; i < text.size(); i++)
-  {
-    if(seq_start)
-    {
-      Sequence temp(text, i, this->sequences());
-      seqs.push_back(temp); seq_start = false;
-      this->header.sequences++;
-    }
-    if(text[i] == ENDMARKER) { seq_start = true; }
-    else { min_node = std::min(text[i], min_node); }
-    max_node = std::max(text[i], max_node);
-  }
-  if(Verbosity::level >= Verbosity::EXTENDED)
-  {
-    std::cerr << "DynamicGBWT::insert(): Inserting " << seqs.size() << " sequences of total length " << text.size() << std::endl;
-  }
-  bool resize = false;
-  if(max_node == 0) { min_node = 1; } // No real nodes, setting offset to 0.
-  if(min_node != this->header.offset + 1)
+  if(new_offset != this->header.offset || new_sigma != this->sigma())
   {
     if(Verbosity::level >= Verbosity::FULL)
     {
-      std::cerr << "DynamicGBWT::insert(): Changing alphabet offset to " << (min_node - 1) << std::endl;
+      if(new_offset != this->header.offset)
+      {
+        std::cerr << "DynamicGBWT::resize(): Changing alphabet offset to " << new_offset << std::endl;
+      }
+      if(new_sigma != this->sigma())
+      {
+        std::cerr << "DynamicGBWT::resize(): Increasing alphabet size to " << new_sigma << std::endl;
+      }
     }
-    resize = true;
-  }
-  if(max_node >= this->sigma())
-  {
-    if(Verbosity::level >= Verbosity::FULL)
-    {
-      std::cerr << "DynamicGBWT::insert(): Increasing alphabet size to " << (max_node + 1) << std::endl;
-    }
-    resize = true;
-  }
-  if(resize)
-  {
-    size_type new_offset = min_node - 1, new_sigma = max_node + 1;
+
     std::vector<DynamicRecord> new_bwt(new_sigma - new_offset);
     if(this->effective() > 0) { new_bwt[0].swap(this->bwt[0]); }
     for(comp_type comp = 1; comp < this->effective(); comp++)
@@ -307,12 +293,85 @@ DynamicGBWT::insert(const text_type& text)
     this->bwt.swap(new_bwt);
     this->header.offset = new_offset; this->header.alphabet_size = new_sigma;
   }
+}
 
-  // Invariant: Sequences are sorted by (curr, offset).
-  size_type iteration = 0;
+void
+nextPosition(std::vector<Sequence>& seqs, const text_type&)
+{
+  for(Sequence& seq : seqs) { seq.pos++; }
+}
+
+void
+nextPosition(std::vector<Sequence>& seqs, const DynamicGBWT& source)
+{
+  for(size_type i = 0; i < seqs.size(); )
+  {
+    node_type curr = seqs[i].curr;
+    const DynamicRecord& current = source.record(curr);
+    std::vector<run_type>::const_iterator iter = current.body.begin();
+    std::vector<edge_type> result(current.outgoing);
+    size_type offset = iter->second; result[iter->first].second += iter->second;
+    while(i < seqs.size() && seqs[i].curr == curr)
+    {
+      while(offset <= seqs[i].pos)
+      {
+        ++iter; offset += iter->second;
+        result[iter->first].second += iter->second;
+      }
+      seqs[i].pos = result[iter->first].second - (offset - seqs[i].pos);
+      i++;
+    }
+  }
+}
+
+void
+advancePosition(std::vector<Sequence>& seqs, const text_type& text)
+{
+  for(Sequence& seq : seqs) { seq.curr = seq.next; seq.next = text[seq.pos]; }
+}
+
+void
+advancePosition(std::vector<Sequence>& seqs, const DynamicGBWT& source)
+{
+  // FIXME We could optimize further by storing the next position.
+  for(size_type i = 0; i < seqs.size(); )
+  {
+    node_type curr = seqs[i].next;
+    const DynamicRecord& current = source.record(curr);
+    std::vector<run_type>::const_iterator iter = current.body.begin();
+    size_type offset = iter->second;
+    while(i < seqs.size() && seqs[i].next == curr)
+    {
+      seqs[i].curr = seqs[i].next;
+      while(offset <= seqs[i].pos) { ++iter; offset += iter->second; }
+      seqs[i].next = current.successor(iter->first);
+      i++;
+    }
+  }
+}
+
+void
+DynamicGBWT::recode()
+{
+  #pragma omp parallel for schedule(static)
+  for(comp_type comp = 0; comp < this->effective(); comp++) { this->bwt[comp].recode(); }
+}
+
+//------------------------------------------------------------------------------
+
+/*
+  Insert the sequences from the source to the GBWT. Maintains an invariant that
+  the sequences are sorted by (curr, offset).
+*/
+
+template<class Source>
+size_type
+insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source)
+{
+  size_type iterations = 0;
   while(true)
   {
-    iteration++;  // We use 1-based iterations.
+    iterations++;  // We use 1-based iterations.
 
     /*
       Process ranges of sequences sharing the same 'curr' node.
@@ -324,11 +383,10 @@ DynamicGBWT::insert(const text_type& text)
       We do not maintain incoming edges to the endmarker, because it can be expensive
       and because searching with the endmarker does not work in a multi-string BWT.
     */
-    size_type i = 0;
-    while(i < seqs.size())
+    for(size_type i = 0; i < seqs.size(); )
     {
       node_type curr = seqs[i].curr;
-      DynamicRecord& current = this->record(curr);
+      DynamicRecord& current = gbwt.record(curr);
       RunMerger new_body(current.outdegree());
       std::vector<run_type>::iterator iter = current.body.begin();
       while(i < seqs.size() && seqs[i].curr == curr)
@@ -353,7 +411,7 @@ DynamicGBWT::insert(const text_type& text)
         new_body.insert(outrank);
         if(seqs[i].next != ENDMARKER)  // The endmarker does not have incoming edges.
         {
-          this->record(seqs[i].next).increment(curr);
+          gbwt.record(seqs[i].next).increment(curr);
         }
         i++;
       }
@@ -363,7 +421,8 @@ DynamicGBWT::insert(const text_type& text)
       }
       swapBody(current, new_body);
     }
-    this->header.size += seqs.size();
+    gbwt.header.size += seqs.size();
+    nextPosition(seqs, source); // Determine the next position for each sequence.
 
     /*
       Sort the sequences for the next iteration and remove the ones that have reached the endmarker.
@@ -378,21 +437,21 @@ DynamicGBWT::insert(const text_type& text)
       for(size_type j = 0; head + j < seqs.size(); j++) { seqs[j] = seqs[head + j]; }
       seqs.resize(seqs.size() - head);
     }
-    if(seqs.empty()) { break; }
+    if(seqs.empty()) { return iterations; }
 
     /*
       Rebuild the edge offsets in the outgoing edges to each 'next' node. The offsets will be
       valid after the insertions in the next iteration.
     */
-    node_type next = this->sigma();
+    node_type next = gbwt.sigma();
     for(Sequence& seq : seqs)
     {
       if(seq.next == next) { continue; }
       next = seq.next;
       size_type offset = 0;
-      for(edge_type inedge : this->record(next).incoming)
+      for(edge_type inedge : gbwt.record(next).incoming)
       {
-        DynamicRecord& predecessor = this->record(inedge.first);
+        DynamicRecord& predecessor = gbwt.record(inedge.first);
         predecessor.offset(predecessor.edgeTo(next)) = offset;
         offset += inedge.second;
       }
@@ -404,20 +463,120 @@ DynamicGBWT::insert(const text_type& text)
     */
     for(Sequence& seq : seqs)
     {
-      const DynamicRecord& current = this->record(seq.curr);
+      const DynamicRecord& current = gbwt.record(seq.curr);
       seq.offset += current.offset(current.edgeTo(seq.next));
-      seq.advance(text);
     }
+    advancePosition(seqs, source);  // Move each sequence to the next position.
+  }
+}
+
+//------------------------------------------------------------------------------
+
+void
+DynamicGBWT::insert(const text_type& text)
+{
+  double start = readTimer();
+
+  if(text.empty()) { return; }
+  if(text[text.size() - 1] != ENDMARKER)
+  {
+    std::cerr << "DynamicGBWT::insert(): The text must end with an endmarker" << std::endl;
+    std::exit(EXIT_FAILURE);
   }
 
-  // Sort the outgoing edges.
-  #pragma omp parallel for schedule(static)
-  for(comp_type comp = 0; comp < this->effective(); comp++) { this->bwt[comp].recode(); }
+  /*
+    Find the start of each sequence and initialize the sequence objects at the endmarker node.
+    Increase alphabet size and decrease offset if necessary.
+  */
+  bool seq_start = true;
+  node_type min_node = (this->empty() ? ~(node_type)0 : this->header.offset + 1);
+  node_type max_node = (this->empty() ? 0 : this->sigma() - 1);
+  std::vector<Sequence> seqs;
+  for(size_type i = 0; i < text.size(); i++)
+  {
+    if(seq_start)
+    {
+      seqs.push_back(Sequence(text, i, this->sequences()));
+      seq_start = false; this->header.sequences++;
+    }
+    if(text[i] == ENDMARKER) { seq_start = true; }
+    else { min_node = std::min(text[i], min_node); }
+    max_node = std::max(text[i], max_node);
+  }
+  if(Verbosity::level >= Verbosity::EXTENDED)
+  {
+    std::cerr << "DynamicGBWT::insert(): Inserting " << seqs.size() << " sequences of total length " << text.size() << std::endl;
+  }
+  if(max_node == 0) { min_node = 1; } // No real nodes, setting offset to 0.
+  this->resize(min_node - 1, max_node + 1);
+
+  // Insert the sequences and sort the outgoing edges.
+  size_type iterations = gbwt::insert(*this, seqs, text);
+  this->recode();
 
   if(Verbosity::level >= Verbosity::EXTENDED)
   {
     double seconds = readTimer() - start;
-    std::cerr << "DynamicGBWT::insert(): " << iteration << " iterations in " << seconds << " seconds" << std::endl;
+    std::cerr << "DynamicGBWT::insert(): " << iterations << " iterations in " << seconds << " seconds" << std::endl;
+  }
+}
+
+//------------------------------------------------------------------------------
+
+void
+DynamicGBWT::insert(const DynamicGBWT& source)
+{
+  double start = readTimer();
+
+  if(source.empty())
+  {
+    if(Verbosity::level >= Verbosity::EXTENDED)
+    {
+      std::cerr << "DynamicGBWT::insert(): The other GBWT is empty" << std::endl;
+    }
+    return;
+  }
+  if(this->empty())
+  {
+    *this = source;
+    if(Verbosity::level >= Verbosity::EXTENDED)
+    {
+      double seconds = readTimer() - start;
+      std::cerr << "DynamicGBWT::insert(): Inserted " << source.sequences() << " sequences of total length "
+                << source.size() << " into an empty GBWT in " << seconds << " seconds" << std::endl;
+    }
+    return;
+  }
+
+  /*
+    Create a Sequence object for each sequence to be inserted. Increase alphabet size
+    and decrease offset if necessary.
+  */
+  std::vector<Sequence> seqs; seqs.reserve(source.sequences());
+  const DynamicRecord& endmarker = source.record(ENDMARKER);
+  size_type source_offset = 0;
+  for(run_type run : endmarker.body)
+  {
+    for(size_type i = 0; i < run.second; i++)
+    {
+      seqs.push_back(Sequence(endmarker.successor(run.first), this->sequences(), source_offset));
+      this->header.sequences++; source_offset++;
+    }
+  }
+  if(Verbosity::level >= Verbosity::EXTENDED)
+  {
+    std::cerr << "DynamicGBWT::insert(): Inserting " << seqs.size() << " sequences of total length " << source.size() << std::endl;
+  }
+  this->resize(source.header.offset, source.sigma());
+
+  // Insert the sequences and sort the outgoing edges.
+  size_type iterations = gbwt::insert(*this, seqs, source);
+  this->recode();
+
+  if(Verbosity::level >= Verbosity::EXTENDED)
+  {
+    double seconds = readTimer() - start;
+    std::cerr << "DynamicGBWT::insert(): " << iterations << " iterations in " << seconds << " seconds" << std::endl;
   }
 }
 

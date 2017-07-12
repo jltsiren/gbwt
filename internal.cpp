@@ -64,6 +64,11 @@ Sequence::Sequence(const text_type& text, size_type i, size_type seq_id) :
 {
 }
 
+Sequence::Sequence(node_type node, size_type seq_id, size_type source_pos) :
+  id(seq_id), curr(ENDMARKER), next(node), offset(seq_id), pos(source_pos)
+{
+}
+
 //------------------------------------------------------------------------------
 
 } // namespace gbwt

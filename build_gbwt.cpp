@@ -24,7 +24,7 @@
 
 #include <unistd.h>
 
-#include "gbwt.h"
+#include "dynamic_gbwt.h"
 
 using namespace gbwt;
 

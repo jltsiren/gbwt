@@ -15,13 +15,13 @@ OTHER_FLAGS=$(RUSAGE_FLAGS) $(PARALLEL_FLAGS)
 
 include $(SDSL_DIR)/Make.helper
 CXX_FLAGS=$(MY_CXX_FLAGS) $(OTHER_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(INC_DIR)
-LIBOBJS=files.o gbwt.o internal.o support.o utils.o
+LIBOBJS=dynamic_gbwt.o files.o internal.o support.o utils.o
 SOURCES=$(wildcard *.cpp)
 HEADERS=$(wildcard *.h)
 OBJS=$(SOURCES:.cpp=.o)
 LIBS=-L$(LIB_DIR) -lsdsl -ldivsufsort -ldivsufsort64
 LIBRARY=libgbwt.a
-PROGRAMS=prepare_text build_gbwt
+PROGRAMS=prepare_text build_gbwt merge_gbwt
 
 all: $(LIBRARY) $(PROGRAMS)
 
@@ -35,6 +35,9 @@ prepare_text:prepare_text.o $(LIBRARY)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 build_gbwt:build_gbwt.o $(LIBRARY)
+	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+
+merge_gbwt:merge_gbwt.o $(LIBRARY)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 clean:

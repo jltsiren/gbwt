@@ -55,6 +55,8 @@ struct DynamicRecord
 
 //------------------------------------------------------------------------------
 
+  DynamicRecord() : body_size(0) {}
+
   inline size_type size() const { return this->body_size; }
   inline bool empty() const { return (this->size() == 0); }
   inline size_type runs() const { return this->body.size(); }
@@ -64,6 +66,7 @@ struct DynamicRecord
   bool operator==(const DynamicRecord& another) const;
   inline bool operator!=(const DynamicRecord& another) const { return !(this->operator==(another)); }
 
+  void clear();
   void swap(DynamicRecord& another);
 
 //------------------------------------------------------------------------------
@@ -78,6 +81,9 @@ struct DynamicRecord
 
   // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
   edge_type LF(size_type i) const;
+
+  // Returns BWT[i] within the record.
+  node_type operator[](size_type i) const;
 
 //------------------------------------------------------------------------------
 
