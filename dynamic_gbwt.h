@@ -55,7 +55,7 @@ public:
   DynamicGBWT& operator=(DynamicGBWT&& source);
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
-  void load(std::istream& in);  // FIXME not tested
+  void load(std::istream& in);
 
   const static std::string EXTENSION; // .gbwt
 
