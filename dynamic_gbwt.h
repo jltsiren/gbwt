@@ -43,6 +43,8 @@ public:
   typedef DynamicRecord::size_type size_type;
   typedef node_type                comp_type; // Index of a record in this->bwt.
 
+  const static size_type BATCH_SIZE = 2000; // Sequences.
+
 //------------------------------------------------------------------------------
 
   DynamicGBWT();
@@ -69,11 +71,13 @@ public:
   void insert(const text_type& text);
 
   /*
-    Insert the sequences from the other GBWT into this.
+    Insert the sequences from the other GBWT into this. Batch size 0 means inserting all
+    sequences at once.
+
     FIXME Also from normal GBWT.
     FIXME Special case when the node ids do not overlap.
   */
-  void insert(const DynamicGBWT& source);
+  void merge(const DynamicGBWT& source, size_type batch_size = BATCH_SIZE);
 
   // Determine whether the GBWTs are identical.
   bool compare(const DynamicGBWT& another, std::ostream& out) const;
@@ -124,7 +128,14 @@ public:
 private:
   void copy(const DynamicGBWT& source);
   void resize(size_type new_offset, size_type new_sigma); // Change offset or alphabet size.
-  void recode();  // Sort the outgoing edges.
+
+  /*
+    Sort the outgoing edges and change the outranks in the runs accordingly.
+    While the GBWT works with any edge order, the final file may vary depending
+    on the batch size used during construction. When we sort the edges, the
+    compressed file will always be the same.
+  */
+  void recode();
 
 //------------------------------------------------------------------------------
 

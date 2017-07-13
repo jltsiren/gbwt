@@ -43,9 +43,9 @@ This repository should eventually become a scalable GBWT implementation.
 
 ## TODO
 
-* Merging optimizations.
-* Static encoding and `DynamicGBWT::insert(const GBWT& source)`.
+* Compressed GBWT and `DynamicGBWT::merge(const GBWT& source)`.
 * Special case for merging when the node ids do not overlap.
+* Query interface.
 * `locate()` support for determining sequence identifiers.
 
 ## References

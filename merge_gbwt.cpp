@@ -22,6 +22,8 @@
   SOFTWARE.
 */
 
+#include <unistd.h>
+
 #include "dynamic_gbwt.h"
 
 using namespace gbwt;
@@ -38,7 +40,23 @@ int
 main(int argc, char** argv)
 {
   if(argc < 4) { printUsage(); }
-  std::string input1 = argv[1], input2 = argv[2], output = argv[3];
+
+  size_type batch_size = DynamicGBWT::BATCH_SIZE;
+  int c = 0;
+  while((c = getopt(argc, argv, "b:")) != -1)
+  {
+    switch(c)
+    {
+    case 'b':
+      batch_size = std::stoul(optarg); break;
+    case '?':
+      std::exit(EXIT_FAILURE);
+    default:
+      std::exit(EXIT_FAILURE);
+    }
+  }
+  if(optind + 2 >= argc) { printUsage(EXIT_FAILURE); }
+  std::string input1 = argv[optind], input2 = argv[optind + 1], output = argv[optind + 2];
 
   std::cout << "GBWT merging" << std::endl;
   std::cout << std::endl;
@@ -46,6 +64,7 @@ main(int argc, char** argv)
   printHeader("Input 1"); std::cout << input1 << std::endl;
   printHeader("Input 2"); std::cout << input2 << std::endl;
   printHeader("Output"); std::cout << output << std::endl;
+  printHeader("Batch size"); std::cout << batch_size << std::endl;
   std::cout << std::endl;
 
   double start = readTimer();
@@ -58,7 +77,7 @@ main(int argc, char** argv)
   sdsl::load_from_file(right, input2 + DynamicGBWT::EXTENSION);
   printGBWT(right, input2);
 
-  left.insert(right);
+  left.merge(right, batch_size);
   sdsl::store_to_file(left, output + DynamicGBWT::EXTENSION);
   printGBWT(left, output);
 
@@ -77,6 +96,7 @@ void
 printUsage(int exit_code)
 {
   std::cerr << "Usage: merge_gbwt input1 input2 output" << std::endl;
+  std::cerr << "  -b N  Use batches of N sequences for merging (default " << DynamicGBWT::BATCH_SIZE << ")" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Use base names for the inputs and the output." << std::endl;
   std::cerr << std::endl;
