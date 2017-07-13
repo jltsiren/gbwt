@@ -22,8 +22,8 @@
   SOFTWARE.
 */
 
-#ifndef _GBWT_UTILS_H
-#define _GBWT_UTILS_H
+#ifndef GBWT_UTILS_H
+#define GBWT_UTILS_H
 
 #include <algorithm>
 #include <cstdint>
@@ -399,4 +399,4 @@ removeDuplicates(std::vector<Element>& vec, bool parallel)
 
 } // namespace gbwt
 
-#endif // _GBWT_UTILS_H
+#endif // GBWT_UTILS_H

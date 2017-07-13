@@ -22,8 +22,8 @@
   SOFTWARE.
 */
 
-#ifndef _GBWT_SUPPORT_H
-#define _GBWT_SUPPORT_H
+#ifndef GBWT_SUPPORT_H
+#define GBWT_SUPPORT_H
 
 #include "utils.h"
 
@@ -128,4 +128,4 @@ std::ostream& operator<<(std::ostream& out, const DynamicRecord& record);
 
 } // namespace gbwt
 
-#endif // _GBWT_SUPPORT_H
+#endif // GBWT_SUPPORT_H

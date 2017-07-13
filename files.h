@@ -22,8 +22,8 @@
   SOFTWARE.
 */
 
-#ifndef _GBWT_FILES_H
-#define _GBWT_FILES_H
+#ifndef GBWT_FILES_H
+#define GBWT_FILES_H
 
 #include "utils.h"
 
@@ -78,4 +78,4 @@ std::ostream& operator<<(std::ostream& stream, const GBWTHeader& header);
 
 } // namespace gbwt
 
-#endif // _GBWT_UTILS_H
+#endif // GBWT_FILES_H

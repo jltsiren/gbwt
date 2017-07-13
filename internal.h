@@ -22,8 +22,8 @@
   SOFTWARE.
 */
 
-#ifndef _GBWT_INTERNAL_H
-#define _GBWT_INTERNAL_H
+#ifndef GBWT_INTERNAL_H
+#define GBWT_INTERNAL_H
 
 #include "utils.h"
 
@@ -219,4 +219,4 @@ struct Sequence
 
 } // namespace gbwt
 
-#endif // _GBWT_INTERNAL_H
+#endif // GBWT_INTERNAL_H

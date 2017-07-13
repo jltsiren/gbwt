@@ -22,8 +22,8 @@
   SOFTWARE.
 */
 
-#ifndef _GBWT_GBWT_H
-#define _GBWT_GBWT_H
+#ifndef GBWT_DYNAMIC_GBWT_H
+#define GBWT_DYNAMIC_GBWT_H
 
 #include "files.h"
 #include "support.h"
@@ -145,4 +145,4 @@ private:
 
 } // namespace gbwt
 
-#endif // _GBWT_GBWT_H
+#endif // GBWT_DYNAMIC_GBWT_H
