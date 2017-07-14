@@ -47,6 +47,7 @@ This repository should eventually become a scalable GBWT implementation.
 * Special case for merging when the node ids do not overlap.
 * Query interface.
 * `locate()` support for determining sequence identifiers.
+* Memory mapped compressed GBWT.
 
 ## References
 
