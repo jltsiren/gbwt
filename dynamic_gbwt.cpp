@@ -353,6 +353,11 @@ advancePosition(std::vector<Sequence>& seqs, const DynamicGBWT& source)
 void
 DynamicGBWT::recode()
 {
+  if(Verbosity::level >= Verbosity::FULL)
+  {
+    std::cerr << "DynamicGBWT::recode(): Sorting the outgoing edges" << std::endl;
+  }
+
   #pragma omp parallel for schedule(static)
   for(comp_type comp = 0; comp < this->effective(); comp++) { this->bwt[comp].recode(); }
 }
@@ -473,7 +478,7 @@ insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source)
 //------------------------------------------------------------------------------
 
 void
-DynamicGBWT::insert(const text_type& text)
+DynamicGBWT::insert(const text_type& text, bool sort_outgoing, size_type start_id)
 {
   double start = readTimer();
 
@@ -505,19 +510,84 @@ DynamicGBWT::insert(const text_type& text)
   }
   if(Verbosity::level >= Verbosity::EXTENDED)
   {
-    std::cerr << "DynamicGBWT::insert(): Inserting " << seqs.size() << " sequences of total length " << text.size() << std::endl;
+    std::cerr << "DynamicGBWT::insert(): Inserting sequences " << start_id
+              << " to " << (start_id + seqs.size() - 1) << std::endl;
   }
   if(max_node == 0) { min_node = 1; } // No real nodes, setting offset to 0.
   this->resize(min_node - 1, max_node + 1);
 
   // Insert the sequences and sort the outgoing edges.
   size_type iterations = gbwt::insert(*this, seqs, text);
-  this->recode();
+  if(sort_outgoing) { this->recode(); }
 
   if(Verbosity::level >= Verbosity::EXTENDED)
   {
     double seconds = readTimer() - start;
     std::cerr << "DynamicGBWT::insert(): " << iterations << " iterations in " << seconds << " seconds" << std::endl;
+  }
+}
+
+//------------------------------------------------------------------------------
+
+void
+DynamicGBWT::insert(const text_type& text)
+{
+  if(text.empty())
+  {
+    if(Verbosity::level >= Verbosity::FULL)
+    {
+      std::cerr << "DynamicGBWT::insert(): The input text is empty" << std::endl;
+    }
+    return;
+  }
+  this->insert(text, true, 0);
+}
+
+void
+DynamicGBWT::insert(text_buffer_type& text, size_type batch_size)
+{
+  double start = readTimer();
+
+  if(text.size() == 0)
+  {
+    if(Verbosity::level >= Verbosity::FULL)
+    {
+      std::cerr << "DynamicGBWT::insert(): The input text is empty" << std::endl;
+    }
+    return;
+  }
+  if(batch_size == 0) { batch_size = text.size(); }
+
+  // Find the last endmarker in the batch, read the batch into memory, and insert the sequences.
+  size_type old_sequences = this->sequences();
+  for(size_type start_offset = 0; start_offset < text.size(); )
+  {
+    size_type limit = std::min(text.size(), start_offset + batch_size);
+    while(limit > start_offset)
+    {
+      if(text[limit - 1] == ENDMARKER) { break; }
+      limit--;
+    }
+    if(limit <= start_offset)
+    {
+      std::cerr << "DynamicGBWT::insert(): Cannot find an endmarker in the batch starting from offset " << start_offset << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    text_type batch(limit - start_offset, 0, text.width());
+    for(size_type i = start_offset; i < limit; i++) { batch[i - start_offset] = text[i]; }
+    this->insert(batch, false, this->sequences() - old_sequences);
+    start_offset = limit;
+  }
+
+  // Finally sort the outgoing edges.
+  this->recode();
+
+  if(Verbosity::level >= Verbosity::BASIC)
+  {
+    double seconds = readTimer() - start;
+    std::cerr << "DynamicGBWT::insert(): Inserted " << (this->sequences() - old_sequences)
+              << " sequences of total length " << text.size()
+              << " in " << seconds << " seconds" << std::endl;
   }
 }
 
@@ -530,9 +600,9 @@ DynamicGBWT::merge(const DynamicGBWT& source, size_type batch_size)
 
   if(source.empty())
   {
-    if(Verbosity::level >= Verbosity::EXTENDED)
+    if(Verbosity::level >= Verbosity::FULL)
     {
-      std::cerr << "DynamicGBWT::merge(): The other GBWT is empty" << std::endl;
+      std::cerr << "DynamicGBWT::merge(): The input GBWT is empty" << std::endl;
     }
     return;
   }

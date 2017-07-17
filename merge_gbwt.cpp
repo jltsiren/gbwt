@@ -41,7 +41,7 @@ main(int argc, char** argv)
 {
   if(argc < 4) { printUsage(); }
 
-  size_type batch_size = DynamicGBWT::BATCH_SIZE;
+  size_type batch_size = DynamicGBWT::MERGE_BATCH_SIZE;
   int c = 0;
   while((c = getopt(argc, argv, "b:")) != -1)
   {
@@ -96,7 +96,8 @@ void
 printUsage(int exit_code)
 {
   std::cerr << "Usage: merge_gbwt input1 input2 output" << std::endl;
-  std::cerr << "  -b N  Use batches of N sequences for merging (default " << DynamicGBWT::BATCH_SIZE << ")" << std::endl;
+  std::cerr << "  -b N  Use batches of N sequences for merging (default "
+            << DynamicGBWT::MERGE_BATCH_SIZE << ")" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Use base names for the inputs and the output." << std::endl;
   std::cerr << std::endl;
