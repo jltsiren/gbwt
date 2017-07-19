@@ -25,8 +25,7 @@
 #ifndef GBWT_DYNAMIC_GBWT_H
 #define GBWT_DYNAMIC_GBWT_H
 
-#include "files.h"
-#include "support.h"
+#include "gbwt.h"
 
 namespace gbwt
 {
@@ -81,9 +80,9 @@ public:
     Insert the sequences from the other GBWT into this. Use batch size 0 to insert all
     sequences at once.
 
-    FIXME Also from normal GBWT.
     FIXME Special case when the node ids do not overlap.
   */
+  void merge(const GBWT& source, size_type batch_size = MERGE_BATCH_SIZE);
   void merge(const DynamicGBWT& source, size_type batch_size = MERGE_BATCH_SIZE);
 
   // Determine whether the GBWTs are identical.

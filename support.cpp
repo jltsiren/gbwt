@@ -22,6 +22,7 @@
   SOFTWARE.
 */
 
+#include "internal.h"
 #include "support.h"
 
 namespace gbwt
@@ -94,7 +95,7 @@ DynamicRecord::recode()
 
 //------------------------------------------------------------------------------
 
-size_type
+DynamicRecord::size_type
 DynamicRecord::LF(size_type i, node_type to) const
 {
   size_type outrank = this->edgeTo(to);
@@ -207,6 +208,131 @@ operator<<(std::ostream& out, const DynamicRecord& record)
       << ", body = " << record.body << ")";
 
   return out;
+}
+
+//------------------------------------------------------------------------------
+
+CompressedRecord::CompressedRecord(const std::vector<byte_type>& source, size_type start, size_type limit)
+{
+  this->outgoing.resize(ByteCode::read(source, start));
+  for(edge_type& outedge : this->outgoing)
+  {
+    outedge.first = ByteCode::read(source, start);
+    outedge.second = ByteCode::read(source, start);
+  }
+
+  this->body = source.data() + start;
+  this->data_size = limit - start;
+}
+
+CompressedRecord::size_type
+CompressedRecord::size() const
+{
+  size_type result = 0;
+
+  if(this->outdegree() > 0)
+  {
+    Run decoder(this->outdegree());
+    for(size_type offset = 0; offset < this->data_size; )
+    {
+      run_type run = decoder.read(this->body, offset);
+      result += run.second;
+    }
+  }
+
+  return result;
+}
+
+CompressedRecord::size_type
+CompressedRecord::runs() const
+{
+  size_type result = 0;
+
+  if(this->outdegree() > 0)
+  {
+    Run decoder(this->outdegree());
+    for(size_type offset = 0; offset < this->data_size; )
+    {
+      decoder.read(this->body, offset); result++;
+    }
+  }
+
+  return result;
+}
+
+CompressedRecord::size_type
+CompressedRecord::LF(size_type i, node_type to) const
+{
+  size_type outrank = this->edgeTo(to);
+  if(outrank >= this->outdegree()) { return invalid_offset(); }
+
+  size_type result = this->offset(outrank);
+  if(i == 0) { return result; }
+
+  size_type record_offset = 0;
+  Run decoder(this->outdegree());
+  for(size_type data_offset = 0; data_offset < this->data_size; )
+  {
+    run_type run = decoder.read(this->body, data_offset);
+    if(run.first == outrank) { result += run.second; }
+    record_offset += run.second;
+    if(record_offset >= i)
+    {
+      if(run.first == outrank) { result -= record_offset - i; }
+      break;
+    }
+  }
+
+  return result;
+}
+
+edge_type
+CompressedRecord::LF(size_type i) const
+{
+  if(i >= this->size()) { return invalid_edge(); }
+
+  std::vector<edge_type> result(this->outgoing);
+  rank_type last_edge = 0;
+  size_type record_offset = 0;
+  Run decoder(this->outdegree());
+  for(size_type data_offset = 0; data_offset < this->data_size; )
+  {
+    run_type run = decoder.read(this->body, data_offset);
+    last_edge = run.first;
+    result[run.first].second += run.second;
+    record_offset += run.second;
+    if(record_offset > i) { break; }
+  }
+
+  result[last_edge].second -= (record_offset - i);
+  return result[last_edge];
+}
+
+node_type
+CompressedRecord::operator[](size_type i) const
+{
+  if(i >= this->size()) { return ENDMARKER; }
+
+  size_type record_offset = 0;
+  Run decoder(this->outdegree());
+  for(size_type data_offset = 0; data_offset < this->data_size; )
+  {
+    run_type run = decoder.read(this->body, data_offset);
+    record_offset += run.second;
+    if(record_offset > i) { return this->successor(run.first); }
+  }
+
+  return ENDMARKER;
+}
+
+rank_type
+CompressedRecord::edgeTo(node_type to) const
+{
+  for(rank_type outrank = 0; outrank < this->outdegree(); outrank++)
+  {
+    if(this->successor(outrank) == to) { return outrank; }
+  }
+  return this->outdegree();
 }
 
 //------------------------------------------------------------------------------

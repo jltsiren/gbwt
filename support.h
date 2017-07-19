@@ -118,11 +118,46 @@ struct DynamicRecord
 
   // Add a new incoming edge.
   void addIncoming(edge_type inedge);
-};
 
 //------------------------------------------------------------------------------
 
+};  // struct DynamicRecord
+
 std::ostream& operator<<(std::ostream& out, const DynamicRecord& record);
+
+//------------------------------------------------------------------------------
+
+struct CompressedRecord
+{
+  typedef gbwt::size_type size_type;
+
+  std::vector<edge_type> outgoing;
+  const byte_type*       body;
+  size_type              data_size;
+
+  CompressedRecord(const std::vector<byte_type>& source, size_type start, size_type limit);
+
+  size_type size() const; // Expensive.
+  inline bool empty() const { return (this->size() == 0); }
+  size_type runs() const; // Expensive.
+  inline size_type outdegree() const { return this->outgoing.size(); }
+
+  // Returns invalid_offset() if there is no edge to the destination.
+  size_type LF(size_type i, node_type to) const;
+
+  // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
+  edge_type LF(size_type i) const;
+
+  // Returns BWT[i] within the record.
+  node_type operator[](size_type i) const;
+
+  // Maps successor nodes to outranks.
+  rank_type edgeTo(node_type to) const;
+
+  // These assume that 'outrank' is a valid outgoing edge.
+  inline node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
+  inline size_type offset(rank_type outrank) const { return this->outgoing[outrank].second; }
+};
 
 //------------------------------------------------------------------------------
 

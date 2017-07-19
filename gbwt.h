@@ -1,0 +1,106 @@
+/*
+  Copyright (c) 2017 Genome Research Ltd.
+
+  Author: Jouni Siren <jouni.siren@iki.fi>
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+*/
+
+#ifndef GBWT_GBWT_H
+#define GBWT_GBWT_H
+
+#include "files.h"
+#include "support.h"
+
+namespace gbwt
+{
+
+/*
+  gbwt.h: Compressed GBWT structures for construction.
+*/
+
+//------------------------------------------------------------------------------
+
+class GBWT
+{
+public:
+  typedef CompressedRecord::size_type size_type;
+  typedef node_type                   comp_type; // Index of a record in this->bwt.
+
+//------------------------------------------------------------------------------
+
+  GBWT();
+  GBWT(const GBWT& source);
+  GBWT(GBWT&& source);
+  ~GBWT();
+
+  void swap(GBWT& another);
+  GBWT& operator=(const GBWT& source);
+  GBWT& operator=(GBWT&& source);
+
+  size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
+  void load(std::istream& in);
+
+  const static std::string EXTENSION; // .gbwt
+
+//------------------------------------------------------------------------------
+
+  inline size_type size() const { return this->header.size; }
+  inline bool empty() const { return (this->size() == 0); }
+  inline size_type sequences() const { return this->header.sequences; }
+  inline size_type sigma() const { return this->header.alphabet_size; }
+  inline size_type effective() const { return this->header.alphabet_size - this->header.offset; }
+  inline size_type count(node_type node) const { return this->record(node).size(); }  // Expensive.
+
+  size_type runs() const;
+
+//------------------------------------------------------------------------------
+
+  // Returns invalid_offset() if the offset or the destination is invalid.
+  size_type LF(node_type from, size_type i, node_type to) const;
+
+  // Returns invalid_edge() if node or offset is invalid.
+  edge_type LF(node_type from, size_type i) const;
+
+//------------------------------------------------------------------------------
+
+  // This returns the compressed record for the given node, assuming that it exists.
+  CompressedRecord record(node_type node) const;
+
+//------------------------------------------------------------------------------
+
+  GBWTHeader                       header;
+  sdsl::sd_vector<>                record_index;
+  sdsl::sd_vector<>::select_1_type record_select;
+  std::vector<byte_type>           bwt;
+
+//------------------------------------------------------------------------------
+
+private:
+  void copy(const GBWT& source);
+
+//------------------------------------------------------------------------------
+
+}; // class GBWT
+
+//------------------------------------------------------------------------------
+
+} // namespace gbwt
+
+#endif // GBWT_GBWT_H
