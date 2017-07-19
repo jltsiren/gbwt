@@ -240,18 +240,6 @@ DynamicGBWT::compare(const DynamicGBWT& another, std::ostream& out) const
 
 //------------------------------------------------------------------------------
 
-/*
-  Support functions for index construction.
-*/
-
-void
-swapBody(DynamicRecord& record, RunMerger& merger)
-{
-  merger.flush();
-  merger.runs.swap(record.body);
-  std::swap(merger.total_size, record.body_size);
-}
-
 void
 DynamicGBWT::resize(size_type new_offset, size_type new_sigma)
 {
@@ -296,6 +284,92 @@ DynamicGBWT::resize(size_type new_offset, size_type new_sigma)
 }
 
 void
+DynamicGBWT::recode()
+{
+  if(Verbosity::level >= Verbosity::FULL)
+  {
+    std::cerr << "DynamicGBWT::recode(): Sorting the outgoing edges" << std::endl;
+  }
+
+  #pragma omp parallel for schedule(static)
+  for(comp_type comp = 0; comp < this->effective(); comp++) { this->bwt[comp].recode(); }
+}
+
+//------------------------------------------------------------------------------
+
+/*
+  Support functions for index construction.
+*/
+
+void
+swapBody(DynamicRecord& record, RunMerger& merger)
+{
+  merger.flush();
+  merger.runs.swap(record.body);
+  std::swap(merger.total_size, record.body_size);
+}
+
+/*
+  Process ranges of sequences sharing the same 'curr' node.
+  - Add the outgoing edge (curr, next) if necessary.
+  - Insert the 'next' node into position 'offset' in the body.
+  - Set 'offset' to rank(next) within the record.
+  - Update the predecessor count of 'curr' in the incoming edges of 'next'.
+
+  We do not maintain incoming edges to the endmarker, because it can be expensive
+  and because searching with the endmarker does not work in a multi-string BWT.
+*/
+
+void
+updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs)
+{
+  for(size_type i = 0; i < seqs.size(); )
+  {
+    node_type curr = seqs[i].curr;
+    DynamicRecord& current = gbwt.record(curr);
+    RunMerger new_body(current.outdegree());
+    std::vector<run_type>::iterator iter = current.body.begin();
+    while(i < seqs.size() && seqs[i].curr == curr)
+    {
+      rank_type outrank = current.edgeTo(seqs[i].next);
+      if(outrank >= current.outdegree())  // Add edge (curr, next) if it does not exist.
+      {
+        current.outgoing.push_back(edge_type(seqs[i].next, 0));
+        new_body.addEdge();
+      }
+      while(new_body.size() < seqs[i].offset)  // Add old runs until 'offset'.
+      {
+        if(iter->second <= seqs[i].offset - new_body.size()) { new_body.insert(*iter); ++iter; }
+        else
+        {
+          run_type temp(iter->first, seqs[i].offset - new_body.size());
+          new_body.insert(temp);
+          iter->second -= temp.second;
+        }
+      }
+      seqs[i].offset = new_body.counts[outrank]; // rank(next) within the record.
+      new_body.insert(outrank);
+      if(seqs[i].next != ENDMARKER)  // The endmarker does not have incoming edges.
+      {
+        gbwt.record(seqs[i].next).increment(curr);
+      }
+      i++;
+    }
+    while(iter != current.body.end()) // Add the rest of the old body.
+    {
+      new_body.insert(*iter); ++iter;
+    }
+    swapBody(current, new_body);
+  }
+  gbwt.header.size += seqs.size();
+}
+
+/*
+  Compute the source offset for each sequence at the next position, assuming that the
+  records have been sorted by the node at the current position.
+*/
+
+void
 nextPosition(std::vector<Sequence>& seqs, const text_type&)
 {
   for(Sequence& seq : seqs) { seq.pos++; }
@@ -324,6 +398,63 @@ nextPosition(std::vector<Sequence>& seqs, const DynamicGBWT& source)
   }
 }
 
+/*
+  Sort the sequences for the next iteration and remove the ones that have reached the endmarker.
+  Note that sorting by (next, curr, offset) now is equivalent to sorting by (curr, offset) in the
+  next interation.
+*/
+
+void
+sortSequences(std::vector<Sequence>& seqs)
+{
+  chooseBestSort(seqs.begin(), seqs.end());
+  size_type head = 0;
+  while(head < seqs.size() && seqs[head].next == ENDMARKER) { head++; }
+  if(head > 0)
+  {
+    for(size_type j = 0; head + j < seqs.size(); j++) { seqs[j] = seqs[head + j]; }
+    seqs.resize(seqs.size() - head);
+  }
+}
+
+/*
+  Rebuild the edge offsets in the outgoing edges to each 'next' node. The offsets will be
+  valid after the insertions in the next iteration.
+
+  Then add the rebuilt edge offsets to sequence offsets, which have been rank(next)
+  within the current record until now.
+*/
+
+void
+rebuildOffsets(DynamicGBWT& gbwt, std::vector<Sequence>& seqs)
+{
+  node_type next = gbwt.sigma();
+  for(const Sequence& seq : seqs)
+  {
+    if(seq.next == next) { continue; }
+    next = seq.next;
+    size_type offset = 0;
+    for(edge_type inedge : gbwt.record(next).incoming)
+    {
+      DynamicRecord& predecessor = gbwt.record(inedge.first);
+      predecessor.offset(predecessor.edgeTo(next)) = offset;
+      offset += inedge.second;
+    }
+  }
+
+  for(Sequence& seq : seqs)
+  {
+    const DynamicRecord& current = gbwt.record(seq.curr);
+    seq.offset += current.offset(current.edgeTo(seq.next));
+  }
+}
+
+/*
+  Move each sequence to the next position, assuming that the source offset has been
+  computed earlier and that the sequences have been sorted by the node at the next
+  position.
+*/
+
 void
 advancePosition(std::vector<Sequence>& seqs, const text_type& text)
 {
@@ -350,20 +481,6 @@ advancePosition(std::vector<Sequence>& seqs, const DynamicGBWT& source)
   }
 }
 
-void
-DynamicGBWT::recode()
-{
-  if(Verbosity::level >= Verbosity::FULL)
-  {
-    std::cerr << "DynamicGBWT::recode(): Sorting the outgoing edges" << std::endl;
-  }
-
-  #pragma omp parallel for schedule(static)
-  for(comp_type comp = 0; comp < this->effective(); comp++) { this->bwt[comp].recode(); }
-}
-
-//------------------------------------------------------------------------------
-
 /*
   Insert the sequences from the source to the GBWT. Maintains an invariant that
   the sequences are sorted by (curr, offset).
@@ -373,105 +490,14 @@ template<class Source>
 size_type
 insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source)
 {
-  size_type iterations = 0;
-  while(true)
+  for(size_type iterations = 1; ; iterations++)
   {
-    iterations++;  // We use 1-based iterations.
-
-    /*
-      Process ranges of sequences sharing the same 'curr' node.
-      - Add the outgoing edge (curr, next) if necessary.
-      - Insert the 'next' node into position 'offset' in the body.
-      - Set 'offset' to rank(next) within the record.
-      - Update the predecessor count of 'curr' in the incoming edges of 'next'.
-
-      We do not maintain incoming edges to the endmarker, because it can be expensive
-      and because searching with the endmarker does not work in a multi-string BWT.
-    */
-    for(size_type i = 0; i < seqs.size(); )
-    {
-      node_type curr = seqs[i].curr;
-      DynamicRecord& current = gbwt.record(curr);
-      RunMerger new_body(current.outdegree());
-      std::vector<run_type>::iterator iter = current.body.begin();
-      while(i < seqs.size() && seqs[i].curr == curr)
-      {
-        rank_type outrank = current.edgeTo(seqs[i].next);
-        if(outrank >= current.outdegree())  // Add edge (curr, next) if it does not exist.
-        {
-          current.outgoing.push_back(edge_type(seqs[i].next, 0));
-          new_body.addEdge();
-        }
-        while(new_body.size() < seqs[i].offset)  // Add old runs until 'offset'.
-        {
-          if(iter->second <= seqs[i].offset - new_body.size()) { new_body.insert(*iter); ++iter; }
-          else
-          {
-            run_type temp(iter->first, seqs[i].offset - new_body.size());
-            new_body.insert(temp);
-            iter->second -= temp.second;
-          }
-        }
-        seqs[i].offset = new_body.counts[outrank]; // rank(next) within the record.
-        new_body.insert(outrank);
-        if(seqs[i].next != ENDMARKER)  // The endmarker does not have incoming edges.
-        {
-          gbwt.record(seqs[i].next).increment(curr);
-        }
-        i++;
-      }
-      while(iter != current.body.end()) // Add the rest of the old body.
-      {
-        new_body.insert(*iter); ++iter;
-      }
-      swapBody(current, new_body);
-    }
-    gbwt.header.size += seqs.size();
+    updateRecords(gbwt, seqs);  // Insert the next nodes into the GBWT.
     nextPosition(seqs, source); // Determine the next position for each sequence.
-
-    /*
-      Sort the sequences for the next iteration and remove the ones that have reached the endmarker.
-      Note that sorting by (next, curr, offset) now is equivalent to sorting by (curr, offset) in the
-      next interation.
-    */
-    chooseBestSort(seqs.begin(), seqs.end());
-    size_type head = 0;
-    while(head < seqs.size() && seqs[head].next == ENDMARKER) { head++; }
-    if(head > 0)
-    {
-      for(size_type j = 0; head + j < seqs.size(); j++) { seqs[j] = seqs[head + j]; }
-      seqs.resize(seqs.size() - head);
-    }
+    sortSequences(seqs);  // Sort for the next iteration and remove the ones that have finished.
     if(seqs.empty()) { return iterations; }
-
-    /*
-      Rebuild the edge offsets in the outgoing edges to each 'next' node. The offsets will be
-      valid after the insertions in the next iteration.
-    */
-    node_type next = gbwt.sigma();
-    for(Sequence& seq : seqs)
-    {
-      if(seq.next == next) { continue; }
-      next = seq.next;
-      size_type offset = 0;
-      for(edge_type inedge : gbwt.record(next).incoming)
-      {
-        DynamicRecord& predecessor = gbwt.record(inedge.first);
-        predecessor.offset(predecessor.edgeTo(next)) = offset;
-        offset += inedge.second;
-      }
-    }
-
-    /*
-      Until now sequence offsets have been rank(next) within the record. We add edge offsets
-      to them to get valid offsets in the next record and then advance the text position.
-    */
-    for(Sequence& seq : seqs)
-    {
-      const DynamicRecord& current = gbwt.record(seq.curr);
-      seq.offset += current.offset(current.edgeTo(seq.next));
-    }
-    advancePosition(seqs, source);  // Move each sequence to the next position.
+    rebuildOffsets(gbwt, seqs); // Rebuild offsets in outgoing edges and sequences.
+    advancePosition(seqs, source);  // Move the sequences to the next position.
   }
 }
 
