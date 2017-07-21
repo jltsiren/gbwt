@@ -144,10 +144,9 @@ private:
   void recode();
 
   /*
-    We don't want to sort outgoing edges between batches. Start id is the first sequence id
-    (in the input) in the current batch.
+    Insert a batch of sequences with ids (in the current input) starting from 'start_id'.
   */
-  void insert(const text_type& text, bool sort_outgoing = true, size_type start_id = 0);
+  void insertBatch(const text_type& text, size_type start_id = 0);
 
 //------------------------------------------------------------------------------
 

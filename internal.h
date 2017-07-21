@@ -25,7 +25,7 @@
 #ifndef GBWT_INTERNAL_H
 #define GBWT_INTERNAL_H
 
-#include "utils.h"
+#include "support.h"
 
 namespace gbwt
 {
@@ -212,6 +212,91 @@ struct Sequence
     if(this->next != another.next) { return (this->next < another.next); }
     if(this->curr != another.curr) { return (this->curr < another.curr); }
     return (this->offset < another.offset);
+  }
+};
+
+//------------------------------------------------------------------------------
+
+/*
+  Iterators for CompressedRecords. The second one is slower, as it also maintains
+  ranks within the record.
+*/
+
+struct CompressedRecordIterator
+{
+  explicit CompressedRecordIterator(const CompressedRecord& source) :
+    record(source), decoder(source.outdegree()),
+    record_offset(0), curr_offset(0), next_offset(0)
+  {
+    this->read();
+  }
+
+  inline bool end() const { return (this->curr_offset >= this->record.data_size); }
+  inline void operator++() { this->curr_offset = this->next_offset; this->read(); }
+
+  inline run_type operator*() const { return this->run; }
+  inline const run_type* operator->() { return &(this->run); }
+
+  // After the current run.
+  inline size_type offset() const { return this->record_offset; }
+
+  const CompressedRecord& record;
+  Run                     decoder;
+
+  size_type               record_offset;
+  size_type               curr_offset, next_offset;
+  run_type                run;
+
+private:
+  inline void read()
+  {
+    if(!(this->end()))
+    {
+      this->run = this->decoder.read(this->record.body, this->next_offset);
+      this->record_offset += this->run.second;
+    }
+  }
+};
+
+struct CompressedRecordRankIterator
+{
+  explicit CompressedRecordRankIterator(const CompressedRecord& source) :
+    record(source), decoder(source.outdegree()), ranks(source.outgoing),
+    record_offset(0), curr_offset(0), next_offset(0)
+  {
+    this->read();
+  }
+
+  inline bool end() const { return (this->curr_offset >= this->record.data_size); }
+  inline void operator++() { this->curr_offset = this->next_offset; this->read(); }
+
+  inline run_type operator*() const { return this->run; }
+  inline const run_type* operator->() { return &(this->run); }
+
+  // After the current run.
+  inline size_type offset() const { return this->record_offset; }
+  inline size_type rank() const { return this->rank(this->run.first); }
+  inline size_type rank(rank_type outrank) const { return this->ranks[outrank].second; }
+  inline edge_type edge() const { return this->edge(this->run.first); }
+  inline edge_type edge(rank_type outrank) const { return this->ranks[outrank]; }
+
+  const CompressedRecord& record;
+  Run                     decoder;
+  std::vector<run_type>   ranks;
+
+  size_type               record_offset;
+  size_type               curr_offset, next_offset;
+  run_type                run;
+
+private:
+  inline void read()
+  {
+    if(!(this->end()))
+    {
+      this->run = this->decoder.read(this->record.body, this->next_offset);
+      this->record_offset += this->run.second;
+      this->ranks[this->run.first].second += this->run.second;
+    }
   }
 };
 

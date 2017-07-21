@@ -382,19 +382,11 @@ nextPosition(std::vector<Sequence>& seqs, const GBWT& source)
   {
     node_type curr = seqs[i].curr;
     const CompressedRecord current = source.record(curr);
-    Run decoder(current.outdegree());
-    size_type data_offset = 0;
-    run_type run = decoder.read(current.body, data_offset);
-    std::vector<edge_type> result(current.outgoing);
-    size_type record_offset = run.second; result[run.first].second += run.second;
+    CompressedRecordRankIterator iter(current);
     while(i < seqs.size() && seqs[i].curr == curr)
     {
-      while(record_offset <= seqs[i].pos)
-      {
-        run = decoder.read(current.body, data_offset); record_offset += run.second;
-        result[run.first].second += run.second;
-      }
-      seqs[i].pos = result[run.first].second - (record_offset - seqs[i].pos);
+      while(iter.offset() <= seqs[i].pos) { ++iter; }
+      seqs[i].pos = iter.rank() - (iter.offset() - seqs[i].pos);
       i++;
     }
   }
@@ -494,15 +486,12 @@ advancePosition(std::vector<Sequence>& seqs, const GBWT& source)
   {
     node_type curr = seqs[i].next;
     const CompressedRecord current = source.record(curr);
-    Run decoder(current.outdegree());
-    size_type data_offset = 0;
-    run_type run = decoder.read(current.body, data_offset);
-    size_type record_offset = run.second;
+    CompressedRecordIterator iter(current);
     while(i < seqs.size() && seqs[i].next == curr)
     {
       seqs[i].curr = seqs[i].next;
-      while(record_offset <= seqs[i].pos) { run = decoder.read(current.body, data_offset); record_offset += run.second; }
-      seqs[i].next = current.successor(run.first);
+      while(iter.offset() <= seqs[i].pos) { ++iter; }
+      seqs[i].next = current.successor(iter->first);
       i++;
     }
   }
@@ -551,7 +540,7 @@ insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source)
 //------------------------------------------------------------------------------
 
 void
-DynamicGBWT::insert(const text_type& text, bool sort_outgoing, size_type start_id)
+DynamicGBWT::insertBatch(const text_type& text, size_type start_id)
 {
   double start = readTimer();
 
@@ -591,8 +580,6 @@ DynamicGBWT::insert(const text_type& text, bool sort_outgoing, size_type start_i
 
   // Insert the sequences and sort the outgoing edges.
   size_type iterations = gbwt::insert(*this, seqs, text);
-  if(sort_outgoing) { this->recode(); }
-
   if(Verbosity::level >= Verbosity::EXTENDED)
   {
     double seconds = readTimer() - start;
@@ -613,7 +600,8 @@ DynamicGBWT::insert(const text_type& text)
     }
     return;
   }
-  this->insert(text, true, 0);
+  this->insertBatch(text, 0);
+  this->recode();
 }
 
 void
@@ -648,7 +636,7 @@ DynamicGBWT::insert(text_buffer_type& text, size_type batch_size)
     }
     text_type batch(limit - start_offset, 0, text.width());
     for(size_type i = start_offset; i < limit; i++) { batch[i - start_offset] = text[i]; }
-    this->insert(batch, false, this->sequences() - old_sequences);
+    this->insertBatch(batch, this->sequences() - old_sequences);
     start_offset = limit;
   }
 
@@ -686,27 +674,26 @@ DynamicGBWT::merge(const GBWT& source, size_type batch_size)
 
   // Insert the sequences in batches.
   const CompressedRecord endmarker = source.record(ENDMARKER);
-  size_type data_offset = 0, record_offset = 0, run_offset = 0;
-  Run decoder(endmarker.outdegree());
-  run_type run = decoder.read(endmarker.body, data_offset);
-  while(record_offset < source.sequences())
+  CompressedRecordIterator iter(endmarker);
+  size_type sequence_id = 0, run_offset = 0;
+  while(sequence_id < source.sequences())
   {
     double batch_start = readTimer();
-    size_type limit = std::min(record_offset + batch_size, source.sequences());
-    std::vector<Sequence> seqs; seqs.reserve(limit - record_offset);
-    while(record_offset < limit)  // Create the new sequence iterators.
+    size_type limit = std::min(sequence_id + batch_size, source.sequences());
+    std::vector<Sequence> seqs; seqs.reserve(limit - sequence_id);
+    while(sequence_id < limit)  // Create the new sequence iterators.
     {
-      if(run_offset >= run.second) { run = decoder.read(endmarker.body, data_offset); run_offset = 0; }
+      if(run_offset >= iter->second) { ++iter; run_offset = 0; }
       else
       {
-        seqs.push_back(Sequence(endmarker.successor(run.first), this->sequences(), record_offset));
-        this->header.sequences++; record_offset++; run_offset++;
+        seqs.push_back(Sequence(endmarker.successor(iter->first), this->sequences(), sequence_id));
+        this->header.sequences++; sequence_id++; run_offset++;
       }
     }
     if(Verbosity::level >= Verbosity::EXTENDED)
     {
-      std::cerr << "DynamicGBWT::merge(): Inserting sequences " << (record_offset - seqs.size())
-                << " to " << (record_offset - 1) << std::endl;
+      std::cerr << "DynamicGBWT::merge(): Inserting sequences " << (sequence_id - seqs.size())
+                << " to " << (sequence_id - 1) << std::endl;
     }
     size_type iterations = gbwt::insert(*this, seqs, source);
     if(Verbosity::level >= Verbosity::EXTENDED)
