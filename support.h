@@ -142,11 +142,14 @@ struct CompressedRecord
   size_type runs() const; // Expensive.
   inline size_type outdegree() const { return this->outgoing.size(); }
 
+  // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
+  edge_type LF(size_type i) const;
+
   // Returns invalid_offset() if there is no edge to the destination.
   size_type LF(size_type i, node_type to) const;
 
-  // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
-  edge_type LF(size_type i) const;
+  // Returns Range::empty_range() if the range is empty or the destination is invalid.
+  range_type LF(range_type range, node_type to) const;
 
   // Returns BWT[i] within the record.
   node_type operator[](size_type i) const;

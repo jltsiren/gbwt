@@ -72,11 +72,14 @@ public:
 
 //------------------------------------------------------------------------------
 
+  // Returns invalid_edge() if node or offset is invalid.
+  edge_type LF(node_type from, size_type i) const;
+
   // Returns invalid_offset() if the offset or the destination is invalid.
   size_type LF(node_type from, size_type i, node_type to) const;
 
-  // Returns invalid_edge() if node or offset is invalid.
-  edge_type LF(node_type from, size_type i) const;
+  // Returns Range::empty_range() if the range is empty or the destination is invalid.
+  range_type LF(node_type from, range_type range, node_type to) const;
 
 //------------------------------------------------------------------------------
 

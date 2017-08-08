@@ -82,7 +82,7 @@ GBWT::operator=(GBWT&& source)
   return *this;
 }
 
-GBWT::size_type
+size_type
 GBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
 {
   sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
@@ -151,6 +151,13 @@ GBWT::runs() const
 
 //------------------------------------------------------------------------------
 
+edge_type
+GBWT::LF(node_type from, size_type i) const
+{
+  if(from >= this->sigma()) { return invalid_edge(); }
+  return this->record(from).LF(i);
+}
+
 size_type
 GBWT::LF(node_type from, size_type i, node_type to) const
 {
@@ -159,11 +166,12 @@ GBWT::LF(node_type from, size_type i, node_type to) const
   return this->record(from).LF(i, to);
 }
 
-edge_type
-GBWT::LF(node_type from, size_type i) const
+range_type
+GBWT::LF(node_type from, range_type range, node_type to) const
 {
-  if(from >= this->sigma()) { return invalid_edge(); }
-  return this->record(from).LF(i);
+  if(to >= this->sigma()) { return Range::empty_range(); }
+  if(from >= this->sigma()) { range.first = range.second = this->count(to); }
+  return this->record(from).LF(range, to);
 }
 
 //------------------------------------------------------------------------------

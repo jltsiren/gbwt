@@ -94,7 +94,7 @@ DynamicRecord::recode()
 
 //------------------------------------------------------------------------------
 
-DynamicRecord::size_type
+size_type
 DynamicRecord::LF(size_type i, node_type to) const
 {
   size_type outrank = this->edgeTo(to);
@@ -224,7 +224,7 @@ CompressedRecord::CompressedRecord(const std::vector<byte_type>& source, size_ty
   this->data_size = limit - start;
 }
 
-CompressedRecord::size_type
+size_type
 CompressedRecord::size() const
 {
   size_type result = 0;
@@ -235,7 +235,7 @@ CompressedRecord::size() const
   return result;
 }
 
-CompressedRecord::size_type
+size_type
 CompressedRecord::runs() const
 {
   size_type result = 0;
@@ -246,34 +246,12 @@ CompressedRecord::runs() const
   return result;
 }
 
-CompressedRecord::size_type
-CompressedRecord::LF(size_type i, node_type to) const
-{
-  size_type outrank = this->edgeTo(to);
-  if(outrank >= this->outdegree()) { return invalid_offset(); }
-
-  size_type result = this->offset(outrank);
-  if(i == 0) { return result; }
-
-  for(CompressedRecordIterator iter(*this); !(iter.end()); ++iter)
-  {
-    if(iter->first == outrank) { result += iter->second; }
-    if(iter.offset() >= i)
-    {
-      if(iter->first == outrank) { result -= iter.offset() - i; }
-      break;
-    }
-  }
-
-  return result;
-}
-
 edge_type
 CompressedRecord::LF(size_type i) const
 {
   if(this->outdegree() == 0) { return invalid_edge(); }
 
-  for(CompressedRecordRankIterator iter(*this); !(iter.end()); ++iter)
+  for(CompressedRecordFullIterator iter(*this); !(iter.end()); ++iter)
   {
     if(iter.offset() > i)
     {
@@ -282,6 +260,34 @@ CompressedRecord::LF(size_type i) const
     }
   }
   return invalid_edge();
+}
+
+size_type
+CompressedRecord::LF(size_type i, node_type to) const
+{
+  size_type outrank = this->edgeTo(to);
+  if(outrank >= this->outdegree()) { return invalid_offset(); }
+  CompressedRecordRankIterator iter(*this, outrank);
+
+  while(!(iter.end()) && iter.offset() < i) { ++iter; }
+  return iter.rankAt(i);
+}
+
+range_type
+CompressedRecord::LF(range_type range, node_type to) const
+{
+  if(Range::empty(range)) { return Range::empty_range(); }
+
+  size_type outrank = this->edgeTo(to);
+  if(outrank >= this->outdegree()) { return Range::empty_range(); }
+  CompressedRecordRankIterator iter(*this, outrank);
+
+  while(!(iter.end()) && iter.offset() < range.first) { ++iter; }
+  range.first = iter.rankAt(range.first);
+  while(!(iter.end()) && iter.offset() < range.second) { ++iter; }
+  range.second = iter.rankAt(range.second);
+
+  return range;
 }
 
 node_type

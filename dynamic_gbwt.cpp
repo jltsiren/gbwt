@@ -78,7 +78,7 @@ DynamicGBWT::operator=(DynamicGBWT&& source)
   return *this;
 }
 
-DynamicGBWT::size_type
+size_type
 DynamicGBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
 {
   sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
@@ -382,7 +382,7 @@ nextPosition(std::vector<Sequence>& seqs, const GBWT& source)
   {
     node_type curr = seqs[i].curr;
     const CompressedRecord current = source.record(curr);
-    CompressedRecordRankIterator iter(current);
+    CompressedRecordFullIterator iter(current);
     while(i < seqs.size() && seqs[i].curr == curr)
     {
       while(iter.offset() <= seqs[i].pos) { ++iter; }

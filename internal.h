@@ -218,8 +218,14 @@ struct Sequence
 //------------------------------------------------------------------------------
 
 /*
-  Iterators for CompressedRecords. The second one is slower, as it also maintains
-  ranks within the record.
+  Iterators for CompressedRecords.
+
+  - CompressedRecordIterator is the fastest, as it only iterates over the runs.
+  - CompressedRecordRankIterator keeps track of the rank for one successor node.
+  - CompressedRecordFullIterator is the slowest, as it keeps track of the ranks
+    for all successor nodes.
+
+  FIXME a single iterator with a RankCalculator as a template parameter.
 */
 
 struct CompressedRecordIterator
@@ -260,7 +266,57 @@ private:
 
 struct CompressedRecordRankIterator
 {
-  explicit CompressedRecordRankIterator(const CompressedRecord& source) :
+  explicit CompressedRecordRankIterator(const CompressedRecord& source, rank_type outrank) :
+    record(source), decoder(source.outdegree()),
+    record_offset(0), curr_offset(0), next_offset(0),
+    value(outrank), result(source.offset(outrank))
+  {
+    this->read();
+  }
+
+  inline bool end() const { return (this->curr_offset >= this->record.data_size); }
+  inline void operator++() { this->curr_offset = this->next_offset; this->read(); }
+
+  inline run_type operator*() const { return this->run; }
+  inline const run_type* operator->() { return &(this->run); }
+
+  // After the current run.
+  inline size_type offset() const { return this->record_offset; }
+  inline size_type rank() const { return this->result; }
+
+  // Intended for positions i covered by the current run.
+  inline size_type rankAt(size_type i) const
+  {
+    size_type temp = this->rank();
+    if(i < this->offset() && this->run.first == value) { temp -= (this->offset() - i); }
+    return temp;
+  }
+
+  const CompressedRecord& record;
+  Run                     decoder;
+
+  size_type               record_offset;
+  size_type               curr_offset, next_offset;
+  run_type                run;
+
+  rank_type               value;
+  size_type               result;
+
+private:
+  inline void read()
+  {
+    if(!(this->end()))
+    {
+      this->run = this->decoder.read(this->record.body, this->next_offset);
+      this->record_offset += this->run.second;
+      if(this->run.first == value) { this->result += this->run.second; }
+    }
+  }
+};
+
+struct CompressedRecordFullIterator
+{
+  explicit CompressedRecordFullIterator(const CompressedRecord& source) :
     record(source), decoder(source.outdegree()), ranks(source.outgoing),
     record_offset(0), curr_offset(0), next_offset(0)
   {
@@ -282,7 +338,7 @@ struct CompressedRecordRankIterator
 
   const CompressedRecord& record;
   Run                     decoder;
-  std::vector<run_type>   ranks;
+  std::vector<edge_type>  ranks;
 
   size_type               record_offset;
   size_type               curr_offset, next_offset;
