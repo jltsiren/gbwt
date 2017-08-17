@@ -69,29 +69,6 @@ DynamicRecord::recode()
 
 //------------------------------------------------------------------------------
 
-size_type
-DynamicRecord::LF(size_type i, node_type to) const
-{
-  size_type outrank = this->edgeTo(to);
-  if(outrank >= this->outdegree()) { return invalid_offset(); }
-
-  size_type result = this->offset(outrank);
-  if(i == 0) { return result; }
-
-  size_type offset = 0;
-  for(run_type run : this->body)
-  {
-    if(run.first == outrank) { result += run.second; }
-    offset += run.second;
-    if(offset >= i)
-    {
-      if(run.first == outrank) { result -= offset - i; }
-      break;
-    }
-  }
-  return result;
-}
-
 edge_type
 DynamicRecord::LF(size_type i) const
 {
@@ -110,6 +87,61 @@ DynamicRecord::LF(size_type i) const
 
   result[last_edge].second -= (offset - i);
   return result[last_edge];
+}
+
+size_type
+DynamicRecord::LF(size_type i, node_type to) const
+{
+  size_type outrank = this->edgeTo(to);
+  if(outrank >= this->outdegree()) { return invalid_offset(); }
+
+  size_type result = this->offset(outrank), offset = 0;
+  for(run_type run : this->body)
+  {
+    if(run.first == outrank) { result += run.second; }
+    offset += run.second;
+    if(offset >= i)
+    {
+      if(run.first == outrank) { result -= offset - i; }
+      break;
+    }
+  }
+  return result;
+}
+
+range_type
+DynamicRecord::LF(range_type range, node_type to) const
+{
+  if(Range::empty(range)) { return Range::empty_range(); }
+
+  size_type outrank = this->edgeTo(to);
+  if(outrank >= this->outdegree()) { return Range::empty_range(); }
+
+  std::vector<run_type>::const_iterator iter = this->body.begin();
+  run_type run = *iter;
+  size_type result = this->offset(outrank) + (run.first == outrank ? run.second : 0), offset = run.second;
+
+  while(iter != body.end() && offset < range.first)
+  {
+    ++iter;
+    if(iter == body.end()) { break; }
+    run = *iter;
+    if(run.first == outrank) { result += run.second; }
+    offset += run.second;
+  }
+  range.first = result - (run.first == outrank ? offset - range.first : 0);
+
+  while(iter != body.end() && offset < range.second)
+  {
+    ++iter;
+    if(iter == body.end()) { break; }
+    run = *iter;
+    if(run.first == outrank) { result += run.second; }
+    offset += run.second;
+  }
+  range.second = result - (run.first == outrank ? offset - range.second : 0);
+
+  return range;
 }
 
 node_type

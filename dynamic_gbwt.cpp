@@ -718,6 +718,14 @@ DynamicGBWT::LF(node_type from, size_type i) const
   return this->record(from).LF(i);
 }
 
+range_type
+DynamicGBWT::LF(node_type from, range_type range, node_type to) const
+{
+  if(to >= this->sigma()) { return Range::empty_range(); }
+  if(from >= this->sigma()) { range.first = range.second = this->count(to); }
+  return this->record(from).LF(range, to);
+}
+
 //------------------------------------------------------------------------------
 
 } // namespace gbwt
