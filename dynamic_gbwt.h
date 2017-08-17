@@ -83,10 +83,6 @@ public:
     FIXME Special case when the node ids do not overlap.
   */
   void merge(const GBWT& source, size_type batch_size = MERGE_BATCH_SIZE);
-  void merge(const DynamicGBWT& source, size_type batch_size = MERGE_BATCH_SIZE);
-
-  // Determine whether the GBWTs are identical.
-  bool compare(const DynamicGBWT& another, std::ostream& out) const;
 
 //------------------------------------------------------------------------------
 
@@ -104,7 +100,7 @@ public:
   // Returns invalid_offset() if the destination is invalid.
   size_type LF(node_type from, size_type i, node_type to) const;
 
-  // Returns invalid_edge() if node or offset is invalid.
+  // Returns invalid_edge() if the node or the offset is invalid.
   edge_type LF(node_type from, size_type i) const;
 
 //------------------------------------------------------------------------------

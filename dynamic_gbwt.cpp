@@ -212,36 +212,6 @@ DynamicGBWT::runs() const
   return total;
 }
 
-bool
-DynamicGBWT::compare(const DynamicGBWT& another, std::ostream& out) const
-{
-  out << "Comparing dynamic GBWTs" << std::endl;
-  out << std::endl;
-
-  if(this->header != another.header)
-  {
-    out << "This:    " << this->header << std::endl;
-    out << "Another: " << another.header << std::endl;
-    out << std::endl;
-    return false;
-  }
-
-  for(comp_type comp = 0; comp < this->effective(); comp++)
-  {
-    if(this->bwt[comp] != another.bwt[comp])
-    {
-      out << "This[" << comp << "]:    " << this->bwt[comp] << std::endl;
-      out << "Another[" << comp << "]: " << another.bwt[comp] << std::endl;
-      out << std::endl;
-      return false;
-    }
-  }
-
-  out << "The GBWTs are identical" << std::endl;
-  out << std::endl;
-  return true;
-}
-
 //------------------------------------------------------------------------------
 
 void
@@ -698,79 +668,6 @@ DynamicGBWT::merge(const GBWT& source, size_type batch_size)
     {
       std::cerr << "DynamicGBWT::merge(): Inserting sequences " << (sequence_id - seqs.size())
                 << " to " << (sequence_id - 1) << std::endl;
-    }
-    size_type iterations = gbwt::insert(*this, seqs, source);
-    if(Verbosity::level >= Verbosity::EXTENDED)
-    {
-      double seconds = readTimer() - batch_start;
-      std::cerr << "DynamicGBWT::merge(): " << iterations << " iterations in " << seconds << " seconds" << std::endl;
-    }
-  }
-
-  // Finally sort the outgoing edges.
-  this->recode();
-
-  if(Verbosity::level >= Verbosity::BASIC)
-  {
-    double seconds = readTimer() - start;
-    std::cerr << "DynamicGBWT::merge(): Inserted " << source.sequences() << " sequences of total length "
-              << source.size() << " in " << seconds << " seconds" << std::endl;
-  }
-}
-
-//------------------------------------------------------------------------------
-
-void
-DynamicGBWT::merge(const DynamicGBWT& source, size_type batch_size)
-{
-  double start = readTimer();
-
-  if(source.empty())
-  {
-    if(Verbosity::level >= Verbosity::FULL)
-    {
-      std::cerr << "DynamicGBWT::merge(): The input GBWT is empty" << std::endl;
-    }
-    return;
-  }
-  if(this->empty())
-  {
-    *this = source;
-    if(Verbosity::level >= Verbosity::EXTENDED)
-    {
-      double seconds = readTimer() - start;
-      std::cerr << "DynamicGBWT::merge(): Inserted " << source.sequences() << " sequences of total length "
-                << source.size() << " into an empty GBWT in " << seconds << " seconds" << std::endl;
-    }
-    return;
-  }
-
-  // Increase alphabet size and decrease offset if necessary.
-  if(batch_size == 0) { batch_size = source.sequences(); }
-  this->resize(source.header.offset, source.sigma());
-
-  // Insert the sequences in batches.
-  const DynamicRecord& endmarker = source.record(ENDMARKER);
-  std::vector<run_type>::const_iterator iter = endmarker.body.begin();
-  size_type record_offset = 0, run_offset = 0;
-  while(record_offset < source.sequences())
-  {
-    double batch_start = readTimer();
-    size_type limit = std::min(record_offset + batch_size, source.sequences());
-    std::vector<Sequence> seqs; seqs.reserve(limit - record_offset);
-    while(record_offset < limit)  // Create the new sequence iterators.
-    {
-      if(run_offset >= iter->second) { ++iter; run_offset = 0; }
-      else
-      {
-        seqs.push_back(Sequence(endmarker.successor(iter->first), this->sequences(), record_offset));
-        this->header.sequences++; record_offset++; run_offset++;
-      }
-    }
-    if(Verbosity::level >= Verbosity::EXTENDED)
-    {
-      std::cerr << "DynamicGBWT::merge(): Inserting sequences " << (record_offset - seqs.size())
-                << " to " << (record_offset - 1) << std::endl;
     }
     size_type iterations = gbwt::insert(*this, seqs, source);
     if(Verbosity::level >= Verbosity::EXTENDED)

@@ -39,7 +39,7 @@ This repository should eventually become a scalable GBWT implementation.
 * An index (`sd_vector`) points to the beginning of each record.
 * Runs are encoded using `Run`, while other integers are encoded using `ByteCode`.
 * The destination nodes of outgoing edges are gap-encoded.
-* The Static in-memory encoding is the same as on disk.
+* The compressed in-memory encoding is the same as on disk.
 * The dynamic encoding required for construction uses three `std::vector`s of pairs of integers.
 
 ## TODO

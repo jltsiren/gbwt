@@ -63,9 +63,6 @@ struct DynamicRecord
   inline size_type indegree() const { return this->incoming.size(); }
   inline size_type outdegree() const { return this->outgoing.size(); }
 
-  bool operator==(const DynamicRecord& another) const;
-  inline bool operator!=(const DynamicRecord& another) const { return !(this->operator==(another)); }
-
   void clear();
   void swap(DynamicRecord& another);
 

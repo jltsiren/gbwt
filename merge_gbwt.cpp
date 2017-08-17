@@ -35,7 +35,6 @@ void printUsage(int exit_code = EXIT_SUCCESS);
 void printGBWT(const GBWT& gbwt, const std::string& name);
 void printGBWT(const DynamicGBWT& gbwt, const std::string& name);
 
-template<class GBWTType>
 size_type insert(DynamicGBWT& index, const std::string input_name, size_type batch_size);
 
 //------------------------------------------------------------------------------
@@ -47,17 +46,12 @@ main(int argc, char** argv)
 
   size_type batch_size = DynamicGBWT::MERGE_BATCH_SIZE;
   int c = 0;
-  bool compressed_inputs = true;
-  while((c = getopt(argc, argv, "b:cd")) != -1)
+  while((c = getopt(argc, argv, "b:")) != -1)
   {
     switch(c)
     {
     case 'b':
       batch_size = std::stoul(optarg); break;
-    case 'c':
-      compressed_inputs = true; break;
-    case 'd':
-      compressed_inputs = false; break;
     case '?':
       std::exit(EXIT_FAILURE);
     default:
@@ -73,7 +67,6 @@ main(int argc, char** argv)
 
   printHeader("Output"); std::cout << output << std::endl;
   printHeader("Batch size"); std::cout << batch_size << std::endl;
-  printHeader("Inputs"); std::cout << (compressed_inputs ? "compressed" : "dynamic") << std::endl;
   std::cout << std::endl;
 
   double start = readTimer();
@@ -86,8 +79,7 @@ main(int argc, char** argv)
   while(optind + 1 < argc)
   {
     std::string input_name = argv[optind]; optind++;
-    if(compressed_inputs) { total_inserted += insert<GBWT>(index, input_name, batch_size); }
-    else { total_inserted += insert<DynamicGBWT>(index, input_name, batch_size); }
+    total_inserted += insert(index, input_name, batch_size);
   }
 
   sdsl::store_to_file(index, output + DynamicGBWT::EXTENSION);
@@ -108,11 +100,9 @@ main(int argc, char** argv)
 void
 printUsage(int exit_code)
 {
-  std::cerr << "Usage: merge_gbwt input1 [input2 ...] output" << std::endl;
+  std::cerr << "Usage: merge_gbwt [options] input1 [input2 ...] output" << std::endl;
   std::cerr << "  -b N  Use batches of N sequences for merging (default "
             << DynamicGBWT::MERGE_BATCH_SIZE << ")" << std::endl;
-  std::cerr << "  -c    Merge compressed GBWTs (default)" << std::endl;
-  std::cerr << "  -d    Merge Dynamic GBWTs" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Use base names for the inputs and the output. Using compressed GBWTs from input2" << std::endl;
   std::cerr << "onwards saves memory but is slower." << std::endl;
@@ -145,12 +135,11 @@ printGBWT(const DynamicGBWT& gbwt, const std::string& name)
   std::cout << std::endl;
 }
 
-template<class GBWTType>
 size_type
 insert(DynamicGBWT& index, const std::string input_name, size_type batch_size)
 {
-  GBWTType next;
-  sdsl::load_from_file(next, input_name + GBWTType::EXTENSION);
+  GBWT next;
+  sdsl::load_from_file(next, input_name + GBWT::EXTENSION);
   printGBWT(next, input_name);
   index.merge(next, batch_size);
   return next.size();

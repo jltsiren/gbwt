@@ -72,7 +72,7 @@ public:
 
 //------------------------------------------------------------------------------
 
-  // Returns invalid_edge() if node or offset is invalid.
+  // Returns invalid_edge() if the node or the offset is invalid.
   edge_type LF(node_type from, size_type i) const;
 
   // Returns invalid_offset() if the offset or the destination is invalid.
