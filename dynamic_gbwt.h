@@ -137,9 +137,8 @@ private:
 
   /*
     Sort the outgoing edges and change the outranks in the runs accordingly.
-    While the GBWT works with any edge order, the final file may vary depending
-    on the batch size used during construction. When we sort the edges, the
-    compressed file will always be the same.
+    While the GBWT works with any edge order, serialization requires sorted edges,
+    as the identifiers of destination nodes are gap-encoded.
   */
   void recode();
 

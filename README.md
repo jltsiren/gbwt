@@ -38,6 +38,7 @@ This repository should eventually become a scalable GBWT implementation.
 * On disk, the records are stored in a single byte array.
 * An index (`sd_vector`) points to the beginning of each record.
 * Runs are encoded using `Run`, while other integers are encoded using `ByteCode`.
+* The destination nodes of outgoing edges are gap-encoded.
 * The Static in-memory encoding is the same as on disk.
 * The dynamic encoding required for construction uses three `std::vector`s of pairs of integers.
 
@@ -47,7 +48,11 @@ This repository should eventually become a scalable GBWT implementation.
 * Special case for merging when the node ids do not overlap.
 * Query interface.
 * `locate()` support for determining sequence identifiers.
-* Memory mapped compressed GBWT.
+  * Because the construction is based on inserting sequences incrementally, the positions where we store the identiers must depend only on the sequence itself.
+  * Use a similar index / array of records combination as with the BWT.
+  * For each node, the sample record tells the number of samples and the samples as (offset, id) pairs.
+  * The offsets can be gap-encoded.
+* Memory-mapped compressed GBWT.
 
 ## References
 

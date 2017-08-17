@@ -95,9 +95,11 @@ DynamicGBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::str
 
     // Write the outgoing edges.
     ByteCode::write(compressed_bwt, current.outdegree());
+    node_type prev = 0;
     for(edge_type outedge : current.outgoing)
     {
-      ByteCode::write(compressed_bwt, outedge.first);
+      ByteCode::write(compressed_bwt, outedge.first - prev);
+      prev = outedge.first;
       ByteCode::write(compressed_bwt, outedge.second);
     }
 
@@ -154,9 +156,11 @@ DynamicGBWT::load(std::istream& in)
 
     // Decompress the outgoing edges.
     current.outgoing.resize(ByteCode::read(node_encoding, offset));
+    node_type prev = 0;
     for(edge_type& outedge : current.outgoing)
     {
-      outedge.first = ByteCode::read(node_encoding, offset);
+      outedge.first = ByteCode::read(node_encoding, offset) + prev;
+      prev = outedge.first;
       outedge.second = ByteCode::read(node_encoding, offset);
     }
 

@@ -214,9 +214,11 @@ operator<<(std::ostream& out, const DynamicRecord& record)
 CompressedRecord::CompressedRecord(const std::vector<byte_type>& source, size_type start, size_type limit)
 {
   this->outgoing.resize(ByteCode::read(source, start));
+  node_type prev = 0;
   for(edge_type& outedge : this->outgoing)
   {
-    outedge.first = ByteCode::read(source, start);
+    outedge.first = ByteCode::read(source, start) + prev;
+    prev = outedge.first;
     outedge.second = ByteCode::read(source, start);
   }
 
