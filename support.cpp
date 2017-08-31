@@ -323,4 +323,113 @@ CompressedRecord::edgeTo(node_type to) const
 
 //------------------------------------------------------------------------------
 
+RecordArray::RecordArray() :
+  records(0)
+{
+}
+
+RecordArray::RecordArray(const RecordArray& source)
+{
+  this->copy(source);
+}
+
+RecordArray::RecordArray(RecordArray&& source)
+{
+  *this = std::move(source);
+}
+
+RecordArray::~RecordArray()
+{
+}
+
+RecordArray::RecordArray(const std::vector<size_type>& offsets, std::vector<byte_type>&& array) :
+  records(offsets.size()), data(array)
+{
+  sdsl::sd_vector_builder builder(array.size(), offsets.size());
+  for(size_type offset : offsets) { builder.set(offset); }
+
+  this->index = sdsl::sd_vector<>(builder);
+  sdsl::util::init_support(this->select, &(this->index));
+}
+
+void
+RecordArray::swap(RecordArray& another)
+{
+  if(this != &another)
+  {
+    std::swap(this->records, another.records),
+    this->index.swap(another.index);
+    sdsl::util::swap_support(this->select, another.select, &(this->index), &(another.index));
+    this->data.swap(another.data);
+  }
+}
+
+RecordArray&
+RecordArray::operator=(const RecordArray& source)
+{
+  if(this != &source) { this->copy(source); }
+  return *this;
+}
+
+RecordArray&
+RecordArray::operator=(RecordArray&& source)
+{
+  if(this != &source)
+  {
+    this->records = std::move(source.records);
+    this->index = std::move(source.index);
+    this->select = std::move(source.select);
+    this->data = std::move(source.data);
+  }
+  return *this;
+}
+
+size_type
+RecordArray::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
+{
+  sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
+  size_type written_bytes = 0;
+
+  written_bytes += sdsl::write_member(this->records, out, child, "records");
+  written_bytes += this->index.serialize(out, child, "index");
+  written_bytes += this->select.serialize(out, child, "select");
+
+  // Serialize the data.
+  size_type data_bytes = this->data.size() * sizeof(byte_type);
+  sdsl::structure_tree_node* data_node =
+    sdsl::structure_tree::add_child(child, "data", "std::vector<gbwt::byte_type>");
+  out.write((const char*)(this->data.data()), data_bytes);
+  sdsl::structure_tree::add_size(data_node, data_bytes);
+  written_bytes += data_bytes;
+
+  sdsl::structure_tree::add_size(child, written_bytes);
+  return written_bytes;
+}
+
+void
+RecordArray::load(std::istream& in)
+{
+  sdsl::read_member(this->records, in);
+
+  // Read the record index.
+  this->index.load(in);
+  this->select.load(in, &(this->index));
+
+  // Read the data.
+  this->data.resize(this->index.size());
+  in.read((char*)(this->data.data()), this->data.size() * sizeof(byte_type));
+}
+
+void
+RecordArray::copy(const RecordArray& source)
+{
+  this->records = source.records;
+  this->index = source.index;
+  this->select = source.select;
+  this->select.set_vector(&(this->index));
+  this->data = source.data;
+}
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwt

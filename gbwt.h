@@ -88,10 +88,8 @@ public:
 
 //------------------------------------------------------------------------------
 
-  GBWTHeader                       header;
-  sdsl::sd_vector<>                record_index;
-  sdsl::sd_vector<>::select_1_type record_select;
-  std::vector<byte_type>           bwt;
+  GBWTHeader  header;
+  RecordArray bwt;
 
 //------------------------------------------------------------------------------
 

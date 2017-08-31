@@ -84,10 +84,11 @@ DynamicGBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::str
   sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
   size_type written_bytes = 0;
 
-  written_bytes += this->header.serialize(out);
+  written_bytes += this->header.serialize(out, child, "header");
 
-  std::vector<byte_type> compressed_bwt;
+  // Compress the BWT.
   std::vector<size_type> bwt_offsets(this->bwt.size());
+  std::vector<byte_type> compressed_bwt;
   for(comp_type comp = 0; comp < this->effective(); comp++)
   {
     bwt_offsets[comp] = compressed_bwt.size();
@@ -111,17 +112,9 @@ DynamicGBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::str
     }
   }
 
-  // Build and serialize index.
-  sdsl::sd_vector_builder builder(compressed_bwt.size(), bwt_offsets.size());
-  for(size_type offset : bwt_offsets) { builder.set(offset); }
-  sdsl::sd_vector<> record_index(builder);
-  sdsl::sd_vector<>::select_1_type record_select(&record_index);
-  written_bytes += record_index.serialize(out);
-  written_bytes += record_select.serialize(out);
-
-  // Serialize BWT.
-  out.write((char*)(compressed_bwt.data()), compressed_bwt.size());
-  written_bytes += compressed_bwt.size();
+  // Serialize the BWT.
+  RecordArray array(bwt_offsets, std::move(compressed_bwt));
+  written_bytes += array.serialize(out, child, "bwt");
 
   sdsl::structure_tree::add_size(child, written_bytes);
   return written_bytes;
@@ -138,40 +131,35 @@ DynamicGBWT::load(std::istream& in)
   }
   this->bwt.resize(this->effective());
 
-  // Read the node index.
-  sdsl::sd_vector<> record_index; record_index.load(in);
-  sdsl::sd_vector<>::select_1_type record_select; record_select.load(in, &record_index);
+  // Read the compressed BWT.
+  RecordArray array;
+  array.load(in);
 
+  // Decompress the BWT.
+  size_type offset = 0;
   for(comp_type comp = 0; comp < this->effective(); comp++)
   {
+    size_type limit = array.limit(comp);
     DynamicRecord& current = this->bwt[comp];
     current.clear();
 
-    // Read the current node.
-    size_type start = record_select(comp + 1);
-    size_type stop = (comp + 1 < this->effective() ? record_select(comp + 2) : record_index.size());
-    std::vector<byte_type> node_encoding(stop - start);
-    in.read((char*)(node_encoding.data()), node_encoding.size());
-    size_type offset = 0;
-
     // Decompress the outgoing edges.
-    current.outgoing.resize(ByteCode::read(node_encoding, offset));
+    current.outgoing.resize(ByteCode::read(array.data, offset));
     node_type prev = 0;
     for(edge_type& outedge : current.outgoing)
     {
-      outedge.first = ByteCode::read(node_encoding, offset) + prev;
+      outedge.first = ByteCode::read(array.data, offset) + prev;
       prev = outedge.first;
-      outedge.second = ByteCode::read(node_encoding, offset);
+      outedge.second = ByteCode::read(array.data, offset);
     }
 
     // Decompress the body.
-    current.body.clear();
     if(current.outdegree() > 0)
     {
       Run decoder(current.outdegree());
-      while(offset < node_encoding.size())
+      while(offset < limit)
       {
-        run_type run = decoder.read(node_encoding, offset);
+        run_type run = decoder.read(array.data, offset);
         current.body.push_back(run);
         current.body_size += run.second;
       }

@@ -56,8 +56,6 @@ GBWT::swap(GBWT& another)
   if(this != &another)
   {
     this->header.swap(another.header);
-    this->record_index.swap(another.record_index);
-    sdsl::util::swap_support(this->record_select, another.record_select, &(this->record_index), &(another.record_index));
     this->bwt.swap(another.bwt);
   }
 }
@@ -75,8 +73,6 @@ GBWT::operator=(GBWT&& source)
   if(this != &source)
   {
     this->header = std::move(source.header);
-    this->record_index = std::move(source.record_index);
-    this->record_select = std::move(source.record_select);
     this->bwt = std::move(source.bwt);
   }
   return *this;
@@ -89,16 +85,7 @@ GBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string nam
   size_type written_bytes = 0;
 
   written_bytes += this->header.serialize(out, child, "header");
-  written_bytes += this->record_index.serialize(out, child, "record_index");
-  written_bytes += this->record_select.serialize(out, child, "record_select");
-
-  // Serialize the BWT.
-  size_type bwt_bytes = this->bwt.size() * sizeof(byte_type);
-  sdsl::structure_tree_node* bwt_node =
-    sdsl::structure_tree::add_child(child, "bwt", "std::vector<gbwt::byte_type>");
-  out.write((const char*)(this->bwt.data()), bwt_bytes);
-  sdsl::structure_tree::add_size(bwt_node, bwt_bytes);
-  written_bytes += bwt_bytes;
+  written_bytes += this->bwt.serialize(out, child, "bwt");
 
   sdsl::structure_tree::add_size(child, written_bytes);
   return written_bytes;
@@ -107,29 +94,19 @@ GBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string nam
 void
 GBWT::load(std::istream& in)
 {
-  // Read the header.
   this->header.load(in);
   if(!(this->header.check()))
   {
     std::cerr << "GBWT::load(): Invalid header: " << this->header << std::endl;
   }
 
-  // Read the record index.
-  this->record_index.load(in);
-  this->record_select.load(in, &(this->record_index));
-
-  // Read the BWT.
-  this->bwt.resize(this->record_index.size());
-  in.read((char*)(this->bwt.data()), this->bwt.size() * sizeof(byte_type));
+  this->bwt.load(in);
 }
 
 void
 GBWT::copy(const GBWT& source)
 {
   this->header = source.header;
-  this->record_index = source.record_index;
-  this->record_select = source.record_select;
-  this->record_select.set_vector(&(this->record_index));
   this->bwt = source.bwt;
 }
 
@@ -141,8 +118,8 @@ GBWT::runs() const
   size_type start = 0, result = 0;
   for(comp_type comp = 0; comp < this->effective(); comp++)
   {
-    size_type limit = (comp + 1 < this->effective() ? this->record_select(comp + 2) : this->record_index.size());
-    CompressedRecord record(this->bwt, start, limit);
+    size_type limit = this->bwt.limit(comp);
+    CompressedRecord record(this->bwt.data, start, limit);
     result += record.runs();
     start = limit;
   }
@@ -180,9 +157,8 @@ CompressedRecord
 GBWT::record(node_type node) const
 {
   comp_type comp = (node == 0 ? node : node - this->header.offset);
-  size_type start = this->record_select(comp + 1);
-  size_type limit = (comp + 1 < this->effective() ? this->record_select(comp + 2) : this->record_index.size());
-  return CompressedRecord(this->bwt, start, limit);
+  size_type start = this->bwt.start(comp), limit = this->bwt.limit(comp);
+  return CompressedRecord(this->bwt.data, start, limit);
 }
 
 //------------------------------------------------------------------------------

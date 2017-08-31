@@ -164,6 +164,42 @@ struct CompressedRecord
 
 //------------------------------------------------------------------------------
 
+struct RecordArray
+{
+  typedef gbwt::size_type size_type;
+
+  size_type                        records;
+  sdsl::sd_vector<>                index;
+  sdsl::sd_vector<>::select_1_type select;
+  std::vector<byte_type>           data;
+
+  RecordArray();
+  RecordArray(const RecordArray& source);
+  RecordArray(RecordArray&& source);
+  ~RecordArray();
+
+  RecordArray(const std::vector<size_type>& offsets, std::vector<byte_type>&& array);
+
+  void swap(RecordArray& another);
+  RecordArray& operator=(const RecordArray& source);
+  RecordArray& operator=(RecordArray&& source);
+
+  size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
+  void load(std::istream& in);
+
+  // 0-based indexing.
+  inline size_type start(size_type record) const { return this->select(record + 1); }
+  inline size_type limit(size_type record) const
+  {
+    return (record + 1 < this->records ? this->select(record + 2) : this->data.size());
+  }
+
+private:
+  void copy(const RecordArray& source);
+};
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwt
 
 #endif // GBWT_SUPPORT_H
