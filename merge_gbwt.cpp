@@ -120,6 +120,7 @@ printGBWT(const GBWT& gbwt, const std::string& name)
   printHeader("Alphabet size"); std::cout << gbwt.sigma() << std::endl;
   printHeader("Effective"); std::cout << gbwt.effective() << std::endl;
   printHeader("Runs"); std::cout << gbwt.runs() << std::endl;
+// FIXME samples
   std::cout << std::endl;
 }
 
@@ -132,6 +133,7 @@ printGBWT(const DynamicGBWT& gbwt, const std::string& name)
   printHeader("Alphabet size"); std::cout << gbwt.sigma() << std::endl;
   printHeader("Effective"); std::cout << gbwt.effective() << std::endl;
   printHeader("Runs"); std::cout << gbwt.runs() << std::endl;
+  printHeader("Samples"); std::cout << gbwt.samples() << std::endl;
   std::cout << std::endl;
 }
 

@@ -65,9 +65,11 @@ typedef size_type rank_type;  // Rank of incoming / outgoing edge.
 #ifdef GBWT_SAVE_MEMORY
 typedef std::pair<short_type, short_type> edge_type;
 typedef std::pair<short_type, short_type> run_type;
+typedef std::pair<short_type, short_type> sample_type;  // (i, DA[i]) within a record
 #else
 typedef std::pair<node_type, size_type>   edge_type;
 typedef std::pair<rank_type, size_type>   run_type;
+typedef std::pair<size_type, size_type>   sample_type;  // (i, DA[i]) within a record
 #endif
 
 //------------------------------------------------------------------------------

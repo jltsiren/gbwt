@@ -41,17 +41,17 @@ namespace gbwt
   prefixes ending with that node).
 
   - Incoming edges are sorted by the source node.
-  - It is not necessary to have the outgoing edges sorted, but we will sort them anyway
-  after each insert.
+  - Outgoing edges are sorted by the destination node.
 */
 
 struct DynamicRecord
 {
   typedef gbwt::size_type size_type;
 
-  size_type              body_size;
-  std::vector<edge_type> incoming, outgoing;
-  std::vector<run_type>  body;
+  size_type                body_size;
+  std::vector<edge_type>   incoming, outgoing;
+  std::vector<run_type>    body;
+  std::vector<sample_type> ids;
 
 //------------------------------------------------------------------------------
 
@@ -59,9 +59,10 @@ struct DynamicRecord
 
   inline size_type size() const { return this->body_size; }
   inline bool empty() const { return (this->size() == 0); }
-  inline size_type runs() const { return this->body.size(); }
   inline size_type indegree() const { return this->incoming.size(); }
   inline size_type outdegree() const { return this->outgoing.size(); }
+  inline size_type runs() const { return this->body.size(); }
+  inline size_type samples() const { return this->ids.size(); }
 
   void clear();
   void swap(DynamicRecord& another);
@@ -70,6 +71,9 @@ struct DynamicRecord
 
   // Sort the outgoing edges if they are not sorted.
   void recode();
+
+  // Sort the samples.
+  void sortSamples();
 
 //------------------------------------------------------------------------------
 

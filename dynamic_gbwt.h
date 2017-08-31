@@ -44,6 +44,7 @@ public:
 
   const static size_type INSERT_BATCH_SIZE = 100 * MILLION; // Nodes.
   const static size_type MERGE_BATCH_SIZE = 2000;           // Sequences.
+  const static size_type SAMPLE_INTERVAL = 1024;            // Positions in a sequence.
 
 //------------------------------------------------------------------------------
 
@@ -94,6 +95,7 @@ public:
   inline size_type count(node_type node) const { return this->record(node).size(); }
 
   size_type runs() const;
+  size_type samples() const;
 
 //------------------------------------------------------------------------------
 

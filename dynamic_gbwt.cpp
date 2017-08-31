@@ -86,35 +86,37 @@ DynamicGBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::str
 
   written_bytes += this->header.serialize(out, child, "header");
 
-  // Compress the BWT.
-  std::vector<size_type> bwt_offsets(this->bwt.size());
-  std::vector<byte_type> compressed_bwt;
-  for(comp_type comp = 0; comp < this->effective(); comp++)
+  // Compress and serialize the BWT
   {
-    bwt_offsets[comp] = compressed_bwt.size();
-    const DynamicRecord& current = this->bwt[comp];
-
-    // Write the outgoing edges.
-    ByteCode::write(compressed_bwt, current.outdegree());
-    node_type prev = 0;
-    for(edge_type outedge : current.outgoing)
+    std::vector<size_type> bwt_offsets(this->bwt.size());
+    std::vector<byte_type> compressed_bwt;
+    for(comp_type comp = 0; comp < this->effective(); comp++)
     {
-      ByteCode::write(compressed_bwt, outedge.first - prev);
-      prev = outedge.first;
-      ByteCode::write(compressed_bwt, outedge.second);
-    }
+      bwt_offsets[comp] = compressed_bwt.size();
+      const DynamicRecord& current = this->bwt[comp];
 
-    // Write the body.
-    if(current.outdegree() > 0)
-    {
-      Run encoder(current.outdegree());
-      for(run_type run : current.body) { encoder.write(compressed_bwt, run); }
+      // Write the outgoing edges.
+      ByteCode::write(compressed_bwt, current.outdegree());
+      node_type prev = 0;
+      for(edge_type outedge : current.outgoing)
+      {
+        ByteCode::write(compressed_bwt, outedge.first - prev);
+        prev = outedge.first;
+        ByteCode::write(compressed_bwt, outedge.second);
+      }
+
+      // Write the body.
+      if(current.outdegree() > 0)
+      {
+        Run encoder(current.outdegree());
+        for(run_type run : current.body) { encoder.write(compressed_bwt, run); }
+      }
     }
+    RecordArray array(bwt_offsets, std::move(compressed_bwt));
+    written_bytes += array.serialize(out, child, "bwt");
   }
 
-  // Serialize the BWT.
-  RecordArray array(bwt_offsets, std::move(compressed_bwt));
-  written_bytes += array.serialize(out, child, "bwt");
+  // FIXME Compress and serialize the samples.
 
   sdsl::structure_tree::add_size(child, written_bytes);
   return written_bytes;
@@ -131,40 +133,42 @@ DynamicGBWT::load(std::istream& in)
   }
   this->bwt.resize(this->effective());
 
-  // Read the compressed BWT.
-  RecordArray array;
-  array.load(in);
-
-  // Decompress the BWT.
-  size_type offset = 0;
-  for(comp_type comp = 0; comp < this->effective(); comp++)
+  // Read and decompress the BWT.
   {
-    size_type limit = array.limit(comp);
-    DynamicRecord& current = this->bwt[comp];
-    current.clear();
-
-    // Decompress the outgoing edges.
-    current.outgoing.resize(ByteCode::read(array.data, offset));
-    node_type prev = 0;
-    for(edge_type& outedge : current.outgoing)
+    RecordArray array;
+    array.load(in);
+    size_type offset = 0;
+    for(comp_type comp = 0; comp < this->effective(); comp++)
     {
-      outedge.first = ByteCode::read(array.data, offset) + prev;
-      prev = outedge.first;
-      outedge.second = ByteCode::read(array.data, offset);
-    }
+      size_type limit = array.limit(comp);
+      DynamicRecord& current = this->bwt[comp];
+      current.clear();
 
-    // Decompress the body.
-    if(current.outdegree() > 0)
-    {
-      Run decoder(current.outdegree());
-      while(offset < limit)
+      // Decompress the outgoing edges.
+      current.outgoing.resize(ByteCode::read(array.data, offset));
+      node_type prev = 0;
+      for(edge_type& outedge : current.outgoing)
       {
-        run_type run = decoder.read(array.data, offset);
-        current.body.push_back(run);
-        current.body_size += run.second;
+        outedge.first = ByteCode::read(array.data, offset) + prev;
+        prev = outedge.first;
+        outedge.second = ByteCode::read(array.data, offset);
+      }
+
+      // Decompress the body.
+      if(current.outdegree() > 0)
+      {
+        Run decoder(current.outdegree());
+        while(offset < limit)
+        {
+          run_type run = decoder.read(array.data, offset);
+          current.body.push_back(run);
+          current.body_size += run.second;
+        }
       }
     }
   }
+
+  // FIXME read and decompress the samples.
 
   // Rebuild the incoming edges.
   for(comp_type comp = 0; comp < this->effective(); comp++)
@@ -197,6 +201,14 @@ DynamicGBWT::runs() const
 {
   size_type total = 0;
   for(const DynamicRecord& node : this->bwt) { total += node.runs(); }
+  return total;
+}
+
+size_type
+DynamicGBWT::samples() const
+{
+  size_type total = 0;
+  for(const DynamicRecord& node : this->bwt) { total += node.samples(); }
   return total;
 }
 
@@ -274,6 +286,7 @@ swapBody(DynamicRecord& record, RunMerger& merger)
 /*
   Process ranges of sequences sharing the same 'curr' node.
   - Add the outgoing edge (curr, next) if necessary.
+  - Add sample (offset, id) if iteration % SAMPLE_INTERVAL == 0 or next == ENDMARKER.
   - Insert the 'next' node into position 'offset' in the body.
   - Set 'offset' to rank(next) within the record.
   - Update the predecessor count of 'curr' in the incoming edges of 'next'.
@@ -283,7 +296,7 @@ swapBody(DynamicRecord& record, RunMerger& merger)
 */
 
 void
-updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs)
+updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, size_type iteration)
 {
   for(size_type i = 0; i < seqs.size(); )
   {
@@ -291,6 +304,7 @@ updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs)
     DynamicRecord& current = gbwt.record(curr);
     RunMerger new_body(current.outdegree());
     std::vector<run_type>::iterator iter = current.body.begin();
+    bool added_samples = false;
     while(i < seqs.size() && seqs[i].curr == curr)
     {
       rank_type outrank = current.edgeTo(seqs[i].next);
@@ -309,6 +323,11 @@ updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs)
           iter->second -= temp.second;
         }
       }
+      if(iteration % DynamicGBWT::SAMPLE_INTERVAL == 0 || seqs[i].next == ENDMARKER)  // Sample sequence id.
+      {
+        current.ids.push_back(sample_type(seqs[i].offset, seqs[i].id));
+        added_samples = true;
+      }
       seqs[i].offset = new_body.counts[outrank]; // rank(next) within the record.
       new_body.insert(outrank);
       if(seqs[i].next != ENDMARKER)  // The endmarker does not have incoming edges.
@@ -322,6 +341,7 @@ updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs)
       new_body.insert(*iter); ++iter;
     }
     swapBody(current, new_body);
+    if(added_samples) { current.sortSamples(); }
   }
   gbwt.header.size += seqs.size();
 }
@@ -490,7 +510,7 @@ insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source)
 {
   for(size_type iterations = 1; ; iterations++)
   {
-    updateRecords(gbwt, seqs);  // Insert the next nodes into the GBWT.
+    updateRecords(gbwt, seqs, iterations);  // Insert the next nodes into the GBWT.
     nextPosition(seqs, source); // Determine the next position for each sequence.
     sortSequences(seqs);  // Sort for the next iteration and remove the ones that have finished.
     if(seqs.empty()) { return iterations; }

@@ -45,6 +45,7 @@ DynamicRecord::swap(DynamicRecord& another)
     this->incoming.swap(another.incoming);
     this->outgoing.swap(another.outgoing);
     this->body.swap(another.body);
+    this->ids.swap(another.ids);
   }
 }
 
@@ -65,6 +66,12 @@ DynamicRecord::recode()
   for(run_type& run : this->body) { run.first = this->successor(run.first); }
   sequentialSort(this->outgoing.begin(), this->outgoing.end());
   for(run_type& run : this->body) { run.first = this->edgeTo(run.first); }
+}
+
+void
+DynamicRecord::sortSamples()
+{
+  chooseBestSort(this->ids.begin(), this->ids.end());
 }
 
 //------------------------------------------------------------------------------
@@ -211,7 +218,8 @@ operator<<(std::ostream& out, const DynamicRecord& record)
       << ", outdegree " << record.outdegree()
       << ", incoming = " << record.incoming
       << ", outgoing = " << record.outgoing
-      << ", body = " << record.body << ")";
+      << ", body = " << record.body
+      << ", ids = " << record.ids << ")";
 
   return out;
 }
