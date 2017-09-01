@@ -32,9 +32,6 @@ using namespace gbwt;
 
 void printUsage(int exit_code = EXIT_SUCCESS);
 
-void printGBWT(const GBWT& gbwt, const std::string& name);
-void printGBWT(const DynamicGBWT& gbwt, const std::string& name);
-
 size_type insert(DynamicGBWT& index, const std::string input_name, size_type batch_size);
 
 //------------------------------------------------------------------------------
@@ -73,7 +70,7 @@ main(int argc, char** argv)
 
   DynamicGBWT index;
   sdsl::load_from_file(index, first_input + DynamicGBWT::EXTENSION);
-  printGBWT(index, first_input);
+  printStatistics(index, first_input);
 
   size_type total_inserted = 0;
   while(optind + 1 < argc)
@@ -83,7 +80,7 @@ main(int argc, char** argv)
   }
 
   sdsl::store_to_file(index, output + DynamicGBWT::EXTENSION);
-  printGBWT(index, output);
+  printStatistics(index, output);
 
   double seconds = readTimer() - start;
 
@@ -111,38 +108,12 @@ printUsage(int exit_code)
   std::exit(exit_code);
 }
 
-void
-printGBWT(const GBWT& gbwt, const std::string& name)
-{
-  printHeader("Compressed GBWT"); std::cout << name << std::endl;
-  printHeader("Total length"); std::cout << gbwt.size() << std::endl;
-  printHeader("Sequences"); std::cout << gbwt.sequences() << std::endl;
-  printHeader("Alphabet size"); std::cout << gbwt.sigma() << std::endl;
-  printHeader("Effective"); std::cout << gbwt.effective() << std::endl;
-  printHeader("Runs"); std::cout << gbwt.runs() << std::endl;
-// FIXME samples
-  std::cout << std::endl;
-}
-
-void
-printGBWT(const DynamicGBWT& gbwt, const std::string& name)
-{
-  printHeader("Dynamic GBWT"); std::cout << name << std::endl;
-  printHeader("Total length"); std::cout << gbwt.size() << std::endl;
-  printHeader("Sequences"); std::cout << gbwt.sequences() << std::endl;
-  printHeader("Alphabet size"); std::cout << gbwt.sigma() << std::endl;
-  printHeader("Effective"); std::cout << gbwt.effective() << std::endl;
-  printHeader("Runs"); std::cout << gbwt.runs() << std::endl;
-  printHeader("Samples"); std::cout << gbwt.samples() << std::endl;
-  std::cout << std::endl;
-}
-
 size_type
 insert(DynamicGBWT& index, const std::string input_name, size_type batch_size)
 {
   GBWT next;
   sdsl::load_from_file(next, input_name + GBWT::EXTENSION);
-  printGBWT(next, input_name);
+  printStatistics(next, input_name);
   index.merge(next, batch_size);
   return next.size();
 }

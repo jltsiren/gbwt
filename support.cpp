@@ -68,12 +68,6 @@ DynamicRecord::recode()
   for(run_type& run : this->body) { run.first = this->edgeTo(run.first); }
 }
 
-void
-DynamicRecord::sortSamples()
-{
-  chooseBestSort(this->ids.begin(), this->ids.end());
-}
-
 //------------------------------------------------------------------------------
 
 edge_type
@@ -350,12 +344,37 @@ RecordArray::~RecordArray()
 {
 }
 
-RecordArray::RecordArray(const std::vector<size_type>& offsets, std::vector<byte_type>&& array) :
-  records(offsets.size()), data(array)
+RecordArray::RecordArray(const std::vector<DynamicRecord>& bwt) :
+  records(bwt.size())
 {
-  sdsl::sd_vector_builder builder(array.size(), offsets.size());
-  for(size_type offset : offsets) { builder.set(offset); }
+  // Find the starting offsets and compress the BWT.
+  std::vector<size_type> offsets(bwt.size());
+  for(size_type i = 0; i < bwt.size(); i++)
+  {
+    offsets[i] = this->data.size();
+    const DynamicRecord& current = bwt[i];
 
+    // Write the outgoing edges.
+    ByteCode::write(this->data, current.outdegree());
+    node_type prev = 0;
+    for(edge_type outedge : current.outgoing)
+    {
+      ByteCode::write(this->data, outedge.first - prev);
+      prev = outedge.first;
+      ByteCode::write(this->data, outedge.second);
+    }
+
+    // Write the body.
+    if(current.outdegree() > 0)
+    {
+      Run encoder(current.outdegree());
+      for(run_type run : current.body) { encoder.write(this->data, run); }
+    }
+  }
+
+  // Compress the index.
+  sdsl::sd_vector_builder builder(this->data.size(), offsets.size());
+  for(size_type offset : offsets) { builder.set(offset); }
   this->index = sdsl::sd_vector<>(builder);
   sdsl::util::init_support(this->select, &(this->index));
 }
@@ -386,7 +405,7 @@ RecordArray::operator=(RecordArray&& source)
   {
     this->records = std::move(source.records);
     this->index = std::move(source.index);
-    this->select = std::move(source.select);
+    this->select = std::move(source.select); this->select.set_vector(&(this->index));
     this->data = std::move(source.data);
   }
   return *this;
@@ -433,9 +452,187 @@ RecordArray::copy(const RecordArray& source)
 {
   this->records = source.records;
   this->index = source.index;
-  this->select = source.select;
-  this->select.set_vector(&(this->index));
+  this->select = source.select; this->select.set_vector(&(this->index));
   this->data = source.data;
+}
+
+//------------------------------------------------------------------------------
+
+DASamples::DASamples()
+{
+}
+
+DASamples::DASamples(const DASamples& source)
+{
+  this->copy(source);
+}
+
+DASamples::DASamples(DASamples&& source)
+{
+  *this = std::move(source);
+}
+
+DASamples::~DASamples()
+{
+}
+
+DASamples::DASamples(const std::vector<DynamicRecord>& bwt)
+{
+  // Determine the statistics and mark the sampled nodes.
+  size_type nodes = 0, offsets = 0, sample_count = 0;
+  this->sampled_nodes = sdsl::bit_vector(bwt.size(), 0);
+  for(size_type i = 0; i < bwt.size(); i++)
+  {
+    if(bwt[i].samples() > 0)
+    {
+      nodes++; offsets += bwt[i].size(); sample_count += bwt[i].samples();
+      this->sampled_nodes[i] = 1;
+    }
+  }
+  sdsl::util::init_support(this->node_rank, &(this->sampled_nodes));
+// FIXME remove these
+std::cout << "Samples at " << nodes << " out of " << bwt.size() << " nodes" << std::endl;
+std::cout << "Samples at " << sample_count << " out of " << offsets << " offsets" << std::endl;
+
+  // Build the bitvectors over BWT offsets.
+  sdsl::sd_vector_builder range_builder(offsets, nodes);
+  sdsl::sd_vector_builder offset_builder(offsets, sample_count);
+  size_type offset = 0, max_sample = 0;
+  for(const DynamicRecord& record : bwt)
+  {
+    if(record.samples() > 0)
+    {
+      range_builder.set(offset);
+      for(sample_type sample : record.ids)
+      {
+        offset_builder.set(offset + sample.first);
+        max_sample = std::max(max_sample, (size_type)(sample.second));
+      }
+      offset += record.size();
+    }
+  }
+  this->bwt_ranges = sdsl::sd_vector<>(range_builder);
+  sdsl::util::init_support(this->bwt_select, &(this->bwt_ranges));
+  this->sampled_offsets = sdsl::sd_vector<>(offset_builder);
+  sdsl::util::init_support(this->sample_rank, &(this->sampled_offsets));
+
+  // Store the samples.
+  this->samples = sdsl::int_vector<0>(sample_count, 0, bit_length(max_sample));
+  size_type curr = 0;
+  for(const DynamicRecord& record : bwt)
+  {
+    if(record.samples() > 0)
+    {
+      for(sample_type sample : record.ids) { this->samples[curr] = sample.second; curr++; }
+    }
+  }
+}
+
+void
+DASamples::swap(DASamples& another)
+{
+  if(this != &another)
+  {
+    this->sampled_nodes.swap(another.sampled_nodes);
+    sdsl::util::swap_support(this->node_rank, another.node_rank, &(this->sampled_nodes), &(another.sampled_nodes));
+
+    this->bwt_ranges.swap(another.bwt_ranges);
+    sdsl::util::swap_support(this->bwt_select, another.bwt_select, &(this->bwt_ranges), &(another.bwt_ranges));
+
+    this->sampled_offsets.swap(another.sampled_offsets);
+    sdsl::util::swap_support(this->sample_rank, another.sample_rank, &(this->sampled_offsets), &(another.sampled_offsets));
+
+    this->samples.swap(another.samples);
+  }
+}
+
+DASamples&
+DASamples::operator=(const DASamples& source)
+{
+  if(this != &source) { this->copy(source); }
+  return *this;
+}
+
+DASamples&
+DASamples::operator=(DASamples&& source)
+{
+  if(this != &source)
+  {
+    this->sampled_nodes = std::move(source.sampled_nodes);
+    this->node_rank = std::move(source.node_rank);
+
+    this->bwt_ranges = std::move(source.bwt_ranges);
+    this->bwt_select = std::move(source.bwt_select);
+
+    this->sampled_offsets = std::move(source.sampled_offsets);
+    this->sample_rank = std::move(source.sample_rank);
+
+    this->samples = std::move(source.samples);
+
+    this->setVectors();
+  }
+  return *this;
+}
+
+size_type
+DASamples::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
+{
+  sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
+  size_type written_bytes = 0;
+
+  written_bytes += this->sampled_nodes.serialize(out, child, "sampled_nodes");
+  written_bytes += this->node_rank.serialize(out, child, "node_rank");
+
+  written_bytes += this->bwt_ranges.serialize(out, child, "bwt_ranges");
+  written_bytes += this->bwt_select.serialize(out, child, "bwt_select");
+
+  written_bytes += this->sampled_offsets.serialize(out, child, "sampled_offsets");
+  written_bytes += this->sample_rank.serialize(out, child, "sample_rank");
+
+  written_bytes += this->samples.serialize(out, child, "samples");
+
+  sdsl::structure_tree::add_size(child, written_bytes);
+  return written_bytes;
+}
+
+void
+DASamples::load(std::istream& in)
+{
+  this->sampled_nodes.load(in);
+  this->node_rank.load(in, &(this->sampled_nodes));
+
+  this->bwt_ranges.load(in);
+  this->bwt_select.load(in, &(this->bwt_ranges));
+
+  this->sampled_offsets.load(in);
+  this->sample_rank.load(in, &(this->sampled_offsets));
+
+  this->samples.load(in);
+}
+
+void
+DASamples::copy(const DASamples& source)
+{
+  this->sampled_nodes = source.sampled_nodes;
+  this->node_rank = source.node_rank;
+
+  this->bwt_ranges = source.bwt_ranges;
+  this->bwt_select = source.bwt_select;
+
+  this->sampled_offsets = source.sampled_offsets;
+  this->sample_rank = source.sample_rank;
+
+  this->samples = source.samples;
+
+  this->setVectors();
+}
+
+void
+DASamples::setVectors()
+{
+  this->node_rank.set_vector(&(this->sampled_nodes));
+  this->bwt_select.set_vector(&(this->bwt_ranges));
+  this->sample_rank.set_vector(&(this->sampled_offsets));
 }
 
 //------------------------------------------------------------------------------

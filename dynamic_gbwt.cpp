@@ -86,37 +86,15 @@ DynamicGBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::str
 
   written_bytes += this->header.serialize(out, child, "header");
 
-  // Compress and serialize the BWT
   {
-    std::vector<size_type> bwt_offsets(this->bwt.size());
-    std::vector<byte_type> compressed_bwt;
-    for(comp_type comp = 0; comp < this->effective(); comp++)
-    {
-      bwt_offsets[comp] = compressed_bwt.size();
-      const DynamicRecord& current = this->bwt[comp];
-
-      // Write the outgoing edges.
-      ByteCode::write(compressed_bwt, current.outdegree());
-      node_type prev = 0;
-      for(edge_type outedge : current.outgoing)
-      {
-        ByteCode::write(compressed_bwt, outedge.first - prev);
-        prev = outedge.first;
-        ByteCode::write(compressed_bwt, outedge.second);
-      }
-
-      // Write the body.
-      if(current.outdegree() > 0)
-      {
-        Run encoder(current.outdegree());
-        for(run_type run : current.body) { encoder.write(compressed_bwt, run); }
-      }
-    }
-    RecordArray array(bwt_offsets, std::move(compressed_bwt));
+    RecordArray array(this->bwt);
     written_bytes += array.serialize(out, child, "bwt");
   }
 
-  // FIXME Compress and serialize the samples.
+  {
+    DASamples compressed_samples(this->bwt);
+    written_bytes += compressed_samples.serialize(out, child, "da_samples");
+  }
 
   sdsl::structure_tree::add_size(child, written_bytes);
   return written_bytes;
@@ -303,8 +281,10 @@ updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, size_type iteratio
     node_type curr = seqs[i].curr;
     DynamicRecord& current = gbwt.record(curr);
     RunMerger new_body(current.outdegree());
+    std::vector<sample_type> new_samples;
     std::vector<run_type>::iterator iter = current.body.begin();
-    bool added_samples = false;
+    std::vector<sample_type>::iterator sample_iter = current.ids.begin();
+    size_type insert_count = 0;
     while(i < seqs.size() && seqs[i].curr == curr)
     {
       rank_type outrank = current.edgeTo(seqs[i].next);
@@ -323,13 +303,18 @@ updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, size_type iteratio
           iter->second -= temp.second;
         }
       }
+      // Add old samples until 'offset'.
+      while(sample_iter != current.ids.end() && sample_iter->first + insert_count < seqs[i].offset)
+      {
+        new_samples.push_back(sample_type(sample_iter->first + insert_count, sample_iter->second));
+        ++sample_iter;
+      }
       if(iteration % DynamicGBWT::SAMPLE_INTERVAL == 0 || seqs[i].next == ENDMARKER)  // Sample sequence id.
       {
-        current.ids.push_back(sample_type(seqs[i].offset, seqs[i].id));
-        added_samples = true;
+        new_samples.push_back(sample_type(seqs[i].offset, seqs[i].id));
       }
       seqs[i].offset = new_body.counts[outrank]; // rank(next) within the record.
-      new_body.insert(outrank);
+      new_body.insert(outrank); insert_count++;
       if(seqs[i].next != ENDMARKER)  // The endmarker does not have incoming edges.
       {
         gbwt.record(seqs[i].next).increment(curr);
@@ -340,8 +325,13 @@ updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, size_type iteratio
     {
       new_body.insert(*iter); ++iter;
     }
+    while(sample_iter != current.ids.end()) // Add the rest of the old samples.
+    {
+      new_samples.push_back(sample_type(sample_iter->first + insert_count, sample_iter->second));
+      ++sample_iter;
+    }
     swapBody(current, new_body);
-    if(added_samples) { current.sortSamples(); }
+    current.ids = new_samples;
   }
   gbwt.header.size += seqs.size();
 }
@@ -732,6 +722,21 @@ DynamicGBWT::LF(node_type from, range_type range, node_type to) const
   if(to >= this->sigma()) { return Range::empty_range(); }
   if(from >= this->sigma()) { range.first = range.second = this->count(to); }
   return this->record(from).LF(range, to);
+}
+
+//------------------------------------------------------------------------------
+
+void
+printStatistics(const DynamicGBWT& gbwt, const std::string& name)
+{
+  printHeader("Dynamic GBWT"); std::cout << name << std::endl;
+  printHeader("Total length"); std::cout << gbwt.size() << std::endl;
+  printHeader("Sequences"); std::cout << gbwt.sequences() << std::endl;
+  printHeader("Alphabet size"); std::cout << gbwt.sigma() << std::endl;
+  printHeader("Effective"); std::cout << gbwt.effective() << std::endl;
+  printHeader("Runs"); std::cout << gbwt.runs() << std::endl;
+  printHeader("Samples"); std::cout << gbwt.samples() << std::endl;
+  std::cout << std::endl;
 }
 
 //------------------------------------------------------------------------------

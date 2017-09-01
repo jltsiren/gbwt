@@ -57,6 +57,7 @@ GBWT::swap(GBWT& another)
   {
     this->header.swap(another.header);
     this->bwt.swap(another.bwt);
+    this->da_samples.swap(another.da_samples);
   }
 }
 
@@ -74,6 +75,7 @@ GBWT::operator=(GBWT&& source)
   {
     this->header = std::move(source.header);
     this->bwt = std::move(source.bwt);
+    this->da_samples = std::move(source.da_samples);
   }
   return *this;
 }
@@ -86,6 +88,7 @@ GBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string nam
 
   written_bytes += this->header.serialize(out, child, "header");
   written_bytes += this->bwt.serialize(out, child, "bwt");
+  written_bytes += this->da_samples.serialize(out, child, "da_samples");
 
   sdsl::structure_tree::add_size(child, written_bytes);
   return written_bytes;
@@ -101,6 +104,7 @@ GBWT::load(std::istream& in)
   }
 
   this->bwt.load(in);
+  this->da_samples.load(in);
 }
 
 void
@@ -108,6 +112,7 @@ GBWT::copy(const GBWT& source)
 {
   this->header = source.header;
   this->bwt = source.bwt;
+  this->da_samples = source.da_samples;
 }
 
 //------------------------------------------------------------------------------
@@ -159,6 +164,24 @@ GBWT::record(node_type node) const
   comp_type comp = (node == 0 ? node : node - this->header.offset);
   size_type start = this->bwt.start(comp), limit = this->bwt.limit(comp);
   return CompressedRecord(this->bwt.data, start, limit);
+}
+
+//------------------------------------------------------------------------------
+
+void
+printStatistics(const GBWT& gbwt, const std::string& name)
+{
+  printHeader("Compressed GBWT"); std::cout << name << std::endl;
+  printHeader("Total length"); std::cout << gbwt.size() << std::endl;
+  printHeader("Sequences"); std::cout << gbwt.sequences() << std::endl;
+  printHeader("Alphabet size"); std::cout << gbwt.sigma() << std::endl;
+  printHeader("Effective"); std::cout << gbwt.effective() << std::endl;
+  printHeader("Runs"); std::cout << gbwt.runs() << std::endl;
+  printHeader("Samples"); std::cout << gbwt.samples() << std::endl;
+  printHeader("BWT"); std::cout << inMegabytes(sdsl::size_in_bytes(gbwt.bwt)) << " MB" << std::endl;
+  printHeader("Samples"); std::cout << inMegabytes(sdsl::size_in_bytes(gbwt.da_samples)) << " MB" << std::endl;
+  printHeader("Total"); std::cout << inMegabytes(sdsl::size_in_bytes(gbwt)) << " MB" << std::endl;
+  std::cout << std::endl;
 }
 
 //------------------------------------------------------------------------------

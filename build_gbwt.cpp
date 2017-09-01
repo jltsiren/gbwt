@@ -79,13 +79,7 @@ main(int argc, char** argv)
 
   double seconds = readTimer() - start;
 
-  printHeader("Total length"); std::cout << gbwt.size() << std::endl;
-  printHeader("Sequences"); std::cout << gbwt.sequences() << std::endl;
-  printHeader("Alphabet size"); std::cout << gbwt.sigma() << std::endl;
-  printHeader("Effective"); std::cout << gbwt.effective() << std::endl;
-  printHeader("Runs"); std::cout << gbwt.runs() << std::endl;
-  printHeader("Samples"); std::cout << gbwt.samples() << std::endl;
-  std::cout << std::endl;
+  printStatistics(gbwt, base_name);
 
   std::cout << "Indexed " << gbwt.size() << " nodes in " << seconds << " seconds (" << (gbwt.size() / seconds) << " nodes/second)" << std::endl;
   std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;

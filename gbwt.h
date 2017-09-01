@@ -69,6 +69,7 @@ public:
   inline size_type count(node_type node) const { return this->record(node).size(); }  // Expensive.
 
   size_type runs() const;
+  inline size_type samples() const { return this->da_samples.size(); }
 
 //------------------------------------------------------------------------------
 
@@ -90,6 +91,7 @@ public:
 
   GBWTHeader  header;
   RecordArray bwt;
+  DASamples   da_samples;
 
 //------------------------------------------------------------------------------
 
@@ -99,6 +101,8 @@ private:
 //------------------------------------------------------------------------------
 
 }; // class GBWT
+
+void printStatistics(const GBWT& gbwt, const std::string& name);
 
 //------------------------------------------------------------------------------
 

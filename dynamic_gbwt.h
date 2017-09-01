@@ -152,6 +152,8 @@ private:
 
 }; // class DynamicGBWT
 
+void printStatistics(const DynamicGBWT& gbwt, const std::string& name);
+
 //------------------------------------------------------------------------------
 
 } // namespace gbwt

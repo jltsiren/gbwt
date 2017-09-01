@@ -42,6 +42,7 @@ namespace gbwt
 
   - Incoming edges are sorted by the source node.
   - Outgoing edges are sorted by the destination node.
+  - Sampled sequence ids are sorted by the offset.
 */
 
 struct DynamicRecord
@@ -71,9 +72,6 @@ struct DynamicRecord
 
   // Sort the outgoing edges if they are not sorted.
   void recode();
-
-  // Sort the samples.
-  void sortSamples();
 
 //------------------------------------------------------------------------------
 
@@ -182,7 +180,7 @@ struct RecordArray
   RecordArray(RecordArray&& source);
   ~RecordArray();
 
-  RecordArray(const std::vector<size_type>& offsets, std::vector<byte_type>&& array);
+  explicit RecordArray(const std::vector<DynamicRecord>& bwt);
 
   void swap(RecordArray& another);
   RecordArray& operator=(const RecordArray& source);
@@ -200,6 +198,47 @@ struct RecordArray
 
 private:
   void copy(const RecordArray& source);
+};
+
+//------------------------------------------------------------------------------
+
+struct DASamples
+{
+  typedef gbwt::size_type size_type;
+
+  // Does node i have samples?
+  sdsl::bit_vector                 sampled_nodes;
+  sdsl::bit_vector::rank_1_type    node_rank;
+
+  // Map from node ranks to BWT offsets.
+  sdsl::sd_vector<>                bwt_ranges;
+  sdsl::sd_vector<>::select_1_type bwt_select;
+
+  // Sampled offsets.
+  sdsl::sd_vector<>                sampled_offsets;
+  sdsl::sd_vector<>::rank_1_type   sample_rank;
+
+  sdsl::int_vector<0>              samples;
+
+  DASamples();
+  DASamples(const DASamples& source);
+  DASamples(DASamples&& source);
+  ~DASamples();
+
+  explicit DASamples(const std::vector<DynamicRecord>& bwt);
+
+  void swap(DASamples& another);
+  DASamples& operator=(const DASamples& source);
+  DASamples& operator=(DASamples&& source);
+
+  size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
+  void load(std::istream& in);
+
+  inline size_type size() const { return this->samples.size(); }
+
+private:
+  void copy(const DASamples& source);
+  void setVectors();
 };
 
 //------------------------------------------------------------------------------
