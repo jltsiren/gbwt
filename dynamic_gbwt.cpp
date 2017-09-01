@@ -657,25 +657,25 @@ DynamicGBWT::merge(const GBWT& source, size_type batch_size)
   // Insert the sequences in batches.
   const CompressedRecord endmarker = source.record(ENDMARKER);
   CompressedRecordIterator iter(endmarker);
-  size_type sequence_id = 0, run_offset = 0;
-  while(sequence_id < source.sequences())
+  size_type source_id = 0, run_offset = 0;
+  while(source_id < source.sequences())
   {
     double batch_start = readTimer();
-    size_type limit = std::min(sequence_id + batch_size, source.sequences());
-    std::vector<Sequence> seqs; seqs.reserve(limit - sequence_id);
-    while(sequence_id < limit)  // Create the new sequence iterators.
+    size_type limit = std::min(source_id + batch_size, source.sequences());
+    std::vector<Sequence> seqs; seqs.reserve(limit - source_id);
+    while(source_id < limit)  // Create the new sequence iterators.
     {
       if(run_offset >= iter->second) { ++iter; run_offset = 0; }
       else
       {
-        seqs.push_back(Sequence(endmarker.successor(iter->first), this->sequences(), sequence_id));
-        this->header.sequences++; sequence_id++; run_offset++;
+        seqs.push_back(Sequence(endmarker.successor(iter->first), this->sequences(), source_id));
+        this->header.sequences++; source_id++; run_offset++;
       }
     }
     if(Verbosity::level >= Verbosity::EXTENDED)
     {
-      std::cerr << "DynamicGBWT::merge(): Inserting sequences " << (sequence_id - seqs.size())
-                << " to " << (sequence_id - 1) << std::endl;
+      std::cerr << "DynamicGBWT::merge(): Inserting sequences " << (source_id - seqs.size())
+                << " to " << (source_id - 1) << std::endl;
     }
     size_type iterations = gbwt::insert(*this, seqs, source);
     if(Verbosity::level >= Verbosity::EXTENDED)
