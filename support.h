@@ -218,7 +218,7 @@ struct DASamples
   sdsl::sd_vector<>                sampled_offsets;
   sdsl::sd_vector<>::rank_1_type   sample_rank;
 
-  sdsl::int_vector<0>              samples;
+  sdsl::int_vector<0>              array;
 
   DASamples();
   DASamples(const DASamples& source);
@@ -234,7 +234,7 @@ struct DASamples
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
 
-  inline size_type size() const { return this->samples.size(); }
+  inline size_type size() const { return this->array.size(); }
 
 private:
   void copy(const DASamples& source);

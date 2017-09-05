@@ -490,9 +490,6 @@ DASamples::DASamples(const std::vector<DynamicRecord>& bwt)
     }
   }
   sdsl::util::init_support(this->node_rank, &(this->sampled_nodes));
-// FIXME remove these
-std::cout << "Samples at " << nodes << " out of " << bwt.size() << " nodes" << std::endl;
-std::cout << "Samples at " << sample_count << " out of " << offsets << " offsets" << std::endl;
 
   // Build the bitvectors over BWT offsets.
   sdsl::sd_vector_builder range_builder(offsets, nodes);
@@ -517,13 +514,13 @@ std::cout << "Samples at " << sample_count << " out of " << offsets << " offsets
   sdsl::util::init_support(this->sample_rank, &(this->sampled_offsets));
 
   // Store the samples.
-  this->samples = sdsl::int_vector<0>(sample_count, 0, bit_length(max_sample));
+  this->array = sdsl::int_vector<0>(sample_count, 0, bit_length(max_sample));
   size_type curr = 0;
   for(const DynamicRecord& record : bwt)
   {
     if(record.samples() > 0)
     {
-      for(sample_type sample : record.ids) { this->samples[curr] = sample.second; curr++; }
+      for(sample_type sample : record.ids) { this->array[curr] = sample.second; curr++; }
     }
   }
 }
@@ -542,7 +539,7 @@ DASamples::swap(DASamples& another)
     this->sampled_offsets.swap(another.sampled_offsets);
     sdsl::util::swap_support(this->sample_rank, another.sample_rank, &(this->sampled_offsets), &(another.sampled_offsets));
 
-    this->samples.swap(another.samples);
+    this->array.swap(another.array);
   }
 }
 
@@ -567,7 +564,7 @@ DASamples::operator=(DASamples&& source)
     this->sampled_offsets = std::move(source.sampled_offsets);
     this->sample_rank = std::move(source.sample_rank);
 
-    this->samples = std::move(source.samples);
+    this->array = std::move(source.array);
 
     this->setVectors();
   }
@@ -589,7 +586,7 @@ DASamples::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::strin
   written_bytes += this->sampled_offsets.serialize(out, child, "sampled_offsets");
   written_bytes += this->sample_rank.serialize(out, child, "sample_rank");
 
-  written_bytes += this->samples.serialize(out, child, "samples");
+  written_bytes += this->array.serialize(out, child, "array");
 
   sdsl::structure_tree::add_size(child, written_bytes);
   return written_bytes;
@@ -607,7 +604,7 @@ DASamples::load(std::istream& in)
   this->sampled_offsets.load(in);
   this->sample_rank.load(in, &(this->sampled_offsets));
 
-  this->samples.load(in);
+  this->array.load(in);
 }
 
 void
@@ -622,7 +619,7 @@ DASamples::copy(const DASamples& source)
   this->sampled_offsets = source.sampled_offsets;
   this->sample_rank = source.sample_rank;
 
-  this->samples = source.samples;
+  this->array = source.array;
 
   this->setVectors();
 }
