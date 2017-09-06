@@ -711,46 +711,8 @@ DynamicGBWT::merge(const GBWT& source, size_type batch_size)
 //------------------------------------------------------------------------------
 
 size_type
-DynamicGBWT::LF(node_type from, size_type i, node_type to) const
-{
-  if(to >= this->sigma()) { return invalid_offset(); }
-  if(from >= this->sigma()) { return this->count(to); }
-
-  size_type result = this->record(from).LF(i, to);
-  if(result != invalid_offset()) { return result; }
-
-  /*
-    Edge (from, to) has not been observed. We find the first edge from a node >= 'from' to 'to'.
-    If 'inrank' is equal to indegree, all incoming edges are from nodes < 'from'.
-    Otherwise the result is the stored offset in the node we found.
-  */
-  const DynamicRecord& to_node = this->record(to);
-  rank_type inrank = to_node.findFirst(from);
-  if(inrank >= to_node.indegree()) { return this->count(to); }
-  const DynamicRecord& next_from = this->record(to_node.predecessor(inrank));
-  return next_from.offset(next_from.edgeTo(to));
-}
-
-edge_type
-DynamicGBWT::LF(node_type from, size_type i) const
-{
-  if(from >= this->sigma()) { return invalid_edge(); }
-  return this->record(from).LF(i);
-}
-
-range_type
-DynamicGBWT::LF(node_type from, range_type range, node_type to) const
-{
-  if(to >= this->sigma()) { return Range::empty_range(); }
-  if(from >= this->sigma()) { range.first = range.second = this->count(to); }
-  return this->record(from).LF(range, to);
-}
-
-size_type
 DynamicGBWT::tryLocate(node_type node, size_type i) const
 {
-  if(node >= this->sigma()) { return invalid_sequence(); }
-
   const DynamicRecord& record = this->record(node);
   for(sample_type sample : record.ids)
   {

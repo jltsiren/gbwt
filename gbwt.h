@@ -68,23 +68,38 @@ public:
   inline size_type effective() const { return this->header.alphabet_size - this->header.offset; }
   inline size_type count(node_type node) const { return this->record(node).size(); }  // Expensive.
 
+  inline bool contains(node_type node) const
+  {
+    return ((node < this->sigma() && node > this->header.offset) || node == 0);
+  }
+
   size_type runs() const;
   inline size_type samples() const { return this->da_samples.size(); }
 
 //------------------------------------------------------------------------------
 
   /*
-    FIXME The interface assumes that the node identifier is not in range [1, offset].
+    The interface assumes that the node identifiers are valid. They can be checked with
+    contains().
   */
 
-  // Returns invalid_edge() if the node or the offset is invalid.
-  edge_type LF(node_type from, size_type i) const;
+  // On error: invalid_edge().
+  inline edge_type LF(node_type from, size_type i) const
+  {
+    return this->record(from).LF(i);
+  }
 
-  // Returns invalid_offset() if the offset or the destination is invalid.
-  size_type LF(node_type from, size_type i, node_type to) const;
+  // On error: invalid_offset().
+  size_type LF(node_type from, size_type i, node_type to) const
+  {
+    return this->record(from).LF(i, to);
+  }
 
-  // Returns Range::empty_range() if the range is empty or the destination is invalid.
-  range_type LF(node_type from, range_type range, node_type to) const;
+  // On error: Range::empty_range().
+  range_type LF(node_type from, range_type range, node_type to) const
+  {
+    return this->record(from).LF(range, to);
+  }
 
 //------------------------------------------------------------------------------
 

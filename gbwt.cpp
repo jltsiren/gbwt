@@ -133,31 +133,6 @@ GBWT::runs() const
 
 //------------------------------------------------------------------------------
 
-edge_type
-GBWT::LF(node_type from, size_type i) const
-{
-  if(from >= this->sigma()) { return invalid_edge(); }
-  return this->record(from).LF(i);
-}
-
-size_type
-GBWT::LF(node_type from, size_type i, node_type to) const
-{
-  if(to >= this->sigma()) { return invalid_offset(); }
-  if(from >= this->sigma()) { return this->count(to); }
-  return this->record(from).LF(i, to);
-}
-
-range_type
-GBWT::LF(node_type from, range_type range, node_type to) const
-{
-  if(to >= this->sigma()) { return Range::empty_range(); }
-  if(from >= this->sigma()) { range.first = range.second = this->count(to); }
-  return this->record(from).LF(range, to);
-}
-
-//------------------------------------------------------------------------------
-
 CompressedRecord
 GBWT::record(node_type node) const
 {
