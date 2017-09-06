@@ -207,10 +207,10 @@ struct DASamples
   typedef gbwt::size_type size_type;
 
   // Does node i have samples?
-  sdsl::bit_vector                 sampled_nodes;
-  sdsl::bit_vector::rank_1_type    node_rank;
+  sdsl::bit_vector                 sampled_records;
+  sdsl::bit_vector::rank_1_type    record_rank;
 
-  // Map from node ranks to BWT offsets.
+  // Map from record ranks to BWT offsets.
   sdsl::sd_vector<>                bwt_ranges;
   sdsl::sd_vector<>::select_1_type bwt_select;
 
@@ -235,6 +235,9 @@ struct DASamples
   void load(std::istream& in);
 
   inline size_type size() const { return this->array.size(); }
+
+  // Returns invalid_sequence() if there is no sample.
+  size_type tryLocate(size_type record, size_type offset) const;
 
 private:
   void copy(const DASamples& source);

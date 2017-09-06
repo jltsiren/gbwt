@@ -479,20 +479,20 @@ DASamples::~DASamples()
 DASamples::DASamples(const std::vector<DynamicRecord>& bwt)
 {
   // Determine the statistics and mark the sampled nodes.
-  size_type nodes = 0, offsets = 0, sample_count = 0;
-  this->sampled_nodes = sdsl::bit_vector(bwt.size(), 0);
+  size_type records = 0, offsets = 0, sample_count = 0;
+  this->sampled_records = sdsl::bit_vector(bwt.size(), 0);
   for(size_type i = 0; i < bwt.size(); i++)
   {
     if(bwt[i].samples() > 0)
     {
-      nodes++; offsets += bwt[i].size(); sample_count += bwt[i].samples();
-      this->sampled_nodes[i] = 1;
+      records++; offsets += bwt[i].size(); sample_count += bwt[i].samples();
+      this->sampled_records[i] = 1;
     }
   }
-  sdsl::util::init_support(this->node_rank, &(this->sampled_nodes));
+  sdsl::util::init_support(this->record_rank, &(this->sampled_records));
 
   // Build the bitvectors over BWT offsets.
-  sdsl::sd_vector_builder range_builder(offsets, nodes);
+  sdsl::sd_vector_builder range_builder(offsets, records);
   sdsl::sd_vector_builder offset_builder(offsets, sample_count);
   size_type offset = 0, max_sample = 0;
   for(const DynamicRecord& record : bwt)
@@ -530,8 +530,8 @@ DASamples::swap(DASamples& another)
 {
   if(this != &another)
   {
-    this->sampled_nodes.swap(another.sampled_nodes);
-    sdsl::util::swap_support(this->node_rank, another.node_rank, &(this->sampled_nodes), &(another.sampled_nodes));
+    this->sampled_records.swap(another.sampled_records);
+    sdsl::util::swap_support(this->record_rank, another.record_rank, &(this->sampled_records), &(another.sampled_records));
 
     this->bwt_ranges.swap(another.bwt_ranges);
     sdsl::util::swap_support(this->bwt_select, another.bwt_select, &(this->bwt_ranges), &(another.bwt_ranges));
@@ -555,8 +555,8 @@ DASamples::operator=(DASamples&& source)
 {
   if(this != &source)
   {
-    this->sampled_nodes = std::move(source.sampled_nodes);
-    this->node_rank = std::move(source.node_rank);
+    this->sampled_records = std::move(source.sampled_records);
+    this->record_rank = std::move(source.record_rank);
 
     this->bwt_ranges = std::move(source.bwt_ranges);
     this->bwt_select = std::move(source.bwt_select);
@@ -577,8 +577,8 @@ DASamples::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::strin
   sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
   size_type written_bytes = 0;
 
-  written_bytes += this->sampled_nodes.serialize(out, child, "sampled_nodes");
-  written_bytes += this->node_rank.serialize(out, child, "node_rank");
+  written_bytes += this->sampled_records.serialize(out, child, "sampled_records");
+  written_bytes += this->record_rank.serialize(out, child, "record_rank");
 
   written_bytes += this->bwt_ranges.serialize(out, child, "bwt_ranges");
   written_bytes += this->bwt_select.serialize(out, child, "bwt_select");
@@ -595,8 +595,8 @@ DASamples::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::strin
 void
 DASamples::load(std::istream& in)
 {
-  this->sampled_nodes.load(in);
-  this->node_rank.load(in, &(this->sampled_nodes));
+  this->sampled_records.load(in);
+  this->record_rank.load(in, &(this->sampled_records));
 
   this->bwt_ranges.load(in);
   this->bwt_select.load(in, &(this->bwt_ranges));
@@ -610,8 +610,8 @@ DASamples::load(std::istream& in)
 void
 DASamples::copy(const DASamples& source)
 {
-  this->sampled_nodes = source.sampled_nodes;
-  this->node_rank = source.node_rank;
+  this->sampled_records = source.sampled_records;
+  this->record_rank = source.record_rank;
 
   this->bwt_ranges = source.bwt_ranges;
   this->bwt_select = source.bwt_select;
@@ -627,9 +627,22 @@ DASamples::copy(const DASamples& source)
 void
 DASamples::setVectors()
 {
-  this->node_rank.set_vector(&(this->sampled_nodes));
+  this->record_rank.set_vector(&(this->sampled_records));
   this->bwt_select.set_vector(&(this->bwt_ranges));
   this->sample_rank.set_vector(&(this->sampled_offsets));
+}
+
+size_type
+DASamples::tryLocate(size_type record, size_type offset) const
+{
+  if(this->sampled_records[record] == 0) { return invalid_sequence(); }
+
+  size_type record_start = this->bwt_select(this->record_rank(record) + 1);
+  if(this->sampled_offsets[record_start + offset])
+  {
+    return this->array[this->sample_rank(record_start + offset)];
+  }
+  return invalid_sequence();
 }
 
 //------------------------------------------------------------------------------

@@ -32,7 +32,8 @@ using namespace gbwt;
 
 void printUsage(int exit_code = EXIT_SUCCESS);
 
-void verify(DynamicGBWT& gbwt, const std::string& base_name);
+template<class GBWTType>
+void verify(const std::string& base_name);
 
 //------------------------------------------------------------------------------
 
@@ -85,7 +86,15 @@ main(int argc, char** argv)
   std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;
   std::cout << std::endl;
 
-  if(verify_index) { verify(gbwt, base_name); }
+  sdsl::util::clear(gbwt);
+  if(verify_index)
+  {
+    std::cout << "Verifying compressed GBWT..." << std::endl;
+    verify<GBWT>(base_name);
+
+    std::cout << "Verifying dynamic GBWT..." << std::endl;
+    verify<DynamicGBWT>(base_name);
+  }
 
   return 0;
 }
@@ -106,10 +115,14 @@ printUsage(int exit_code)
 
 //------------------------------------------------------------------------------
 
+template<class GBWTType>
 void
-verify(DynamicGBWT& gbwt, const std::string& base_name)
+verify(const std::string& base_name)
 {
   double start = readTimer();
+
+  GBWTType gbwt;
+  sdsl::load_from_file(gbwt, base_name + GBWTType::EXTENSION);
 
   // Read the input and find the starting offsets.
   std::vector<size_type> offsets;
@@ -138,7 +151,7 @@ verify(DynamicGBWT& gbwt, const std::string& base_name)
       while(true)
       {
         // Check for a sample.
-        size_type sample = gbwt.tryLocate(current.first, current.second);
+        size_type sample = gbwt.tryLocate(current);
         if(sample != invalid_sequence())
         {
           samples_found++;
@@ -157,7 +170,7 @@ verify(DynamicGBWT& gbwt, const std::string& base_name)
 
         // Verify LF().
         if(text[offset] == ENDMARKER) { break; }
-        edge_type next = gbwt.LF(current.first, current.second);
+        edge_type next = gbwt.LF(current);
         if(next.first != text[offset])
         {
           #pragma omp critical

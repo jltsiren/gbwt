@@ -73,6 +73,8 @@ public:
     return ((node < this->sigma() && node > this->header.offset) || node == 0);
   }
 
+  inline comp_type toComp(node_type node) const { return (node == 0 ? node : node - this->header.offset); }
+
   size_type runs() const;
   inline size_type samples() const { return this->da_samples.size(); }
 
@@ -89,17 +91,45 @@ public:
     return this->record(from).LF(i);
   }
 
+  // On error: invalid_edge().
+  inline edge_type LF(edge_type position) const
+  {
+    return this->record(position.first).LF(position.second);
+  }
+
   // On error: invalid_offset().
-  size_type LF(node_type from, size_type i, node_type to) const
+  inline size_type LF(node_type from, size_type i, node_type to) const
   {
     return this->record(from).LF(i, to);
   }
 
+  // On error: invalid_offset().
+  inline size_type LF(edge_type position, node_type to) const
+  {
+    return this->record(position.first).LF(position.second, to);
+  }
+
   // On error: Range::empty_range().
-  range_type LF(node_type from, range_type range, node_type to) const
+  inline range_type LF(node_type from, range_type range, node_type to) const
   {
     return this->record(from).LF(range, to);
   }
+
+  // Returns the sampled document identifier or invalid_sequence() if there is no sample.
+  inline size_type tryLocate(node_type node, size_type i) const
+  {
+    return this->da_samples.tryLocate(this->toComp(node), i);
+  }
+
+  // Returns the sampled document identifier or invalid_sequence() if there is no sample.
+  inline size_type tryLocate(edge_type position) const
+  {
+    return this->da_samples.tryLocate(this->toComp(position.first), position.second);
+  }
+
+  // On error: invalid_sequence().
+  size_type locate(node_type node, size_type i) const;
+  inline size_type locate(edge_type position) const { return this->locate(position.first, position.second); }
 
 //------------------------------------------------------------------------------
 

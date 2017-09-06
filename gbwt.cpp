@@ -133,10 +133,25 @@ GBWT::runs() const
 
 //------------------------------------------------------------------------------
 
+size_type
+GBWT::locate(node_type node, size_type i) const
+{
+  if(!(this->contains(node))) { return invalid_sequence(); }
+
+  while(true)
+  {
+    size_type result = this->tryLocate(node, i);
+    if(result != invalid_sequence()) { return result; }
+    std::tie(node, i) = this->LF(node, i);
+  }
+}
+
+//------------------------------------------------------------------------------
+
 CompressedRecord
 GBWT::record(node_type node) const
 {
-  comp_type comp = (node == 0 ? node : node - this->header.offset);
+  comp_type comp = this->toComp(node);
   size_type start = this->bwt.start(comp), limit = this->bwt.limit(comp);
   return CompressedRecord(this->bwt.data, start, limit);
 }
