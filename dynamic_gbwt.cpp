@@ -746,6 +746,20 @@ DynamicGBWT::LF(node_type from, range_type range, node_type to) const
   return this->record(from).LF(range, to);
 }
 
+size_type
+DynamicGBWT::tryLocate(node_type node, size_type i) const
+{
+  if(node >= this->sigma()) { return invalid_sequence(); }
+
+  const DynamicRecord& record = this->record(node);
+  for(sample_type sample : record.ids)
+  {
+    if(sample.first == i) { return sample.second; }
+    if(sample.first > i) { break; }
+  }
+  return invalid_sequence();
+}
+
 //------------------------------------------------------------------------------
 
 void

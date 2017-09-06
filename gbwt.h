@@ -73,6 +73,10 @@ public:
 
 //------------------------------------------------------------------------------
 
+  /*
+    FIXME The interface assumes that the node identifier is not in range [1, offset].
+  */
+
   // Returns invalid_edge() if the node or the offset is invalid.
   edge_type LF(node_type from, size_type i) const;
 

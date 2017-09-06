@@ -99,6 +99,10 @@ public:
 
 //------------------------------------------------------------------------------
 
+  /*
+    FIXME The interface assumes that the node identifier is not in range [1, offset].
+  */
+
   // Returns invalid_offset() if the destination is invalid.
   size_type LF(node_type from, size_type i, node_type to) const;
 
@@ -107,6 +111,9 @@ public:
 
   // Returns Range::empty_range() if the range is empty or the destination is invalid.
   range_type LF(node_type from, range_type range, node_type to) const;
+
+  // Returns the sampled document identifier or invalid_sequence() if there is no sample.
+  size_type tryLocate(node_type node, size_type i) const;
 
 //------------------------------------------------------------------------------
 

@@ -126,6 +126,7 @@ verify(DynamicGBWT& gbwt, const std::string& base_name)
   std::vector<range_type> blocks = Range::partition(range_type(0, offsets.size() - 1), 4 * omp_get_max_threads());
 
   bool failed = false;
+  std::atomic<size_type> samples_found(0);
   #pragma omp parallel for schedule(dynamic, 1)
   for(size_type block = 0; block < blocks.size(); block++)
   {
@@ -133,8 +134,29 @@ verify(DynamicGBWT& gbwt, const std::string& base_name)
     for(size_type sequence = blocks[block].first; sequence <= blocks[block].second; sequence++)
     {
       edge_type current(ENDMARKER, sequence);
-      for(size_type offset = offsets[sequence]; text[offset] != ENDMARKER; offset++)
+      size_type offset = offsets[sequence];
+      while(true)
       {
+        // Check for a sample.
+        size_type sample = gbwt.tryLocate(current.first, current.second);
+        if(sample != invalid_sequence())
+        {
+          samples_found++;
+          if(sample != sequence)
+          {
+            #pragma omp critical
+            {
+              std::cerr << "build_gbwt: Index verification failed with sequence " << sequence << ", offset "
+                        << (offset - offsets[sequence]) << std::endl;
+              std::cerr << "build_gbwt: Sample had sequence id " << sample << std::endl;
+              failed = true;
+            }
+            break;
+          }
+        }
+
+        // Verify LF().
+        if(text[offset] == ENDMARKER) { break; }
         edge_type next = gbwt.LF(current.first, current.second);
         if(next.first != text[offset])
         {
@@ -148,9 +170,15 @@ verify(DynamicGBWT& gbwt, const std::string& base_name)
           }
           break;
         }
-        current = next;
+        current = next; offset++;
       }
     }
+  }
+
+  if(samples_found != gbwt.samples())
+  {
+    std::cerr << "build_gbwt: Found " << samples_found << " samples, expected " << gbwt.samples() << std::endl;
+    failed = true;
   }
 
   double seconds = readTimer() - start;
