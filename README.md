@@ -32,6 +32,8 @@ This repository should eventually become a scalable GBWT implementation.
   * (to, path rank) for each outgoing edge in sorted order
 * Body
   * Run-length encoding of pairs (outgoing edge rank, count)
+* Samples
+  * *(i, DA[i])* for each sampled offset *i* in sorted order.
 
 ## Encoding
 
@@ -39,19 +41,21 @@ This repository should eventually become a scalable GBWT implementation.
 * An index (`sd_vector`) points to the beginning of each record.
 * Runs are encoded using `Run`, while other integers are encoded using `ByteCode`.
 * The destination nodes of outgoing edges are gap-encoded.
+* Samples are stored in a single global structure.
+  * A bitvector marks the nodes that contain samples. As most nodes do not have samples, this makes skipping them faster.
+  * A compressed bitvector maps the rank of a sampled node to the corresponding interval in the concatenated BWT ranges of the sampled nodes.
+  * Another compressed bitvector marks the sampled offsets in the concatenated BWT ranges.
+  * The sampled document identifiers are stored in an array.
 * The compressed in-memory encoding is the same as on disk.
-* The dynamic encoding required for construction uses three `std::vector`s of pairs of integers.
+* The dynamic encoding required for construction uses four `std::vector`s of pairs of integers.
 
 ## TODO
 
 * Construction of compressed/dynamic GBWT from the other.
 * Special case for merging when the node ids do not overlap.
-* Query interface.
-* `locate()` support for determining sequence identifiers.
-  * Because the construction is based on inserting sequences incrementally, the positions where we store the identiers must depend only on the sequence itself.
-  * Use a similar index / array of records combination as with the BWT.
-  * For each node, the sample record tells the number of samples and the samples as (offset, id) pairs.
-  * The offsets can be gap-encoded.
+* Encode the destination of the first outgoing edge relative to the current node.
+* Sample interval as a construction parameter.
+* `locate(range)` optimizations.
 * Memory-mapped compressed GBWT.
 
 ## References
