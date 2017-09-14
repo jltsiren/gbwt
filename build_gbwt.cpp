@@ -22,6 +22,7 @@
   SOFTWARE.
 */
 
+#include <random>
 #include <unistd.h>
 
 #include "dynamic_gbwt.h"
@@ -34,6 +35,8 @@ void printUsage(int exit_code = EXIT_SUCCESS);
 
 template<class GBWTType>
 void verify(const std::string& base_name);
+
+void verifyLocate(const std::string& base_name);
 
 //------------------------------------------------------------------------------
 
@@ -94,6 +97,9 @@ main(int argc, char** argv)
 
     std::cout << "Verifying dynamic GBWT..." << std::endl;
     verify<DynamicGBWT>(base_name);
+
+    std::cout << "Verifying locate()..." << std::endl;
+    verifyLocate(base_name);
   }
 
   return 0;
@@ -198,6 +204,75 @@ verify(const std::string& base_name)
 
   if(failed) { std::cout << "Index verification failed" << std::endl; }
   else { std::cout << "Index verified in " << seconds << " seconds" << std::endl; }
+  std::cout << std::endl;
+}
+
+//------------------------------------------------------------------------------
+
+const size_type RANDOM_SEED    = 0xDEADBEEF;
+const size_type LOCATE_QUERIES = 10000;
+const size_type MAX_LENGTH     = 100;
+
+void
+verifyLocate(const std::string& base_name)
+{
+  GBWT gbwt;
+  sdsl::load_from_file(gbwt, base_name + GBWT::EXTENSION);
+
+  std::mt19937_64 rng(RANDOM_SEED);
+  std::vector<node_type>  nodes(LOCATE_QUERIES);
+  std::vector<range_type> ranges(LOCATE_QUERIES);
+  size_type total_length = 0;
+  for(size_type i = 0; i < LOCATE_QUERIES; i++)
+  {
+    size_type node_size = 0;
+    while(node_size == 0)
+    {
+      nodes[i] = rng() % gbwt.effective();
+      if(nodes[i] > 0) { nodes[i] += gbwt.header.offset; }
+      node_size = gbwt.count(nodes[i]);
+    }
+    ranges[i].first = rng() % node_size;
+    ranges[i].second = ranges[i].first + rng() % std::min(MAX_LENGTH, node_size - ranges[i].first);
+    total_length += Range::length(ranges[i]);
+  }
+  std::cout << "Generated " << LOCATE_QUERIES << " ranges of total length " << total_length << std::endl;
+
+  size_type direct_hash = FNV_OFFSET_BASIS;
+  {
+    double start = readTimer();
+    size_type found = 0;
+    for(size_type i = 0; i < LOCATE_QUERIES; i++)
+    {
+      std::vector<size_type> result;
+      for(size_type j = ranges[i].first; j <= ranges[i].second; j++)
+      {
+        result.push_back(gbwt.locate(nodes[i], j));
+      }
+      removeDuplicates(result, false);
+      for(size_type res : result) { direct_hash = fnv1a_hash(res, direct_hash); }
+      found += result.size();
+    }
+    double seconds = readTimer() - start;
+    printTime("Direct locate()", found, seconds);
+  }
+
+  size_type fast_hash = FNV_OFFSET_BASIS;
+  {
+    double start = readTimer();
+    size_type found = 0;
+    for(size_type i = 0; i < LOCATE_QUERIES; i++)
+    {
+      std::vector<size_type> result = gbwt.locate(nodes[i], ranges[i]);
+      for(size_type res : result) { fast_hash = fnv1a_hash(res, fast_hash); }
+      found += result.size();
+    }
+    double seconds = readTimer() - start;
+    printTime("Fast locate()", found, seconds);
+  }
+
+  if(direct_hash != fast_hash) { std::cout << "Verification failed" << std::endl; }
+  else { std::cout << "Verification successful" << std::endl; }
   std::cout << std::endl;
 }
 

@@ -146,6 +146,66 @@ GBWT::locate(node_type node, size_type i) const
   }
 }
 
+std::vector<size_type>
+GBWT::locate(node_type node, range_type range) const
+{
+  std::vector<size_type> result;
+  if(!(this->contains(node)) || Range::empty(range)) { return result; }
+  if(range.second >= this->count(node)) { return result; }
+
+  // Initialize BWT positions for each offset in the range.
+  std::vector<edge_type> positions(Range::length(range));
+  for(size_type i = range.first; i <= range.second; i++)
+  {
+    positions[i - range.first] = edge_type(node, i);
+  }
+
+  // Continue with LF() until samples have been found for all sequences.
+  while(!(positions.empty()))
+  {
+    size_type tail = 0;
+    node_type curr = invalid_node();
+    CompressedRecord current;
+    sample_type sample;
+    edge_type LF_result;
+    range_type LF_range;
+
+    for(size_type i = 0; i < positions.size(); i++)
+    {
+      if(positions[i].first != curr)              // Node changed.
+      {
+        curr = positions[i].first; current = this->record(curr);
+        sample = this->da_samples.nextSample(this->toComp(curr), positions[i].second);
+        LF_range.first = positions[i].second;
+        LF_result = current.runLF(positions[i].second, LF_range.second);
+      }
+      if(sample.first < positions[i].second)      // Went past the sample.
+      {
+        sample = this->da_samples.nextSample(this->toComp(curr), positions[i].second);
+      }
+      if(sample.first > positions[i].second)      // Not sampled, also valid for invalid_sample().
+      {
+        if(positions[i].second > LF_range.second) // Went past the existing LF() result.
+        {
+          LF_range.first = positions[i].second;
+          LF_result = current.runLF(positions[i].second, LF_range.second);
+        }
+        positions[tail] = edge_type(LF_result.first, LF_result.second + positions[i].second - LF_range.first);
+        tail++;
+      }
+      else                                        // Found a sample.
+      {
+        result.push_back(sample.second);
+      }
+    }
+    positions.resize(tail);
+    sequentialSort(positions.begin(), positions.end());
+  }
+
+  removeDuplicates(result, false);
+  return result;
+}
+
 //------------------------------------------------------------------------------
 
 CompressedRecord

@@ -137,6 +137,7 @@ struct CompressedRecord
   const byte_type*       body;
   size_type              data_size;
 
+  CompressedRecord();
   CompressedRecord(const std::vector<byte_type>& source, size_type start, size_type limit);
 
   size_type size() const; // Expensive.
@@ -146,6 +147,9 @@ struct CompressedRecord
 
   // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
   edge_type LF(size_type i) const;
+
+  // As above, but also sets 'run_end' to the last offset of the current run.
+  edge_type runLF(size_type i, size_type& run_end) const;
 
   // Returns invalid_offset() if there is no edge to the destination.
   size_type LF(size_type i, node_type to) const;
@@ -238,6 +242,9 @@ struct DASamples
 
   // Returns invalid_sequence() if there is no sample.
   size_type tryLocate(size_type record, size_type offset) const;
+
+  // Returns the first sample at offset >= i or invalid_sample() if there is no sample.
+  sample_type nextSample(size_type record, size_type offset) const;
 
 private:
   void copy(const DASamples& source);

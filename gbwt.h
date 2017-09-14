@@ -131,6 +131,9 @@ public:
   size_type locate(node_type node, size_type i) const;
   inline size_type locate(edge_type position) const { return this->locate(position.first, position.second); }
 
+  // On error: empty vector.
+  std::vector<size_type> locate(node_type node, range_type range) const;
+
 //------------------------------------------------------------------------------
 
   // This returns the compressed record for the given node, assuming that it exists.

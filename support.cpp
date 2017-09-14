@@ -220,6 +220,11 @@ operator<<(std::ostream& out, const DynamicRecord& record)
 
 //------------------------------------------------------------------------------
 
+CompressedRecord::CompressedRecord() :
+  outgoing(), body(0), data_size(0)
+{
+}
+
 CompressedRecord::CompressedRecord(const std::vector<byte_type>& source, size_type start, size_type limit)
 {
   this->outgoing.resize(ByteCode::read(source, start));
@@ -267,6 +272,23 @@ CompressedRecord::LF(size_type i) const
     if(iter.offset() > i)
     {
       edge_type result = iter.edge(); result.second -= (iter.offset() - i);
+      return result;
+    }
+  }
+  return invalid_edge();
+}
+
+edge_type
+CompressedRecord::runLF(size_type i, size_type& run_end) const
+{
+  if(this->outdegree() == 0) { return invalid_edge(); }
+
+  for(CompressedRecordFullIterator iter(*this); !(iter.end()); ++iter)
+  {
+    if(iter.offset() > i)
+    {
+      edge_type result = iter.edge(); result.second -= (iter.offset() - i);
+      run_end = iter.offset() - 1;
       return result;
     }
   }
@@ -643,6 +665,21 @@ DASamples::tryLocate(size_type record, size_type offset) const
     return this->array[this->sample_rank(record_start + offset)];
   }
   return invalid_sequence();
+}
+
+sample_type
+DASamples::nextSample(size_type record, size_type offset) const
+{
+  if(this->sampled_records[record] == 0) { return invalid_sample(); }
+
+  size_type record_start = this->bwt_select(this->record_rank(record) + 1);
+  size_type rank = this->sample_rank(record_start + offset);
+  if(rank < this->array.size())
+  {
+    sdsl::sd_vector<>::select_1_type sample_select(&(this->sampled_offsets));
+    return sample_type(sample_select(rank + 1) - record_start, this->array[rank]);
+  }
+  return invalid_sample();
 }
 
 //------------------------------------------------------------------------------

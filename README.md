@@ -55,7 +55,6 @@ This repository should eventually become a scalable GBWT implementation.
 * Special case for merging when the node ids do not overlap.
 * Encode the destination of the first outgoing edge relative to the current node.
 * Sample interval as a construction parameter.
-* `locate(range)` optimizations.
 * Memory-mapped compressed GBWT.
 
 ## References
