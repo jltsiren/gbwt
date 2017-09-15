@@ -26,7 +26,7 @@
 
 #include <unistd.h>
 
-#include "files.h"
+#include <gbwt/files.h>
 
 using namespace gbwt;
 

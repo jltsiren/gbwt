@@ -22,7 +22,7 @@
   SOFTWARE.
 */
 
-#include "internal.h"
+#include <gbwt/internal.h>
 
 namespace gbwt
 {

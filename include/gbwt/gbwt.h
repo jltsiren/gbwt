@@ -25,8 +25,8 @@
 #ifndef GBWT_GBWT_H
 #define GBWT_GBWT_H
 
-#include "files.h"
-#include "support.h"
+#include <gbwt/files.h>
+#include <gbwt/support.h>
 
 namespace gbwt
 {

@@ -28,7 +28,7 @@
 #include <sys/resource.h>
 #include <unistd.h>
 
-#include "utils.h"
+#include <gbwt/utils.h>
 
 namespace gbwt
 {

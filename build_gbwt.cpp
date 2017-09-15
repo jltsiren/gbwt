@@ -25,7 +25,7 @@
 #include <random>
 #include <unistd.h>
 
-#include "dynamic_gbwt.h"
+#include <gbwt/dynamic_gbwt.h>
 
 using namespace gbwt;
 

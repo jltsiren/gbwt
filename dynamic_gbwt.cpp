@@ -22,8 +22,8 @@
   SOFTWARE.
 */
 
-#include "dynamic_gbwt.h"
-#include "internal.h"
+#include <gbwt/dynamic_gbwt.h>
+#include <gbwt/internal.h>
 
 namespace gbwt
 {

@@ -25,7 +25,7 @@
 #ifndef GBWT_DYNAMIC_GBWT_H
 #define GBWT_DYNAMIC_GBWT_H
 
-#include "gbwt.h"
+#include <gbwt/gbwt.h>
 
 namespace gbwt
 {

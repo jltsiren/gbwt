@@ -14,10 +14,10 @@ endif
 OTHER_FLAGS=$(RUSAGE_FLAGS) $(PARALLEL_FLAGS)
 
 include $(SDSL_DIR)/Make.helper
-CXX_FLAGS=$(MY_CXX_FLAGS) $(OTHER_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(INC_DIR)
+CXX_FLAGS=$(MY_CXX_FLAGS) $(OTHER_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(INC_DIR) -Iinclude
 LIBOBJS=dynamic_gbwt.o files.o gbwt.o internal.o support.o utils.o
 SOURCES=$(wildcard *.cpp)
-HEADERS=$(wildcard *.h)
+HEADERS=$(wildcard include/gbwt/*.h)
 OBJS=$(SOURCES:.cpp=.o)
 LIBS=-L$(LIB_DIR) -lsdsl -ldivsufsort -ldivsufsort64
 LIBRARY=libgbwt.a
