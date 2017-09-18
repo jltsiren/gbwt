@@ -59,7 +59,8 @@ typedef std::uint64_t size_type;
 typedef std::uint32_t short_type;
 typedef std::uint8_t  byte_type;
 
-typedef size_type node_type;
+typedef size_type node_type;  // Node identifier.
+typedef size_type comp_type;  // Record identifier, compacted node identifier.
 typedef size_type rank_type;  // Rank of incoming / outgoing edge.
 
 #ifdef GBWT_SAVE_MEMORY

@@ -101,8 +101,7 @@ printUsage(int exit_code)
   std::cerr << "  -b N  Use batches of N sequences for merging (default "
             << DynamicGBWT::MERGE_BATCH_SIZE << ")" << std::endl;
   std::cerr << std::endl;
-  std::cerr << "Use base names for the inputs and the output. Using compressed GBWTs from input2" << std::endl;
-  std::cerr << "onwards saves memory but is slower." << std::endl;
+  std::cerr << "Use base names for the inputs and the output." << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);

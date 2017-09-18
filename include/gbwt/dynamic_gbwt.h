@@ -40,7 +40,6 @@ class DynamicGBWT
 {
 public:
   typedef DynamicRecord::size_type size_type;
-  typedef node_type                comp_type; // Index of a record in this->bwt.
 
   const static size_type INSERT_BATCH_SIZE = 100 * MILLION; // Nodes.
   const static size_type MERGE_BATCH_SIZE = 2000;           // Sequences.

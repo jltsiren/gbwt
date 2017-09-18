@@ -41,7 +41,6 @@ class GBWT
 {
 public:
   typedef CompressedRecord::size_type size_type;
-  typedef node_type                   comp_type; // Index of a record in this->bwt.
 
 //------------------------------------------------------------------------------
 
