@@ -141,14 +141,14 @@ struct Run
   }
 
   template<class ByteArray>
-  inline void write(ByteArray& array, run_type run) { this->write(array, run.first, run.second); }
+  void write(ByteArray& array, run_type run) { this->write(array, run.first, run.second); }
 
-  inline code_type encodeBasic(value_type value, size_type length)
+  code_type encodeBasic(value_type value, size_type length)
   {
     return value + this->sigma * (length - 1);
   }
 
-  inline run_type decodeBasic(code_type code)
+  run_type decodeBasic(code_type code)
   {
     return run_type(code % this->sigma, code / this->sigma + 1);
   }
@@ -169,20 +169,20 @@ struct RunMerger
 
   RunMerger(size_type sigma) : total_size(0), accumulator(0, 0), counts(sigma) {}
 
-  inline size_type size() const { return this->total_size; }
+  size_type size() const { return this->total_size; }
 
-  inline void insert(run_type run)
+  void insert(run_type run)
   {
     this->total_size += run.second; counts[run.first] += run.second;
     if(run.first == accumulator.first) { accumulator.second += run.second; }
     else { this->flush(); this->accumulator = run; }
   }
 
-  inline void insert(rank_type outrank) { this->insert(run_type(outrank, 1)); }
+  void insert(rank_type outrank) { this->insert(run_type(outrank, 1)); }
 
   void flush();
 
-  inline void addEdge() { this->counts.push_back(0); }
+  void addEdge() { this->counts.push_back(0); }
 };
 
 //------------------------------------------------------------------------------
@@ -207,7 +207,7 @@ struct Sequence
   Sequence(node_type node, size_type seq_id, size_type source_pos);
 
   // Sort by reverse prefixes text[..pos+1].
-  inline bool operator<(const Sequence& another) const
+  bool operator<(const Sequence& another) const
   {
     if(this->next != another.next) { return (this->next < another.next); }
     if(this->curr != another.curr) { return (this->curr < another.curr); }
@@ -237,14 +237,14 @@ struct CompressedRecordIterator
     this->read();
   }
 
-  inline bool end() const { return (this->curr_offset >= this->record.data_size); }
-  inline void operator++() { this->curr_offset = this->next_offset; this->read(); }
+  bool end() const { return (this->curr_offset >= this->record.data_size); }
+  void operator++() { this->curr_offset = this->next_offset; this->read(); }
 
-  inline run_type operator*() const { return this->run; }
-  inline const run_type* operator->() { return &(this->run); }
+  run_type operator*() const { return this->run; }
+  const run_type* operator->() { return &(this->run); }
 
   // After the current run.
-  inline size_type offset() const { return this->record_offset; }
+  size_type offset() const { return this->record_offset; }
 
   const CompressedRecord& record;
   Run                     decoder;
@@ -254,7 +254,7 @@ struct CompressedRecordIterator
   run_type                run;
 
 private:
-  inline void read()
+  void read()
   {
     if(!(this->end()))
     {
@@ -274,18 +274,18 @@ struct CompressedRecordRankIterator
     this->read();
   }
 
-  inline bool end() const { return (this->curr_offset >= this->record.data_size); }
-  inline void operator++() { this->curr_offset = this->next_offset; this->read(); }
+  bool end() const { return (this->curr_offset >= this->record.data_size); }
+  void operator++() { this->curr_offset = this->next_offset; this->read(); }
 
-  inline run_type operator*() const { return this->run; }
-  inline const run_type* operator->() { return &(this->run); }
+  run_type operator*() const { return this->run; }
+  const run_type* operator->() { return &(this->run); }
 
   // After the current run.
-  inline size_type offset() const { return this->record_offset; }
-  inline size_type rank() const { return this->result; }
+  size_type offset() const { return this->record_offset; }
+  size_type rank() const { return this->result; }
 
   // Intended for positions i covered by the current run.
-  inline size_type rankAt(size_type i) const
+  size_type rankAt(size_type i) const
   {
     size_type temp = this->rank();
     if(i < this->offset() && this->run.first == value) { temp -= (this->offset() - i); }
@@ -303,7 +303,7 @@ struct CompressedRecordRankIterator
   size_type               result;
 
 private:
-  inline void read()
+  void read()
   {
     if(!(this->end()))
     {
@@ -323,18 +323,18 @@ struct CompressedRecordFullIterator
     this->read();
   }
 
-  inline bool end() const { return (this->curr_offset >= this->record.data_size); }
-  inline void operator++() { this->curr_offset = this->next_offset; this->read(); }
+  bool end() const { return (this->curr_offset >= this->record.data_size); }
+  void operator++() { this->curr_offset = this->next_offset; this->read(); }
 
-  inline run_type operator*() const { return this->run; }
-  inline const run_type* operator->() { return &(this->run); }
+  run_type operator*() const { return this->run; }
+  const run_type* operator->() { return &(this->run); }
 
   // After the current run.
-  inline size_type offset() const { return this->record_offset; }
-  inline size_type rank() const { return this->rank(this->run.first); }
-  inline size_type rank(rank_type outrank) const { return this->ranks[outrank].second; }
-  inline edge_type edge() const { return this->edge(this->run.first); }
-  inline edge_type edge(rank_type outrank) const { return this->ranks[outrank]; }
+  size_type offset() const { return this->record_offset; }
+  size_type rank() const { return this->rank(this->run.first); }
+  size_type rank(rank_type outrank) const { return this->ranks[outrank].second; }
+  edge_type edge() const { return this->edge(this->run.first); }
+  edge_type edge(rank_type outrank) const { return this->ranks[outrank]; }
 
   const CompressedRecord& record;
   Run                     decoder;
@@ -345,7 +345,7 @@ struct CompressedRecordFullIterator
   run_type                run;
 
 private:
-  inline void read()
+  void read()
   {
     if(!(this->end()))
     {

@@ -115,32 +115,32 @@ typedef std::pair<size_type, size_type> range_type;
 
 struct Range
 {
-  inline static size_type length(range_type range)
+  static size_type length(range_type range)
   {
     return range.second + 1 - range.first;
   }
 
-  inline static bool empty(range_type range)
+  static bool empty(range_type range)
   {
     return (range.first + 1 > range.second + 1);
   }
 
-  inline static bool empty(size_type sp, size_type ep)
+  static bool empty(size_type sp, size_type ep)
   {
     return (sp + 1 > ep + 1);
   }
 
-  inline static size_type bound(size_type value, range_type bounds)
+  static size_type bound(size_type value, range_type bounds)
   {
     return bound(value, bounds.first, bounds.second);
   }
 
-  inline static size_type bound(size_type value, size_type low, size_type high)
+  static size_type bound(size_type value, size_type low, size_type high)
   {
     return std::max(std::min(value, high), low);
   }
 
-  inline static range_type empty_range()
+  static range_type empty_range()
   {
     return range_type(1, 0);
   }
@@ -197,7 +197,7 @@ struct Verbosity
 //------------------------------------------------------------------------------
 
 template<class IntegerType>
-inline size_type
+size_type
 bit_length(IntegerType val)
 {
   return sdsl::bits::hi(val) + 1;

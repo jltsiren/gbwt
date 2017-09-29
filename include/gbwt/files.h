@@ -69,7 +69,7 @@ struct GBWTHeader
   void swap(GBWTHeader& another);
 
   bool operator==(const GBWTHeader& another) const;
-  inline bool operator!=(const GBWTHeader& another) const { return !(this->operator==(another)); }
+  bool operator!=(const GBWTHeader& another) const { return !(this->operator==(another)); }
 };
 
 std::ostream& operator<<(std::ostream& stream, const GBWTHeader& header);

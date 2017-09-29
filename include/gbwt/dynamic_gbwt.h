@@ -86,19 +86,19 @@ public:
 
 //------------------------------------------------------------------------------
 
-  inline size_type size() const { return this->header.size; }
-  inline bool empty() const { return (this->size() == 0); }
-  inline size_type sequences() const { return this->header.sequences; }
-  inline size_type sigma() const { return this->header.alphabet_size; }
-  inline size_type effective() const { return this->header.alphabet_size - this->header.offset; }
-  inline size_type count(node_type node) const { return this->record(node).size(); }
+  size_type size() const { return this->header.size; }
+  bool empty() const { return (this->size() == 0); }
+  size_type sequences() const { return this->header.sequences; }
+  size_type sigma() const { return this->header.alphabet_size; }
+  size_type effective() const { return this->header.alphabet_size - this->header.offset; }
+  size_type count(node_type node) const { return this->record(node).size(); }
 
-  inline bool contains(node_type node) const
+  bool contains(node_type node) const
   {
     return ((node < this->sigma() && node > this->header.offset) || node == 0);
   }
 
-  inline comp_type toComp(node_type node) const { return (node == 0 ? node : node - this->header.offset); }
+  comp_type toComp(node_type node) const { return (node == 0 ? node : node - this->header.offset); }
 
   size_type runs() const;
   size_type samples() const;
@@ -111,38 +111,38 @@ public:
   */
 
   // On error: invalid_edge().
-  inline edge_type LF(node_type from, size_type i) const
+  edge_type LF(node_type from, size_type i) const
   {
     return this->record(from).LF(i);
   }
 
   // On error: invalid_edge().
-  inline edge_type LF(edge_type position) const
+  edge_type LF(edge_type position) const
   {
     return this->record(position.first).LF(position.second);
   }
 
   // On error: invalid_offset().
-  inline size_type LF(node_type from, size_type i, node_type to) const
+  size_type LF(node_type from, size_type i, node_type to) const
   {
     return this->record(from).LF(i, to);
   }
 
   // On error: invalid_offset().
-  inline size_type LF(edge_type position, node_type to) const
+  size_type LF(edge_type position, node_type to) const
   {
     return this->record(position.first).LF(position.second, to);
   }
 
   // On error: Range::empty_range().
-  inline range_type LF(node_type from, range_type range, node_type to) const
+  range_type LF(node_type from, range_type range, node_type to) const
   {
     return this->record(from).LF(range, to);
   }
 
   // Returns the sampled document identifier or invalid_sequence() if there is no sample.
   size_type tryLocate(node_type node, size_type i) const;
-  inline size_type tryLocate(edge_type position) const { return this->tryLocate(position.first, position.second); }
+  size_type tryLocate(edge_type position) const { return this->tryLocate(position.first, position.second); }
 
 //------------------------------------------------------------------------------
 
@@ -151,12 +151,12 @@ public:
     in range [1..offset], we cannot simply access the BWT.
   */
 
-  inline DynamicRecord& record(node_type node)
+  DynamicRecord& record(node_type node)
   {
     return this->bwt[this->toComp(node)];
   }
 
-  inline const DynamicRecord& record(node_type node) const
+  const DynamicRecord& record(node_type node) const
   {
     return this->bwt[this->toComp(node)];
   }

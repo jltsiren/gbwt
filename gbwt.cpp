@@ -133,19 +133,6 @@ GBWT::runs() const
 
 //------------------------------------------------------------------------------
 
-size_type
-GBWT::locate(node_type node, size_type i) const
-{
-  if(!(this->contains(node))) { return invalid_sequence(); }
-
-  while(true)
-  {
-    size_type result = this->tryLocate(node, i);
-    if(result != invalid_sequence()) { return result; }
-    std::tie(node, i) = this->LF(node, i);
-  }
-}
-
 std::vector<size_type>
 GBWT::locate(node_type node, range_type range) const
 {

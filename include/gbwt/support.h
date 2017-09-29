@@ -58,12 +58,12 @@ struct DynamicRecord
 
   DynamicRecord() : body_size(0) {}
 
-  inline size_type size() const { return this->body_size; }
-  inline bool empty() const { return (this->size() == 0); }
-  inline size_type indegree() const { return this->incoming.size(); }
-  inline size_type outdegree() const { return this->outgoing.size(); }
-  inline size_type runs() const { return this->body.size(); }
-  inline size_type samples() const { return this->ids.size(); }
+  size_type size() const { return this->body_size; }
+  bool empty() const { return (this->size() == 0); }
+  size_type indegree() const { return this->incoming.size(); }
+  size_type outdegree() const { return this->outgoing.size(); }
+  size_type runs() const { return this->body.size(); }
+  size_type samples() const { return this->ids.size(); }
 
   void clear();
   void swap(DynamicRecord& another);
@@ -93,13 +93,13 @@ struct DynamicRecord
   rank_type edgeTo(node_type to) const;
 
   // These assume that 'outrank' is a valid outgoing edge.
-  inline node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
+  node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
 #ifdef GBWT_SAVE_MEMORY
-  inline short_type& offset(rank_type outrank) { return this->outgoing[outrank].second; }
+  short_type& offset(rank_type outrank) { return this->outgoing[outrank].second; }
 #else
-  inline size_type& offset(rank_type outrank) { return this->outgoing[outrank].second; }
+  size_type& offset(rank_type outrank) { return this->outgoing[outrank].second; }
 #endif
-  inline size_type offset(rank_type outrank) const { return this->outgoing[outrank].second; }
+  size_type offset(rank_type outrank) const { return this->outgoing[outrank].second; }
 
 //------------------------------------------------------------------------------
 
@@ -107,13 +107,13 @@ struct DynamicRecord
   rank_type findFirst(node_type from) const;
 
   // These assume that 'inrank' is a valid incoming edge.
-  inline node_type predecessor(rank_type inrank) const { return this->incoming[inrank].first; }
+  node_type predecessor(rank_type inrank) const { return this->incoming[inrank].first; }
 #ifdef GBWT_SAVE_MEMORY
-  inline short_type& count(rank_type inrank) { return this->incoming[inrank].second; }
+  short_type& count(rank_type inrank) { return this->incoming[inrank].second; }
 #else
-  inline size_type& count(rank_type inrank) { return this->incoming[inrank].second; }
+  size_type& count(rank_type inrank) { return this->incoming[inrank].second; }
 #endif
-  inline size_type count(rank_type inrank) const { return this->incoming[inrank].second; }
+  size_type count(rank_type inrank) const { return this->incoming[inrank].second; }
 
   // Increment the count of the incoming edge from 'from'.
   void increment(node_type from);
@@ -141,9 +141,9 @@ struct CompressedRecord
   CompressedRecord(const std::vector<byte_type>& source, size_type start, size_type limit);
 
   size_type size() const; // Expensive.
-  inline bool empty() const { return (this->size() == 0); }
+  bool empty() const { return (this->size() == 0); }
   size_type runs() const; // Expensive.
-  inline size_type outdegree() const { return this->outgoing.size(); }
+  size_type outdegree() const { return this->outgoing.size(); }
 
   // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
   edge_type LF(size_type i) const;
@@ -164,8 +164,8 @@ struct CompressedRecord
   rank_type edgeTo(node_type to) const;
 
   // These assume that 'outrank' is a valid outgoing edge.
-  inline node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
-  inline size_type offset(rank_type outrank) const { return this->outgoing[outrank].second; }
+  node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
+  size_type offset(rank_type outrank) const { return this->outgoing[outrank].second; }
 };
 
 //------------------------------------------------------------------------------
@@ -194,8 +194,8 @@ struct RecordArray
   void load(std::istream& in);
 
   // 0-based indexing.
-  inline size_type start(size_type record) const { return this->select(record + 1); }
-  inline size_type limit(size_type record) const
+  size_type start(size_type record) const { return this->select(record + 1); }
+  size_type limit(size_type record) const
   {
     return (record + 1 < this->records ? this->select(record + 2) : this->data.size());
   }
@@ -238,7 +238,7 @@ struct DASamples
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
 
-  inline size_type size() const { return this->array.size(); }
+  size_type size() const { return this->array.size(); }
 
   // Returns invalid_sequence() if there is no sample.
   size_type tryLocate(size_type record, size_type offset) const;
