@@ -1,4 +1,5 @@
 /*
+  Copyright (c) 2017 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -134,17 +135,16 @@ GBWT::runs() const
 //------------------------------------------------------------------------------
 
 std::vector<size_type>
-GBWT::locate(node_type node, range_type range) const
+GBWT::locate(SearchState state) const
 {
   std::vector<size_type> result;
-  if(!(this->contains(node)) || Range::empty(range)) { return result; }
-  if(range.second >= this->count(node)) { return result; }
+  if(!(this->contains(state))) { return result; }
 
   // Initialize BWT positions for each offset in the range.
-  std::vector<edge_type> positions(Range::length(range));
-  for(size_type i = range.first; i <= range.second; i++)
+  std::vector<edge_type> positions(state.size());
+  for(size_type i = state.range.first; i <= state.range.second; i++)
   {
-    positions[i - range.first] = edge_type(node, i);
+    positions[i - state.range.first] = edge_type(state.node, i);
   }
 
   // Continue with LF() until samples have been found for all sequences.

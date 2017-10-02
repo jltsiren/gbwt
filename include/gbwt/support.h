@@ -1,4 +1,5 @@
 /*
+  Copyright (c) 2017 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -75,11 +76,14 @@ struct DynamicRecord
 
 //------------------------------------------------------------------------------
 
-  // Returns invalid_offset() if there is no edge to the destination.
-  size_type LF(size_type i, node_type to) const;
-
   // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
   edge_type LF(size_type i) const;
+
+  // As above, but also sets 'run_end' to the last offset of the current run.
+  edge_type runLF(size_type i, size_type& run_end) const;
+
+  // Returns invalid_offset() if there is no edge to the destination.
+  size_type LF(size_type i, node_type to) const;
 
   // Returns Range::empty_range() if the range is empty or the destination is invalid.
   range_type LF(range_type range, node_type to) const;
@@ -122,6 +126,9 @@ struct DynamicRecord
   void addIncoming(edge_type inedge);
 
 //------------------------------------------------------------------------------
+
+  // Returns the first sample at offset >= i or ids.end() if there is no sample.
+  std::vector<sample_type>::const_iterator nextSample(size_type i) const;
 
 };  // struct DynamicRecord
 
@@ -243,7 +250,7 @@ struct DASamples
   // Returns invalid_sequence() if there is no sample.
   size_type tryLocate(size_type record, size_type offset) const;
 
-  // Returns the first sample at offset >= i or invalid_sample() if there is no sample.
+  // Returns the first sample at >= offset or invalid_sample() if there is no sample.
   sample_type nextSample(size_type record, size_type offset) const;
 
 private:

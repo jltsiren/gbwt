@@ -1,4 +1,5 @@
 /*
+  Copyright (c) 2017 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -87,6 +88,28 @@ DynamicRecord::LF(size_type i) const
   }
 
   result[last_edge].second -= (offset - i);
+  return result[last_edge];
+}
+
+// FIXME This is almost the same as LF(i)...
+edge_type
+DynamicRecord::runLF(size_type i, size_type& run_end) const
+{
+  if(i >= this->size()) { return invalid_edge(); }
+
+  std::vector<edge_type> result(this->outgoing);
+  rank_type last_edge = 0;
+  size_type offset = 0;
+  for(run_type run : this->body)
+  {
+    last_edge = run.first;
+    result[run.first].second += run.second;
+    offset += run.second;
+    if(offset > i) { break; }
+  }
+
+  result[last_edge].second -= (offset - i);
+  run_end = offset - 1;
   return result[last_edge];
 }
 
@@ -203,6 +226,16 @@ DynamicRecord::addIncoming(edge_type inedge)
 
 //------------------------------------------------------------------------------
 
+std::vector<sample_type>::const_iterator
+DynamicRecord::nextSample(size_type i) const
+{
+  std::vector<sample_type>::const_iterator curr = this->ids.begin();
+  while(curr != this->ids.end() && curr->first < i) { ++curr; }
+  return curr;
+}
+
+//------------------------------------------------------------------------------
+
 std::ostream&
 operator<<(std::ostream& out, const DynamicRecord& record)
 {
@@ -278,6 +311,7 @@ CompressedRecord::LF(size_type i) const
   return invalid_edge();
 }
 
+// FIXME This is almost the same as LF(i)...
 edge_type
 CompressedRecord::runLF(size_type i, size_type& run_end) const
 {

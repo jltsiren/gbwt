@@ -1,4 +1,5 @@
 /*
+  Copyright (c) 2017 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -720,6 +721,66 @@ DynamicGBWT::tryLocate(node_type node, size_type i) const
     if(sample.first > i) { break; }
   }
   return invalid_sequence();
+}
+
+// FIXME This should really have a common implementation with GBWT::locate(state).
+std::vector<size_type>
+DynamicGBWT::locate(SearchState state) const
+{
+  std::vector<size_type> result;
+  if(!(this->contains(state))) { return result; }
+
+  // Initialize BWT positions for each offset in the range.
+  std::vector<edge_type> positions(state.size());
+  for(size_type i = state.range.first; i <= state.range.second; i++)
+  {
+    positions[i - state.range.first] = edge_type(state.node, i);
+  }
+
+  // Continue with LF() until samples have been found for all sequences.
+  while(!(positions.empty()))
+  {
+    size_type tail = 0;
+    node_type curr = invalid_node();
+    DynamicRecord current;
+    std::vector<sample_type>::const_iterator sample;
+    edge_type LF_result;
+    range_type LF_range;
+
+    for(size_type i = 0; i < positions.size(); i++)
+    {
+      if(positions[i].first != curr)  // Node changed.
+      {
+        curr = positions[i].first; current = this->record(curr);
+        sample = current.nextSample(positions[i].second);
+        LF_range.first = positions[i].second;
+        LF_result = current.runLF(positions[i].second, LF_range.second);
+      }
+      while(sample != current.ids.end() && sample->first < positions[i].second)  // Went past the sample.
+      {
+        ++sample;
+      }
+      if(sample == current.ids.end() || sample->first > positions[i].second) // Not sampled.
+      {
+        if(positions[i].second > LF_range.second) // Went past the existing LF() result.
+        {
+          LF_range.first = positions[i].second;
+          LF_result = current.runLF(positions[i].second, LF_range.second);
+        }
+        positions[tail] = edge_type(LF_result.first, LF_result.second + positions[i].second - LF_range.first);
+        tail++;
+      }
+      else  // Found a sample.
+      {
+        result.push_back(sample->second);
+      }
+    }
+    positions.resize(tail);
+    sequentialSort(positions.begin(), positions.end());
+  }
+
+  removeDuplicates(result, false);
+  return result;
 }
 
 //------------------------------------------------------------------------------

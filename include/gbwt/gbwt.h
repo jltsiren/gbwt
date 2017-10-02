@@ -1,4 +1,5 @@
 /*
+  Copyright (c) 2017 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -91,20 +92,21 @@ public:
   template<class Iterator>
   SearchState find(Iterator begin, Iterator end) const { return gbwt::find(*this, begin, end); }
 
+  SearchState prefix(node_type node) const { return gbwt::prefix(*this, node); }
+
   template<class Iterator>
   SearchState prefix(Iterator begin, Iterator end) const { return gbwt::prefix(*this, begin, end); }
 
-  template<class Iterator>
-  SearchState extend(SearchState state, Iterator begin, Iterator end) const { return gbwt::extend(*this, begin, end); }
+  SearchState extend(SearchState state, node_type node) const { return gbwt::extend(*this, state, node); }
 
   template<class Iterator>
-  size_type count(Iterator begin, Iterator end) const { return gbwt::find(*this, begin, end).size(); }
+  SearchState extend(SearchState state, Iterator begin, Iterator end) const { return gbwt::extend(*this, state, begin, end); }
 
   size_type locate(node_type node, size_type i) const { return gbwt::locate(*this, range_type(node, i)); }
   size_type locate(edge_type position) const { return gbwt::locate(*this, position); }
 
-  std::vector<size_type> locate(node_type node, range_type range) const;
-  std::vector<size_type> locate(SearchState state) const { return this->locate(state.node, state.range); }
+  std::vector<size_type> locate(node_type node, range_type range) const { return this->locate(SearchState(node, range)); }
+  std::vector<size_type> locate(SearchState state) const;
 
   std::vector<node_type> extract(size_type sequence) const { return gbwt::extract(*this, sequence); }
 
@@ -120,9 +122,19 @@ public:
     return ((node < this->sigma() && node > this->header.offset) || node == 0);
   }
 
+  bool contains(edge_type position) const
+  {
+    return (this->contains(position.first) && position.second < this->nodeSize(position.first));
+  }
+
+  bool contains(SearchState state) const
+  {
+    return (this->contains(state.node) && !(state.empty()) && state.range.second < this->nodeSize(state.node));
+  }
+
   comp_type toComp(node_type node) const { return (node == 0 ? node : node - this->header.offset); }
 
-  size_type count(node_type node) const { return this->record(node).size(); }
+  size_type nodeSize(node_type node) const { return this->record(node).size(); }
 
   CompressedRecord record(node_type node) const;
 

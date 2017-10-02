@@ -1,4 +1,5 @@
 /*
+  Copyright (c) 2017 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -33,10 +34,17 @@ using namespace gbwt;
 
 void printUsage(int exit_code = EXIT_SUCCESS);
 
-template<class GBWTType>
-void verify(const std::string& base_name);
+std::vector<size_type> startOffsets(const std::string& base_name);
+std::vector<SearchState> queryRanges(const DynamicGBWT& index);
 
-void verifyLocate(const std::string& base_name);
+template<class GBWTType>
+void verifyExtract(const GBWTType& index, const std::string& base_name, const std::vector<size_type>& offsets);
+
+template<class GBWTType>
+void verifySamples(const GBWTType& index);
+
+template<class GBWTType>
+void verifyLocate(const GBWTType& index, const std::vector<SearchState>& queries);
 
 //------------------------------------------------------------------------------
 
@@ -74,32 +82,51 @@ main(int argc, char** argv)
 
   double start = readTimer();
 
-  DynamicGBWT gbwt;
+  DynamicGBWT dynamic_index;
   text_buffer_type input(base_name);
-  gbwt.insert(input, batch_size * MILLION);
+  dynamic_index.insert(input, batch_size * MILLION);
 
   std::string gbwt_name = base_name + DynamicGBWT::EXTENSION;
-  sdsl::store_to_file(gbwt, gbwt_name);
+  sdsl::store_to_file(dynamic_index, gbwt_name);
 
   double seconds = readTimer() - start;
 
-  printStatistics(gbwt, base_name);
+  printStatistics(dynamic_index, base_name);
 
-  std::cout << "Indexed " << gbwt.size() << " nodes in " << seconds << " seconds (" << (gbwt.size() / seconds) << " nodes/second)" << std::endl;
+  std::cout << "Indexed " << dynamic_index.size() << " nodes in " << seconds << " seconds (" << (dynamic_index.size() / seconds) << " nodes/second)" << std::endl;
   std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;
   std::cout << std::endl;
 
-  sdsl::util::clear(gbwt);
   if(verify_index)
   {
-    std::cout << "Verifying compressed GBWT..." << std::endl;
-    verify<GBWT>(base_name);
+    std::cout << "Verifying the index..." << std::endl;
+    std::vector<size_type> offsets = startOffsets(base_name);
+    std::vector<SearchState> queries = queryRanges(dynamic_index);
+    std::cout << std::endl;
 
-    std::cout << "Verifying dynamic GBWT..." << std::endl;
-    verify<DynamicGBWT>(base_name);
+    GBWT compressed_index;
+    sdsl::load_from_file(compressed_index, gbwt_name);
 
-    std::cout << "Verifying locate()..." << std::endl;
-    verifyLocate(base_name);
+    sdsl::util::clear(dynamic_index);
+    sdsl::load_from_file(dynamic_index, gbwt_name);
+
+    std::cout << "Verifying extract() in compressed GBWT..." << std::endl;
+    verifyExtract(compressed_index, base_name, offsets);
+
+    std::cout << "Verifying extract() in dynamic GBWT..." << std::endl;
+    verifyExtract(dynamic_index, base_name, offsets);
+
+    std::cout << "Verifying samples in compressed GBWT..." << std::endl;
+    verifySamples(compressed_index);
+
+    std::cout << "Verifying samples in dynamic GBWT..." << std::endl;
+    verifySamples(dynamic_index);
+
+    std::cout << "Verifying locate() in compressed GBWT..." << std::endl;
+    verifyLocate(compressed_index, queries);
+
+    std::cout << "Verifying locate() in dynamic GBWT..." << std::endl;
+    verifyLocate(dynamic_index, queries);
   }
 
   return 0;
@@ -119,45 +146,126 @@ printUsage(int exit_code)
   std::exit(exit_code);
 }
 
+std::vector<size_type>
+startOffsets(const std::string& base_name)
+{
+  std::vector<size_type> offsets;
+  text_buffer_type text(base_name);
+  bool seq_start = true;
+  for(size_type i = 0; i < text.size(); i++)
+  {
+    if(seq_start) { offsets.push_back(i); seq_start = false; }
+    if(text[i] == ENDMARKER) { seq_start = true; }
+  }
+
+  std::cout << "Found the starting offsets for " << offsets.size() << " sequences" << std::endl;
+  return offsets;
+}
+
+const size_type RANDOM_SEED    = 0xDEADBEEF;
+const size_type LOCATE_QUERIES = 10000;
+const size_type MAX_LENGTH     = 100;
+
+std::vector<SearchState>
+queryRanges(const DynamicGBWT& index)
+{
+  std::mt19937_64 rng(RANDOM_SEED);
+  std::vector<SearchState> result(LOCATE_QUERIES);
+  size_type total_length = 0;
+  for(size_type i = 0; i < LOCATE_QUERIES; i++)
+  {
+    size_type node_size = 0;
+    while(node_size == 0)
+    {
+      result[i].node = rng() % index.effective();
+      if(result[i].node > 0) { result[i].node += index.header.offset; }
+      node_size = index.nodeSize(result[i].node);
+    }
+    result[i].range.first = rng() % node_size;
+    result[i].range.second = result[i].range.first + rng() % std::min(MAX_LENGTH, node_size - result[i].range.first);
+    total_length += Range::length(result[i].range);
+  }
+
+  std::cout << "Generated " << LOCATE_QUERIES << " ranges of total length " << total_length << std::endl;
+  return result;
+}
+
 //------------------------------------------------------------------------------
 
 template<class GBWTType>
 void
-verify(const std::string& base_name)
+verifyExtract(const GBWTType& index, const std::string& base_name, const std::vector<size_type>& offsets)
 {
   double start = readTimer();
 
-  GBWTType gbwt;
-  sdsl::load_from_file(gbwt, base_name + GBWTType::EXTENSION);
-
-  // Read the input and find the starting offsets.
-  std::vector<size_type> offsets;
+  bool failed = false;
+  if(index.sequences() != offsets.size())
   {
-    text_buffer_type text(base_name);
-    bool seq_start = true;
-    for(size_type i = 0; i < text.size(); i++)
-    {
-      if(seq_start) { offsets.push_back(i); seq_start = false; }
-      if(text[i] == ENDMARKER) { seq_start = true; }
-    }
+    std::cerr << "verifyExtract(): Expected " << offsets.size() << " sequences, got " << index.sequences() << std::endl;
+    failed = true;
   }
-  if(offsets.empty()) { return; }
   std::vector<range_type> blocks = Range::partition(range_type(0, offsets.size() - 1), 4 * omp_get_max_threads());
 
-  bool failed = false;
-  std::atomic<size_type> samples_found(0);
   #pragma omp parallel for schedule(dynamic, 1)
   for(size_type block = 0; block < blocks.size(); block++)
   {
     text_buffer_type text(base_name);
     for(size_type sequence = blocks[block].first; sequence <= blocks[block].second; sequence++)
     {
-      edge_type current(ENDMARKER, sequence);
-      size_type offset = offsets[sequence];
-      while(true)
+      std::vector<node_type> result = index.extract(sequence);
+      for(size_type i = 0; i < result.size(); i++)
       {
-        // Check for a sample.
-        size_type sample = gbwt.tryLocate(current);
+        if(result[i] != text[offsets[sequence] + i])
+        {
+          #pragma omp critical
+          {
+            std::cerr << "verifyExtract(): Verification failed with sequence " << sequence << ", offset " << i << std::endl;
+            std::cerr << "verifyExtract(): Expected " << text[offsets[sequence] + i] << ", got " << result[i] << std::endl;
+            failed = true;
+          }
+          break;
+        }
+      }
+      if(text[offsets[sequence] + result.size()] != ENDMARKER)
+      {
+        #pragma omp critical
+        {
+          std::cerr << "verifyExtract(): Verification failed with sequence " << sequence << ", offset " << result.size() << std::endl;
+          std::cerr << "verifyExtract(): Expected " << text[offsets[sequence] + result.size()] << ", got endmarker" << std::endl;
+          failed = true;
+        }
+      }
+    }
+  }
+
+  double seconds = readTimer() - start;
+
+  if(failed) { std::cout << "extract() verification failed" << std::endl; }
+  else { std::cout << "extract() verified in " << seconds << " seconds" << std::endl; }
+  std::cout << std::endl;
+}
+
+//------------------------------------------------------------------------------
+
+template<class GBWTType>
+void
+verifySamples(const GBWTType& index)
+{
+  double start = readTimer();
+
+  bool failed = false;
+  std::atomic<size_type> samples_found(0);
+  std::vector<range_type> blocks = Range::partition(range_type(0, index.sequences() - 1), 4 * omp_get_max_threads());
+
+  #pragma omp parallel for schedule(dynamic, 1)
+  for(size_type block = 0; block < blocks.size(); block++)
+  {
+    for(size_type sequence = blocks[block].first; sequence <= blocks[block].second; sequence++)
+    {
+      edge_type current(ENDMARKER, sequence);
+      do
+      {
+        size_type sample = index.tryLocate(current);
         if(sample != invalid_sequence())
         {
           samples_found++;
@@ -165,79 +273,38 @@ verify(const std::string& base_name)
           {
             #pragma omp critical
             {
-              std::cerr << "build_gbwt: Index verification failed with sequence " << sequence << ", offset "
-                        << (offset - offsets[sequence]) << std::endl;
-              std::cerr << "build_gbwt: Sample had sequence id " << sample << std::endl;
+              std::cerr << "verifySamples(): Verification failed with sequence " << sequence << ", position " << current << std::endl;
+              std::cerr << "verifySamples(): Sample had sequence id " << sample << std::endl;
               failed = true;
             }
             break;
           }
         }
-
-        // Verify LF().
-        if(text[offset] == ENDMARKER) { break; }
-        edge_type next = gbwt.LF(current);
-        if(next.first != text[offset])
-        {
-          #pragma omp critical
-          {
-            std::cerr << "build_gbwt: Index verification failed with sequence " << sequence << ", offset "
-                      << (offset - offsets[sequence]) << std::endl;
-            std::cerr << "build_gbwt: Expected an edge from " << current.first << " to " << text[offset]
-                      << ", ended up in " << next.first << std::endl;
-            failed = true;
-          }
-          break;
-        }
-        current = next; offset++;
+        current = index.LF(current);
       }
+      while(current.first != ENDMARKER);
     }
   }
 
-  if(samples_found != gbwt.samples())
+  if(samples_found != index.samples())
   {
-    std::cerr << "build_gbwt: Found " << samples_found << " samples, expected " << gbwt.samples() << std::endl;
+    std::cerr << "verifySamples(): Found " << samples_found << " samples, expected " << index.samples() << std::endl;
     failed = true;
   }
 
   double seconds = readTimer() - start;
 
-  if(failed) { std::cout << "Index verification failed" << std::endl; }
-  else { std::cout << "Index verified in " << seconds << " seconds" << std::endl; }
+  if(failed) { std::cout << "Sample verification failed" << std::endl; }
+  else { std::cout << "Samples verified in " << seconds << " seconds" << std::endl; }
   std::cout << std::endl;
 }
 
 //------------------------------------------------------------------------------
 
-const size_type RANDOM_SEED    = 0xDEADBEEF;
-const size_type LOCATE_QUERIES = 10000;
-const size_type MAX_LENGTH     = 100;
-
+template<class GBWTType>
 void
-verifyLocate(const std::string& base_name)
+verifyLocate(const GBWTType& index, const std::vector<SearchState>& queries)
 {
-  GBWT gbwt;
-  sdsl::load_from_file(gbwt, base_name + GBWT::EXTENSION);
-
-  std::mt19937_64 rng(RANDOM_SEED);
-  std::vector<node_type>  nodes(LOCATE_QUERIES);
-  std::vector<range_type> ranges(LOCATE_QUERIES);
-  size_type total_length = 0;
-  for(size_type i = 0; i < LOCATE_QUERIES; i++)
-  {
-    size_type node_size = 0;
-    while(node_size == 0)
-    {
-      nodes[i] = rng() % gbwt.effective();
-      if(nodes[i] > 0) { nodes[i] += gbwt.header.offset; }
-      node_size = gbwt.count(nodes[i]);
-    }
-    ranges[i].first = rng() % node_size;
-    ranges[i].second = ranges[i].first + rng() % std::min(MAX_LENGTH, node_size - ranges[i].first);
-    total_length += Range::length(ranges[i]);
-  }
-  std::cout << "Generated " << LOCATE_QUERIES << " ranges of total length " << total_length << std::endl;
-
   size_type direct_hash = FNV_OFFSET_BASIS;
   {
     double start = readTimer();
@@ -245,9 +312,9 @@ verifyLocate(const std::string& base_name)
     for(size_type i = 0; i < LOCATE_QUERIES; i++)
     {
       std::vector<size_type> result;
-      for(size_type j = ranges[i].first; j <= ranges[i].second; j++)
+      for(size_type j = queries[i].range.first; j <= queries[i].range.second; j++)
       {
-        result.push_back(gbwt.locate(nodes[i], j));
+        result.push_back(index.locate(queries[i].node, j));
       }
       removeDuplicates(result, false);
       for(size_type res : result) { direct_hash = fnv1a_hash(res, direct_hash); }
@@ -263,7 +330,7 @@ verifyLocate(const std::string& base_name)
     size_type found = 0;
     for(size_type i = 0; i < LOCATE_QUERIES; i++)
     {
-      std::vector<size_type> result = gbwt.locate(nodes[i], ranges[i]);
+      std::vector<size_type> result = index.locate(queries[i]);
       for(size_type res : result) { fast_hash = fnv1a_hash(res, fast_hash); }
       found += result.size();
     }
@@ -271,8 +338,8 @@ verifyLocate(const std::string& base_name)
     printTime("Fast locate()", found, seconds);
   }
 
-  if(direct_hash != fast_hash) { std::cout << "Verification failed" << std::endl; }
-  else { std::cout << "Verification successful" << std::endl; }
+  if(direct_hash != fast_hash) { std::cout << "locate() verification failed" << std::endl; }
+  else { std::cout << "locate() verification successful" << std::endl; }
   std::cout << std::endl;
 }
 

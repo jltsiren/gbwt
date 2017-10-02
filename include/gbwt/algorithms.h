@@ -1,4 +1,5 @@
 /*
+  Copyright (c) 2017 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -25,6 +26,8 @@
 #ifndef GBWT_ALGORITHMS_H
 #define GBWT_ALGORITHMS_H
 
+#include <map>
+
 #include <gbwt/utils.h>
 
 namespace gbwt
@@ -41,7 +44,7 @@ struct SearchState
   node_type  node;
   range_type range;
 
-  SearchState() : node(0), range(Range::empty_range()) {}
+  SearchState() : node(ENDMARKER), range(Range::empty_range()) {}
   SearchState(node_type node_id, range_type offset_range) : node(node_id), range(offset_range) {}
   SearchState(node_type node_id, size_type sp, size_type ep) : node(node_id), range(sp, ep) {}
 
@@ -60,18 +63,34 @@ struct SearchState
     Iterator  InputIterator
 */
 
+template<class GBWTType>
+SearchState
+extend(const GBWTType& index, SearchState state, node_type node)
+{
+  if(state.empty() || !(index.contains(node))) { return SearchState(); }
+  state.range = index.LF(state, node);
+  state.node = node;
+  return state;
+}
+
 template<class GBWTType, class Iterator>
 SearchState
 extend(const GBWTType& index, SearchState state, Iterator begin, Iterator end)
 {
-  while(begin != end && !(Range::empty(state.range)))
+  while(begin != end && !(state.empty()))
   {
-    if(!(index.contains(*begin))) { return SearchState(); }
-    state.range = index.LF(state, *begin);
-    state.node = *begin;
+    state = gbwt::extend(index, state, *begin);
     ++begin;
   }
   return state;
+}
+
+template<class GBWTType>
+SearchState
+find(const GBWTType& index, node_type node)
+{
+  if(!(index.contains(node))) { return SearchState(); }
+  return SearchState(node, 0, index.nodeSize(node) - 1);
 }
 
 template<class GBWTType, class Iterator>
@@ -80,11 +99,18 @@ find(const GBWTType& index, Iterator begin, Iterator end)
 {
   if(begin == end) { return SearchState(); }
 
-  if(!(index.contains(*begin))) { return SearchState(); }
-  SearchState state(*begin, 0, index.count(*begin) - 1);
+  SearchState state = gbwt::find(index, *begin);
   ++begin;
 
   return gbwt::extend(index, state, begin, end);
+}
+
+template<class GBWTType>
+SearchState
+prefix(const GBWTType& index, node_type node)
+{
+  SearchState state(ENDMARKER, 0, index.sequences() - 1);
+  return gbwt::extend(index, state, node);
 }
 
 template<class GBWTType, class Iterator>
@@ -109,7 +135,7 @@ template<class GBWTType>
 size_type
 locate(const GBWTType& index, edge_type position)
 {
-  if(!(index.contains(position.first))) { return invalid_sequence(); }
+  if(!(index.contains(position))) { return invalid_sequence(); }
 
   // No need to check for invalid_edge(), if the initial position is valid.
   while(true)
@@ -123,7 +149,7 @@ locate(const GBWTType& index, edge_type position)
 //------------------------------------------------------------------------------
 
 /*
-  If the parameters are invalid, the extraction algorithms return an empty vector.
+  If the parameters are invalid, the extraction algorithms return an empty container.
 
   Template parameters:
     GBWTType  GBWT or DynamicGBWT

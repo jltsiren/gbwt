@@ -1,4 +1,5 @@
 /*
+  Copyright (c) 2017 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -86,28 +87,95 @@ public:
 
 //------------------------------------------------------------------------------
 
+  /*
+    Low-level interface: Statistics.
+  */
+
   size_type size() const { return this->header.size; }
   bool empty() const { return (this->size() == 0); }
   size_type sequences() const { return this->header.sequences; }
   size_type sigma() const { return this->header.alphabet_size; }
   size_type effective() const { return this->header.alphabet_size - this->header.offset; }
-  size_type count(node_type node) const { return this->record(node).size(); }
+
+  size_type runs() const;     // Expensive.
+  size_type samples() const;  // Expensive.
+
+//------------------------------------------------------------------------------
+
+  /*
+    High-level interface. The queries check that the parameters are valid. Iterators
+    must be InputIterators. On error or failed search, the return values will be the
+    following:
+
+    find     empty search state
+    prefix   empty search state
+    extend   empty search state
+    locate   invalid_sequence() or empty vector
+    extract  empty vector
+  */
+
+  template<class Iterator>
+  SearchState find(Iterator begin, Iterator end) const { return gbwt::find(*this, begin, end); }
+
+  SearchState prefix(node_type node) const { return gbwt::prefix(*this, node); }
+
+  template<class Iterator>
+  SearchState prefix(Iterator begin, Iterator end) const { return gbwt::prefix(*this, begin, end); }
+
+  SearchState extend(SearchState state, node_type node) const { return gbwt::extend(*this, state, node); }
+
+  template<class Iterator>
+  SearchState extend(SearchState state, Iterator begin, Iterator end) const { return gbwt::extend(*this, state, begin, end); }
+
+  size_type locate(node_type node, size_type i) const { return gbwt::locate(*this, range_type(node, i)); }
+  size_type locate(edge_type position) const { return gbwt::locate(*this, position); }
+
+  std::vector<size_type> locate(node_type node, range_type range) const { return this->locate(SearchState(node, range)); }
+  std::vector<size_type> locate(SearchState state) const;
+
+  std::vector<node_type> extract(size_type sequence) const { return gbwt::extract(*this, sequence); }
+
+//------------------------------------------------------------------------------
+
+  /*
+    Low-level interface: Nodes. The interface assumes that node identifiers are valid.
+    This can be checked with contains().
+  */
 
   bool contains(node_type node) const
   {
     return ((node < this->sigma() && node > this->header.offset) || node == 0);
   }
 
+  bool contains(edge_type position) const
+  {
+    return (this->contains(position.first) && position.second < this->nodeSize(position.first));
+  }
+
+  bool contains(SearchState state) const
+  {
+    return (this->contains(state.node) && !(state.empty()) && state.range.second < this->nodeSize(state.node));
+  }
+
   comp_type toComp(node_type node) const { return (node == 0 ? node : node - this->header.offset); }
 
-  size_type runs() const;
-  size_type samples() const;
+  size_type nodeSize(node_type node) const { return this->record(node).size(); }
+
+  DynamicRecord& record(node_type node)
+  {
+    return this->bwt[this->toComp(node)];
+  }
+
+  const DynamicRecord& record(node_type node) const
+  {
+    return this->bwt[this->toComp(node)];
+  }
 
 //------------------------------------------------------------------------------
 
   /*
-    The interface assumes that the node identifiers are valid. They can be checked with
-    contains().
+    Low-level interface: Navigation and searching. The interface assumes that node
+    identifiers are valid. This can be checked with contains().
   */
 
   // On error: invalid_edge().
@@ -140,26 +208,25 @@ public:
     return this->record(from).LF(range, to);
   }
 
-  // Returns the sampled document identifier or invalid_sequence() if there is no sample.
-  size_type tryLocate(node_type node, size_type i) const;
-  size_type tryLocate(edge_type position) const { return this->tryLocate(position.first, position.second); }
+  // On error: Range::empty_range().
+  range_type LF(SearchState state, node_type to) const
+  {
+    return this->record(state.node).LF(state.range, to);
+  }
 
 //------------------------------------------------------------------------------
 
   /*
-    These functions get the BWT record for the given node. Because the alphabet is empty
-    in range [1..offset], we cannot simply access the BWT.
+    Low-level interface: Sequences. The interface assumes that node identifiers are
+    valid. This can be checked with contains().
   */
 
-  DynamicRecord& record(node_type node)
-  {
-    return this->bwt[this->toComp(node)];
-  }
+  // Starting position of the sequence or invalid_edge() if something fails.
+  edge_type start(size_type sequence) const { return this->LF(ENDMARKER, sequence); }
 
-  const DynamicRecord& record(node_type node) const
-  {
-    return this->bwt[this->toComp(node)];
-  }
+  // Returns the sampled document identifier or invalid_sequence() if there is no sample.
+  size_type tryLocate(node_type node, size_type i) const;
+  size_type tryLocate(edge_type position) const { return this->tryLocate(position.first, position.second); }
 
 //------------------------------------------------------------------------------
 
