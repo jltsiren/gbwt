@@ -70,6 +70,7 @@ public:
     from this->sequences().
   */
   void insert(const text_type& text);
+  void insert(const std::vector<node_type>& text);
 
   /*
     Use the above to insert the sequences in batches of up to 'batch_size' nodes. Use batch
@@ -235,11 +236,11 @@ public:
 
 //------------------------------------------------------------------------------
 
-private:
-  void copy(const DynamicGBWT& source);
-
   // Change offset or alphabet size if the new values are beyond the current values.
   void resize(size_type new_offset, size_type new_sigma);
+
+private:
+  void copy(const DynamicGBWT& source);
 
   /*
     Sort the outgoing edges and change the outranks in the runs accordingly.
@@ -247,11 +248,6 @@ private:
     as the identifiers of destination nodes are gap-encoded.
   */
   void recode();
-
-  /*
-    Insert a batch of sequences with ids (in the current input) starting from 'start_id'.
-  */
-  void insertBatch(const text_type& text, size_type start_id = 0);
 
 //------------------------------------------------------------------------------
 

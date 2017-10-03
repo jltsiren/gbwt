@@ -371,6 +371,12 @@ nextPosition(std::vector<Sequence>& seqs, const text_type&)
 }
 
 void
+nextPosition(std::vector<Sequence>& seqs, const std::vector<node_type>&)
+{
+  for(Sequence& seq : seqs) { seq.pos++; }
+}
+
+void
 nextPosition(std::vector<Sequence>& seqs, const GBWT& source)
 {
   for(size_type i = 0; i < seqs.size(); )
@@ -474,6 +480,12 @@ advancePosition(std::vector<Sequence>& seqs, const text_type& text)
 }
 
 void
+advancePosition(std::vector<Sequence>& seqs, const std::vector<node_type>& text)
+{
+  for(Sequence& seq : seqs) { seq.curr = seq.next; seq.next = text[seq.pos]; }
+}
+
+void
 advancePosition(std::vector<Sequence>& seqs, const GBWT& source)
 {
   // FIXME We could optimize further by storing the next position.
@@ -534,15 +546,21 @@ insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source)
 
 //------------------------------------------------------------------------------
 
+/*
+  Insert a batch of sequences with ids (in the current insertion) starting from 'start_id'.
+  The template parameter should be an integer vector.
+*/
+
+template<class IntegerVector>
 void
-DynamicGBWT::insertBatch(const text_type& text, size_type start_id)
+insertBatch(DynamicGBWT& index, const IntegerVector& text, size_type start_id)
 {
   double start = readTimer();
 
   if(text.empty()) { return; }
   if(text[text.size() - 1] != ENDMARKER)
   {
-    std::cerr << "DynamicGBWT::insert(): The text must end with an endmarker" << std::endl;
+    std::cerr << "insertBatch(): The text must end with an endmarker" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
@@ -551,15 +569,15 @@ DynamicGBWT::insertBatch(const text_type& text, size_type start_id)
     Increase alphabet size and decrease offset if necessary.
   */
   bool seq_start = true;
-  node_type min_node = (this->empty() ? ~(node_type)0 : this->header.offset + 1);
-  node_type max_node = (this->empty() ? 0 : this->sigma() - 1);
+  node_type min_node = (index.empty() ? ~(node_type)0 : index.header.offset + 1);
+  node_type max_node = (index.empty() ? 0 : index.sigma() - 1);
   std::vector<Sequence> seqs;
   for(size_type i = 0; i < text.size(); i++)
   {
     if(seq_start)
     {
-      seqs.push_back(Sequence(text, i, this->sequences()));
-      seq_start = false; this->header.sequences++;
+      seqs.push_back(Sequence(text, i, index.sequences()));
+      seq_start = false; index.header.sequences++;
     }
     if(text[i] == ENDMARKER) { seq_start = true; }
     else { min_node = std::min(text[i], min_node); }
@@ -567,18 +585,17 @@ DynamicGBWT::insertBatch(const text_type& text, size_type start_id)
   }
   if(Verbosity::level >= Verbosity::EXTENDED)
   {
-    std::cerr << "DynamicGBWT::insert(): Inserting sequences " << start_id
-              << " to " << (start_id + seqs.size() - 1) << std::endl;
+    std::cerr << "insertBatch(): Inserting sequences " << start_id << " to " << (start_id + seqs.size() - 1) << std::endl;
   }
   if(max_node == 0) { min_node = 1; } // No real nodes, setting offset to 0.
-  this->resize(min_node - 1, max_node + 1);
+  index.resize(min_node - 1, max_node + 1);
 
   // Insert the sequences and sort the outgoing edges.
-  size_type iterations = gbwt::insert(*this, seqs, text);
+  size_type iterations = gbwt::insert(index, seqs, text);
   if(Verbosity::level >= Verbosity::EXTENDED)
   {
     double seconds = readTimer() - start;
-    std::cerr << "DynamicGBWT::insert(): " << iterations << " iterations in " << seconds << " seconds" << std::endl;
+    std::cerr << "insertBatch(): " << iterations << " iterations in " << seconds << " seconds" << std::endl;
   }
 }
 
@@ -595,7 +612,22 @@ DynamicGBWT::insert(const text_type& text)
     }
     return;
   }
-  this->insertBatch(text, 0);
+  gbwt::insertBatch(*this, text, 0);
+  this->recode();
+}
+
+void
+DynamicGBWT::insert(const std::vector<node_type>& text)
+{
+  if(text.empty())
+  {
+    if(Verbosity::level >= Verbosity::FULL)
+    {
+      std::cerr << "DynamicGBWT::insert(): The input text is empty" << std::endl;
+    }
+    return;
+  }
+  gbwt::insertBatch(*this, text, 0);
   this->recode();
 }
 
@@ -631,7 +663,7 @@ DynamicGBWT::insert(text_buffer_type& text, size_type batch_size)
     }
     text_type batch(limit - start_offset, 0, text.width());
     for(size_type i = start_offset; i < limit; i++) { batch[i - start_offset] = text[i]; }
-    this->insertBatch(batch, this->sequences() - old_sequences);
+    gbwt::insertBatch(*this, batch, this->sequences() - old_sequences);
     start_offset = limit;
   }
 
