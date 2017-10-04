@@ -32,10 +32,17 @@ using namespace gbwt;
 
 //------------------------------------------------------------------------------
 
+const size_type MAX_ERRORS   = 100; // Do not print more error messages.
+size_type errors             = 0;
+
+const size_type RANDOM_SEED  = 0xDEADBEEF;
+const size_type QUERIES      = 20000;
+const size_type QUERY_LENGTH = 60;
+
 void printUsage(int exit_code = EXIT_SUCCESS);
 
 std::vector<size_type> startOffsets(const std::string& base_name);
-std::vector<SearchState> queryRanges(const DynamicGBWT& index);
+std::vector<std::vector<node_type>> generateQueries(const std::string& base_name);
 
 template<class GBWTType>
 void verifyExtract(const GBWTType& index, const std::string& base_name, const std::vector<size_type>& offsets);
@@ -45,6 +52,8 @@ void verifySamples(const GBWTType& index);
 
 template<class GBWTType>
 void verifyLocate(const GBWTType& index, const std::vector<SearchState>& queries);
+
+std::vector<SearchState> verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<std::vector<node_type>>& queries);
 
 //------------------------------------------------------------------------------
 
@@ -101,7 +110,7 @@ main(int argc, char** argv)
   {
     std::cout << "Verifying the index..." << std::endl;
     std::vector<size_type> offsets = startOffsets(base_name);
-    std::vector<SearchState> queries = queryRanges(dynamic_index);
+    std::vector<std::vector<node_type>> queries = generateQueries(base_name);
     std::cout << std::endl;
 
     GBWT compressed_index;
@@ -110,11 +119,14 @@ main(int argc, char** argv)
     sdsl::util::clear(dynamic_index);
     sdsl::load_from_file(dynamic_index, gbwt_name);
 
-    std::cout << "Verifying extract() in compressed GBWT..." << std::endl;
-    verifyExtract(compressed_index, base_name, offsets);
+    std::cout << "Verifying find()..." << std::endl;
+    std::vector<SearchState> results = verifyFind(compressed_index, dynamic_index, queries);
 
-    std::cout << "Verifying extract() in dynamic GBWT..." << std::endl;
-    verifyExtract(dynamic_index, base_name, offsets);
+    std::cout << "Verifying locate() in compressed GBWT..." << std::endl;
+    verifyLocate(compressed_index, results);
+
+    std::cout << "Verifying locate() in dynamic GBWT..." << std::endl;
+    verifyLocate(dynamic_index, results);
 
     std::cout << "Verifying samples in compressed GBWT..." << std::endl;
     verifySamples(compressed_index);
@@ -122,11 +134,11 @@ main(int argc, char** argv)
     std::cout << "Verifying samples in dynamic GBWT..." << std::endl;
     verifySamples(dynamic_index);
 
-    std::cout << "Verifying locate() in compressed GBWT..." << std::endl;
-    verifyLocate(compressed_index, queries);
+    std::cout << "Verifying extract() in compressed GBWT..." << std::endl;
+    verifyExtract(compressed_index, base_name, offsets);
 
-    std::cout << "Verifying locate() in dynamic GBWT..." << std::endl;
-    verifyLocate(dynamic_index, queries);
+    std::cout << "Verifying extract() in dynamic GBWT..." << std::endl;
+    verifyExtract(dynamic_index, base_name, offsets);
   }
 
   return 0;
@@ -162,31 +174,33 @@ startOffsets(const std::string& base_name)
   return offsets;
 }
 
-const size_type RANDOM_SEED    = 0xDEADBEEF;
-const size_type LOCATE_QUERIES = 10000;
-const size_type MAX_LENGTH     = 100;
-
-std::vector<SearchState>
-queryRanges(const DynamicGBWT& index)
+std::vector<std::vector<node_type>>
+generateQueries(const std::string& base_name)
 {
   std::mt19937_64 rng(RANDOM_SEED);
-  std::vector<SearchState> result(LOCATE_QUERIES);
-  size_type total_length = 0;
-  for(size_type i = 0; i < LOCATE_QUERIES; i++)
+  std::vector<std::vector<node_type>> result;
+  text_buffer_type text(base_name);
+  if(text.size() <= QUERY_LENGTH)
   {
-    size_type node_size = 0;
-    while(node_size == 0)
-    {
-      result[i].node = rng() % index.effective();
-      if(result[i].node > 0) { result[i].node += index.header.offset; }
-      node_size = index.nodeSize(result[i].node);
-    }
-    result[i].range.first = rng() % node_size;
-    result[i].range.second = result[i].range.first + rng() % std::min(MAX_LENGTH, node_size - result[i].range.first);
-    total_length += Range::length(result[i].range);
+    std::cerr << "generateQueries(): Text length " << text.size() << " is too small for query length " << QUERY_LENGTH << std::endl;
+    return result;
   }
 
-  std::cout << "Generated " << LOCATE_QUERIES << " ranges of total length " << total_length << std::endl;
+  size_type attempts = 0;
+  while(result.size() < QUERIES && attempts < 2 * QUERIES)
+  {
+    size_type start_offset = rng() % (text.size() - QUERY_LENGTH);  // We do not want queries containing the final endmarker.
+    std::vector<node_type> candidate(text.begin() + start_offset, text.begin() + start_offset + QUERY_LENGTH);
+    bool ok = true;
+    for(node_type node : candidate)
+    {
+      if(node == ENDMARKER) { ok = false; break; }
+    }
+    if(ok) { result.push_back(candidate); }
+    attempts++;
+  }
+
+  std::cout << "Generated " << result.size() << " queries of total length " << (result.size() * QUERY_LENGTH) << std::endl;
   return result;
 }
 
@@ -198,11 +212,14 @@ verifyExtract(const GBWTType& index, const std::string& base_name, const std::ve
 {
   double start = readTimer();
 
-  bool failed = false;
+  size_type initial_errors = errors;
   if(index.sequences() != offsets.size())
   {
-    std::cerr << "verifyExtract(): Expected " << offsets.size() << " sequences, got " << index.sequences() << std::endl;
-    failed = true;
+    errors++;
+    if(errors <= MAX_ERRORS)
+    {
+      std::cerr << "verifyExtract(): Expected " << offsets.size() << " sequences, got " << index.sequences() << std::endl;
+    }
   }
   std::vector<range_type> blocks = Range::partition(range_type(0, offsets.size() - 1), 4 * omp_get_max_threads());
 
@@ -219,9 +236,12 @@ verifyExtract(const GBWTType& index, const std::string& base_name, const std::ve
         {
           #pragma omp critical
           {
-            std::cerr << "verifyExtract(): Verification failed with sequence " << sequence << ", offset " << i << std::endl;
-            std::cerr << "verifyExtract(): Expected " << text[offsets[sequence] + i] << ", got " << result[i] << std::endl;
-            failed = true;
+            errors++;
+            if(errors <= MAX_ERRORS)
+            {
+              std::cerr << "verifyExtract(): Verification failed with sequence " << sequence << ", offset " << i << std::endl;
+              std::cerr << "verifyExtract(): Expected " << text[offsets[sequence] + i] << ", got " << result[i] << std::endl;
+            }
           }
           break;
         }
@@ -230,9 +250,12 @@ verifyExtract(const GBWTType& index, const std::string& base_name, const std::ve
       {
         #pragma omp critical
         {
-          std::cerr << "verifyExtract(): Verification failed with sequence " << sequence << ", offset " << result.size() << std::endl;
-          std::cerr << "verifyExtract(): Expected " << text[offsets[sequence] + result.size()] << ", got endmarker" << std::endl;
-          failed = true;
+          errors++;
+          if(errors <= MAX_ERRORS)
+          {
+            std::cerr << "verifyExtract(): Verification failed with sequence " << sequence << ", offset " << result.size() << std::endl;
+            std::cerr << "verifyExtract(): Expected " << text[offsets[sequence] + result.size()] << ", got endmarker" << std::endl;
+          }
         }
       }
     }
@@ -240,7 +263,7 @@ verifyExtract(const GBWTType& index, const std::string& base_name, const std::ve
 
   double seconds = readTimer() - start;
 
-  if(failed) { std::cout << "extract() verification failed" << std::endl; }
+  if(errors > initial_errors) { std::cout << "extract() verification failed" << std::endl; }
   else { std::cout << "extract() verified in " << seconds << " seconds" << std::endl; }
   std::cout << std::endl;
 }
@@ -253,7 +276,7 @@ verifySamples(const GBWTType& index)
 {
   double start = readTimer();
 
-  bool failed = false;
+  size_type initial_errors = errors;
   std::atomic<size_type> samples_found(0);
   std::vector<range_type> blocks = Range::partition(range_type(0, index.sequences() - 1), 4 * omp_get_max_threads());
 
@@ -273,9 +296,12 @@ verifySamples(const GBWTType& index)
           {
             #pragma omp critical
             {
-              std::cerr << "verifySamples(): Verification failed with sequence " << sequence << ", position " << current << std::endl;
-              std::cerr << "verifySamples(): Sample had sequence id " << sample << std::endl;
-              failed = true;
+              errors++;
+              if(errors <= MAX_ERRORS)
+              {
+                std::cerr << "verifySamples(): Verification failed with sequence " << sequence << ", position " << current << std::endl;
+                std::cerr << "verifySamples(): Sample had sequence id " << sample << std::endl;
+              }
             }
             break;
           }
@@ -288,13 +314,16 @@ verifySamples(const GBWTType& index)
 
   if(samples_found != index.samples())
   {
-    std::cerr << "verifySamples(): Found " << samples_found << " samples, expected " << index.samples() << std::endl;
-    failed = true;
+    errors++;
+    if(errors <= MAX_ERRORS)
+    {
+      std::cerr << "verifySamples(): Found " << samples_found << " samples, expected " << index.samples() << std::endl;
+    }
   }
 
   double seconds = readTimer() - start;
 
-  if(failed) { std::cout << "Sample verification failed" << std::endl; }
+  if(errors > initial_errors) { std::cout << "Sample verification failed" << std::endl; }
   else { std::cout << "Samples verified in " << seconds << " seconds" << std::endl; }
   std::cout << std::endl;
 }
@@ -309,12 +338,12 @@ verifyLocate(const GBWTType& index, const std::vector<SearchState>& queries)
   {
     double start = readTimer();
     size_type found = 0;
-    for(size_type i = 0; i < LOCATE_QUERIES; i++)
+    for(SearchState query : queries)
     {
       std::vector<size_type> result;
-      for(size_type j = queries[i].range.first; j <= queries[i].range.second; j++)
+      for(size_type i = query.range.first; i <= query.range.second; i++)
       {
-        result.push_back(index.locate(queries[i].node, j));
+        result.push_back(index.locate(query.node, i));
       }
       removeDuplicates(result, false);
       for(size_type res : result) { direct_hash = fnv1a_hash(res, direct_hash); }
@@ -328,9 +357,9 @@ verifyLocate(const GBWTType& index, const std::vector<SearchState>& queries)
   {
     double start = readTimer();
     size_type found = 0;
-    for(size_type i = 0; i < LOCATE_QUERIES; i++)
+    for(SearchState query : queries)
     {
-      std::vector<size_type> result = index.locate(queries[i]);
+      std::vector<size_type> result = index.locate(query);
       for(size_type res : result) { fast_hash = fnv1a_hash(res, fast_hash); }
       found += result.size();
     }
@@ -341,6 +370,53 @@ verifyLocate(const GBWTType& index, const std::vector<SearchState>& queries)
   if(direct_hash != fast_hash) { std::cout << "locate() verification failed" << std::endl; }
   else { std::cout << "locate() verification successful" << std::endl; }
   std::cout << std::endl;
+}
+
+//------------------------------------------------------------------------------
+
+std::vector<SearchState>
+verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<std::vector<node_type>>& queries)
+{
+  std::vector<SearchState> results(queries.size());
+  size_type total_length = 0;
+  size_type initial_errors = errors;
+
+  {
+    double start = readTimer();
+    for(size_type i = 0; i < queries.size(); i++)
+    {
+      results[i] = compressed_index.find(queries[i].begin(), queries[i].end());
+      total_length += results[i].size();
+    }
+    double seconds = readTimer() - start;
+    printTime("Compressed GBWT", queries.size(), seconds);
+  }
+
+  {
+    double start = readTimer();
+    for(size_type i = 0; i < queries.size(); i++)
+    {
+      SearchState result = dynamic_index.find(queries[i].begin(), queries[i].end());
+      if(result != results[i])
+      {
+        errors++;
+        if(errors <= MAX_ERRORS)
+        {
+          std::cerr << "verifyFind(): Mismatching results with query " << i << std::endl;
+          std::cerr << "verifyFind(): Compressed: " << results[i] << ", dynamic: " << result << std::endl;
+        }
+      }
+    }
+    double seconds = readTimer() - start;
+    printTime("Dynamic GBWT", queries.size(), seconds);
+  }
+
+  std::cout << "Generated " << results.size() << " ranges of total length " << total_length << std::endl;
+  if(errors > initial_errors) { std::cout << "find() verification failed" << std::endl; }
+  else { std::cout << "find() verification successful" << std::endl; }
+  std::cout << std::endl;
+
+  return results;
 }
 
 //------------------------------------------------------------------------------

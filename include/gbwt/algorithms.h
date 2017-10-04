@@ -50,7 +50,12 @@ struct SearchState
 
   size_type size() const { return Range::length(this->range); }
   bool empty() const { return Range::empty(this->range); }
+
+  bool operator==(SearchState another) const { return (this->node == another.node && this->range == another.range); }
+  bool operator!=(SearchState another) const { return (this->node != another.node || this->range != another.range); }
 };
+
+std::ostream& operator<<(std::ostream& out, SearchState state);
 
 //------------------------------------------------------------------------------
 
