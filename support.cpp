@@ -155,6 +155,7 @@ DynamicRecord::LF(range_type range, node_type to) const
   }
   range.first = result - (run.first == outrank ? offset - range.first : 0);
 
+  range.second++; // We compute LF(range.second + 1, to) - 1.
   while(iter != body.end() && offset < range.second)
   {
     ++iter;
@@ -163,7 +164,7 @@ DynamicRecord::LF(range_type range, node_type to) const
     if(run.first == outrank) { result += run.second; }
     offset += run.second;
   }
-  range.second = result - (run.first == outrank ? offset - range.second : 0);
+  range.second = result - (run.first == outrank ? offset - range.second : 0) - 1;
 
   return range;
 }
@@ -351,8 +352,10 @@ CompressedRecord::LF(range_type range, node_type to) const
 
   while(!(iter.end()) && iter.offset() < range.first) { ++iter; }
   range.first = iter.rankAt(range.first);
+
+  range.second++; // We compute LF(range.second + 1, to) - 1.
   while(!(iter.end()) && iter.offset() < range.second) { ++iter; }
-  range.second = iter.rankAt(range.second);
+  range.second = iter.rankAt(range.second) - 1;
 
   return range;
 }

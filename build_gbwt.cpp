@@ -139,6 +139,10 @@ main(int argc, char** argv)
 
     std::cout << "Verifying extract() in dynamic GBWT..." << std::endl;
     verifyExtract(dynamic_index, base_name, offsets);
+
+    if(errors > 0) { std::cout << "Index verification failed" << std::endl; }
+    else { std::cout << "Index verification successful" << std::endl; }
+    std::cout << std::endl;
   }
 
   return 0;
@@ -340,6 +344,7 @@ verifyLocate(const GBWTType& index, const std::vector<SearchState>& queries)
     size_type found = 0;
     for(SearchState query : queries)
     {
+      if(query.empty()) { continue; }
       std::vector<size_type> result;
       for(size_type i = query.range.first; i <= query.range.second; i++)
       {
@@ -367,7 +372,7 @@ verifyLocate(const GBWTType& index, const std::vector<SearchState>& queries)
     printTime("Fast locate()", found, seconds);
   }
 
-  if(direct_hash != fast_hash) { std::cout << "locate() verification failed" << std::endl; }
+  if(direct_hash != fast_hash) { errors++; std::cout << "locate() verification failed" << std::endl; }
   else { std::cout << "locate() verification successful" << std::endl; }
   std::cout << std::endl;
 }
