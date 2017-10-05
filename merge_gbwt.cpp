@@ -39,30 +39,36 @@ size_type insert(DynamicGBWT& index, const std::string input_name, size_type bat
 int
 main(int argc, char** argv)
 {
-  if(argc < 3) { printUsage(); }
+  if(argc < 5) { printUsage(); }
 
   size_type batch_size = DynamicGBWT::MERGE_BATCH_SIZE;
+  std::string output;
   int c = 0;
-  while((c = getopt(argc, argv, "b:")) != -1)
+  while((c = getopt(argc, argv, "b:o:")) != -1)
   {
     switch(c)
     {
     case 'b':
       batch_size = std::stoul(optarg); break;
+    case 'o':
+      output = optarg; break;
     case '?':
       std::exit(EXIT_FAILURE);
     default:
       std::exit(EXIT_FAILURE);
     }
   }
-  if(optind + 1 >= argc) { printUsage(EXIT_FAILURE); }
+
+  size_type input_files = argc - optind;
+  size_type total_inserted = 0;
   std::string first_input = argv[optind]; optind++;
-  std::string output = argv[argc - 1];
+  if(input_files <= 1 || output.empty()) { printUsage(EXIT_FAILURE); }
 
   std::cout << "GBWT merging" << std::endl;
   std::cout << std::endl;
 
-  printHeader("Output"); std::cout << output << std::endl;
+  printHeader("Input files"); std::cout << input_files << std::endl;
+  printHeader("Output name"); std::cout << output << std::endl;
   printHeader("Batch size"); std::cout << batch_size << std::endl;
   std::cout << std::endl;
 
@@ -72,11 +78,11 @@ main(int argc, char** argv)
   sdsl::load_from_file(index, first_input + DynamicGBWT::EXTENSION);
   printStatistics(index, first_input);
 
-  size_type total_inserted = 0;
-  while(optind + 1 < argc)
+  while(optind < argc)
   {
-    std::string input_name = argv[optind]; optind++;
+    std::string input_name = argv[optind];
     total_inserted += insert(index, input_name, batch_size);
+    optind++;
   }
 
   sdsl::store_to_file(index, output + DynamicGBWT::EXTENSION);
@@ -97,9 +103,9 @@ main(int argc, char** argv)
 void
 printUsage(int exit_code)
 {
-  std::cerr << "Usage: merge_gbwt [options] input1 [input2 ...] output" << std::endl;
-  std::cerr << "  -b N  Use batches of N sequences for merging (default "
-            << DynamicGBWT::MERGE_BATCH_SIZE << ")" << std::endl;
+  std::cerr << "Usage: merge_gbwt [options] -o output input1 input2 [input3 ...]" << std::endl;
+  std::cerr << "  -b N  Use batches of N sequences for merging (default: " << DynamicGBWT::MERGE_BATCH_SIZE << ")" << std::endl;
+  std::cerr << "  -o X  Use X as the base name for output (required)" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Use base names for the inputs and the output." << std::endl;
   std::cerr << std::endl;

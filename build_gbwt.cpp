@@ -64,13 +64,18 @@ main(int argc, char** argv)
 
   size_type batch_size = DynamicGBWT::INSERT_BATCH_SIZE / MILLION;
   bool verify_index = false;
+  std::string index_base, input_base, output_base;
   int c = 0;
-  while((c = getopt(argc, argv, "b:v")) != -1)
+  while((c = getopt(argc, argv, "b:i:o:v")) != -1)
   {
     switch(c)
     {
     case 'b':
       batch_size = std::stoul(optarg); break;
+    case 'i':
+      index_base = optarg; break;
+    case 'o':
+      output_base = optarg; break;
     case 'v':
       verify_index = true; break;
     case '?':
@@ -79,38 +84,61 @@ main(int argc, char** argv)
       std::exit(EXIT_FAILURE);
     }
   }
-  if(optind >= argc) { printUsage(EXIT_FAILURE); }
-  std::string base_name = argv[optind];
+
+  size_type input_files = argc - optind;
+  size_type input_size = 0;
+  if(index_base.empty() && output_base.empty() && input_files == 1) { output_base = argv[optind]; }
+  if(input_files == 0 || output_base.empty()) { printUsage(EXIT_FAILURE); }
+  if(verify_index && !(input_files == 1 && index_base.empty()))
+  {
+    std::cerr << "build_gbwt: Verification only works with indexes for a single file" << std::endl;
+    verify_index = false;
+  }
 
   std::cout << "GBWT construction" << std::endl;
   std::cout << std::endl;
 
-  printHeader("Base name"); std::cout << base_name << std::endl;
+  if(!(index_base.empty())) { printHeader("Index name"); std::cout << index_base << std::endl; }
+  printHeader("Input files"); std::cout << input_files << std::endl;
+  printHeader("Output name"); std::cout << output_base << std::endl;
   if(batch_size != 0) { printHeader("Batch size"); std::cout << batch_size << " million" << std::endl; }
   std::cout << std::endl;
 
   double start = readTimer();
 
   DynamicGBWT dynamic_index;
-  text_buffer_type input(base_name);
-  dynamic_index.insert(input, batch_size * MILLION);
+  if(!(index_base.empty()))
+  {
+    sdsl::load_from_file(dynamic_index, index_base + DynamicGBWT::EXTENSION);
+    printStatistics(dynamic_index, index_base);
+  }
 
-  std::string gbwt_name = base_name + DynamicGBWT::EXTENSION;
+  while(optind < argc)
+  {
+    input_base = argv[optind];
+    printHeader("Input name"); std::cout << input_base << std::endl;
+    text_buffer_type input(input_base);
+    input_size += input.size();
+    dynamic_index.insert(input, batch_size * MILLION);
+    optind++;
+  }
+  std::cout << std::endl;
+
+  std::string gbwt_name = output_base + DynamicGBWT::EXTENSION;
   sdsl::store_to_file(dynamic_index, gbwt_name);
+  printStatistics(dynamic_index, output_base);
 
   double seconds = readTimer() - start;
 
-  printStatistics(dynamic_index, base_name);
-
-  std::cout << "Indexed " << dynamic_index.size() << " nodes in " << seconds << " seconds (" << (dynamic_index.size() / seconds) << " nodes/second)" << std::endl;
+  std::cout << "Indexed " << input_size << " nodes in " << seconds << " seconds (" << (input_size / seconds) << " nodes/second)" << std::endl;
   std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;
   std::cout << std::endl;
 
   if(verify_index)
   {
     std::cout << "Verifying the index..." << std::endl;
-    std::vector<size_type> offsets = startOffsets(base_name);
-    std::vector<std::vector<node_type>> queries = generateQueries(base_name);
+    std::vector<size_type> offsets = startOffsets(input_base);
+    std::vector<std::vector<node_type>> queries = generateQueries(input_base);
     std::cout << std::endl;
 
     GBWT compressed_index;
@@ -135,10 +163,10 @@ main(int argc, char** argv)
     verifySamples(dynamic_index);
 
     std::cout << "Verifying extract() in compressed GBWT..." << std::endl;
-    verifyExtract(compressed_index, base_name, offsets);
+    verifyExtract(compressed_index, input_base, offsets);
 
     std::cout << "Verifying extract() in dynamic GBWT..." << std::endl;
-    verifyExtract(dynamic_index, base_name, offsets);
+    verifyExtract(dynamic_index, input_base, offsets);
 
     if(errors > 0) { std::cout << "Index verification failed" << std::endl; }
     else { std::cout << "Index verification successful" << std::endl; }
@@ -153,9 +181,10 @@ main(int argc, char** argv)
 void
 printUsage(int exit_code)
 {
-  std::cerr << "Usage: build_gbwt [options] base_name" << std::endl;
-  std::cerr << "  -b N  Insert in batches of N million nodes (default "
-            << (DynamicGBWT::INSERT_BATCH_SIZE / MILLION) << ")" << std::endl;
+  std::cerr << "Usage: build_gbwt [options] input1 [input2 ...]" << std::endl;
+  std::cerr << "  -b N  Insert in batches of N million nodes (default: " << (DynamicGBWT::INSERT_BATCH_SIZE / MILLION) << ")" << std::endl;
+  std::cerr << "  -i X  Insert the sequences into an existing index with base name X" << std::endl;
+  std::cerr << "  -o X  Use base name X for output (default: the only input)" << std::endl;
   std::cerr << "  -v    Verify the index after construction" << std::endl;
   std::cerr << std::endl;
 
