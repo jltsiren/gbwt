@@ -47,6 +47,8 @@ size_type totalLength(const std::vector<SearchState>& states);
 template<class GBWTType>
 void locateBenchmark(const GBWTType& index, const std::vector<SearchState>& queries);
 
+void extractBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index);
+
 //------------------------------------------------------------------------------
 
 int
@@ -81,6 +83,8 @@ main(int argc, char** argv)
 
   locateBenchmark(compressed_index, results);
   locateBenchmark(dynamic_index, results);
+
+  extractBenchmark(compressed_index, dynamic_index);
 
   double seconds = readTimer() - start;
   std::cout << "Benchmarks completed in " << seconds << " seconds" << std::endl;
@@ -214,6 +218,36 @@ locateBenchmark(const GBWTType& index, const std::vector<SearchState>& queries)
     printTime("Fast", found, seconds);
   }
 
+  std::cout << std::endl;
+}
+
+//------------------------------------------------------------------------------
+
+template<class GBWTType>
+void
+extractBenchmark(const GBWTType& index)
+{
+  double start = readTimer();
+  size_type total_length = 0;
+  for(size_type i = 0; i < index.sequences(); i++)
+  {
+    std::vector<node_type> sequence = index.extract(i);
+    total_length += sequence.size() + 1;
+  }
+  double seconds = readTimer() - start;
+  printTime(indexType(index), index.sequences(), seconds);
+  if(total_length != index.size())
+  {
+    std::cerr << "extractBenchmark(): " << indexType(index) << ": Total length " << total_length << ", expected " << index.size() << std::endl;
+  }
+}
+
+void
+extractBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index)
+{
+  std::cout << "extract() benchmarks:" << std::endl;
+  extractBenchmark(compressed_index);
+  extractBenchmark(dynamic_index);
   std::cout << std::endl;
 }
 
