@@ -386,8 +386,7 @@ nextPosition(std::vector<Sequence>& seqs, const GBWT& source)
     CompressedRecordFullIterator iter(current);
     while(i < seqs.size() && seqs[i].curr == curr)
     {
-      while(iter.offset() <= seqs[i].pos) { ++iter; }
-      seqs[i].pos = iter.rank() - (iter.offset() - seqs[i].pos);
+      seqs[i].pos = iter.rankAt(seqs[i].pos);
       i++;
     }
   }

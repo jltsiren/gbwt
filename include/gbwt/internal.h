@@ -286,11 +286,19 @@ struct CompressedRecordRankIterator
   size_type offset() const { return this->record_offset; }
   size_type rank() const { return this->result; }
 
-  // Intended for positions i covered by the current run.
-  size_type rankAt(size_type i) const
+  // Intended for positions i covered by or after the current run. May advance the iterator.
+  size_type rankAt(size_type i)
   {
+    while(this->offset() < i && !(this->end()))
+    {
+      this->curr_offset = this->next_offset;
+      this->run = this->decoder.read(this->record.body, this->next_offset);
+      this->record_offset += this->run.second;
+      if(this->run.first == this->value) { this->result += this->run.second; }
+    }
+
     size_type temp = this->rank();
-    if(i < this->offset() && this->run.first == value) { temp -= (this->offset() - i); }
+    if(i < this->offset() && this->run.first == this->value) { temp -= (this->offset() - i); }
     return temp;
   }
 
@@ -337,6 +345,38 @@ struct CompressedRecordFullIterator
   size_type rank(rank_type outrank) const { return this->ranks[outrank].second; }
   edge_type edge() const { return this->edge(this->run.first); }
   edge_type edge(rank_type outrank) const { return this->ranks[outrank]; }
+
+  // Intended for positions i covered by or after the current run. May advance the iterator.
+  size_type rankAt(size_type i)
+  {
+    while(this->offset() <= i)  // We need <= to get BWT[i].
+    {
+      if(this->end()) { return invalid_offset(); }
+      this->curr_offset = this->next_offset;
+      this->run = this->decoder.read(this->record.body, this->next_offset);
+      this->record_offset += this->run.second;
+      this->ranks[this->run.first].second += this->run.second;
+    }
+
+    return this->rank() - (this->offset() - i);
+  }
+
+  // Intended for positions i covered by or after the current run. May advance the iterator.
+  edge_type edgeAt(size_type i)
+  {
+    while(this->offset() <= i)  // We need <= to get BWT[i].
+    {
+      if(this->end()) { return invalid_edge(); }
+      this->curr_offset = this->next_offset;
+      this->run = this->decoder.read(this->record.body, this->next_offset);
+      this->record_offset += this->run.second;
+      this->ranks[this->run.first].second += this->run.second;
+    }
+
+    edge_type temp = this->edge();
+    temp.second -= (this->offset() - i);
+    return temp;
+  }
 
   const CompressedRecord& record;
   Run                     decoder;

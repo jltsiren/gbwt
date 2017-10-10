@@ -301,33 +301,19 @@ CompressedRecord::LF(size_type i) const
 {
   if(this->outdegree() == 0) { return invalid_edge(); }
 
-  for(CompressedRecordFullIterator iter(*this); !(iter.end()); ++iter)
-  {
-    if(iter.offset() > i)
-    {
-      edge_type result = iter.edge(); result.second -= (iter.offset() - i);
-      return result;
-    }
-  }
-  return invalid_edge();
+  CompressedRecordFullIterator iter(*this);
+  return iter.edgeAt(i);
 }
 
-// FIXME This is almost the same as LF(i)...
 edge_type
 CompressedRecord::runLF(size_type i, size_type& run_end) const
 {
   if(this->outdegree() == 0) { return invalid_edge(); }
 
-  for(CompressedRecordFullIterator iter(*this); !(iter.end()); ++iter)
-  {
-    if(iter.offset() > i)
-    {
-      edge_type result = iter.edge(); result.second -= (iter.offset() - i);
-      run_end = iter.offset() - 1;
-      return result;
-    }
-  }
-  return invalid_edge();
+  CompressedRecordFullIterator iter(*this);
+  edge_type result = iter.edgeAt(i);
+  if(result != invalid_edge()) { run_end = iter.offset() - 1; }
+  return result;
 }
 
 size_type
@@ -336,8 +322,6 @@ CompressedRecord::LF(size_type i, node_type to) const
   size_type outrank = this->edgeTo(to);
   if(outrank >= this->outdegree()) { return invalid_offset(); }
   CompressedRecordRankIterator iter(*this, outrank);
-
-  while(!(iter.end()) && iter.offset() < i) { ++iter; }
   return iter.rankAt(i);
 }
 
@@ -349,13 +333,8 @@ CompressedRecord::LF(range_type range, node_type to) const
   size_type outrank = this->edgeTo(to);
   if(outrank >= this->outdegree()) { return Range::empty_range(); }
   CompressedRecordRankIterator iter(*this, outrank);
-
-  while(!(iter.end()) && iter.offset() < range.first) { ++iter; }
   range.first = iter.rankAt(range.first);
-
-  range.second++; // We compute LF(range.second + 1, to) - 1.
-  while(!(iter.end()) && iter.offset() < range.second) { ++iter; }
-  range.second = iter.rankAt(range.second) - 1;
+  range.second = iter.rankAt(range.second + 1) - 1;
 
   return range;
 }
