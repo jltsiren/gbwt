@@ -1,4 +1,5 @@
 /*
+  Copyright (c) 2017 Jouni Siren
   Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -39,8 +40,12 @@ namespace gbwt
 /*
   GBWT file header.
 
+  Version 1:
+  - The first proper version.
+  - Identical to version 0.
+
   Version 0:
-  - Current version.
+  - Preliminary version.
 */
 
 struct GBWTHeader
@@ -56,7 +61,7 @@ struct GBWTHeader
   std::uint64_t flags;
 
   const static std::uint32_t TAG = 0x6B376B37;
-  const static std::uint32_t VERSION = 0;
+  const static std::uint32_t VERSION = Version::GBWT_VERSION;
   const static std::uint32_t MIN_VERSION = 0;
 
   GBWTHeader();

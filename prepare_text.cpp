@@ -1,4 +1,5 @@
 /*
+  Copyright (c) 2017 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -32,6 +33,8 @@ using namespace gbwt;
 
 //------------------------------------------------------------------------------
 
+const std::string tool_name = "Input transformation";
+
 void printUsage(int exit_code = EXIT_SUCCESS);
 
 //------------------------------------------------------------------------------
@@ -58,8 +61,7 @@ main(int argc, char** argv)
   if(optind + 1 >= argc) { printUsage(EXIT_FAILURE); }
   std::string input_name = argv[optind], output_name = argv[optind + 1];
 
-  std::cout << "Preparing the text for indexing" << std::endl;
-  std::cout << std::endl;
+  Version::print(std::cout, tool_name);
 
   printHeader("Input"); std::cout << input_name << std::endl;
   printHeader("Output"); std::cout << output_name << std::endl;
@@ -112,6 +114,8 @@ main(int argc, char** argv)
 void
 printUsage(int exit_code)
 {
+  Version::print(std::cerr, tool_name);
+
   std::cerr << "Usage: prepare_text input output" << std::endl;
   std::cerr << "  -m N  Read up to N sequences" << std::endl;
   std::cerr << std::endl;

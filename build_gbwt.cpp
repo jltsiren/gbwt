@@ -32,6 +32,8 @@ using namespace gbwt;
 
 //------------------------------------------------------------------------------
 
+const std::string tool_name = "GBWT construction";
+
 const size_type MAX_ERRORS   = 100; // Do not print more error messages.
 size_type errors             = 0;
 
@@ -86,8 +88,7 @@ main(int argc, char** argv)
     verify_index = false;
   }
 
-  std::cout << "GBWT construction" << std::endl;
-  std::cout << std::endl;
+  Version::print(std::cout, tool_name);
 
   if(!(index_base.empty())) { printHeader("Index name"); std::cout << index_base << std::endl; }
   printHeader("Input files"); std::cout << input_files << std::endl;
@@ -155,6 +156,8 @@ main(int argc, char** argv)
 void
 printUsage(int exit_code)
 {
+  Version::print(std::cerr, tool_name);
+
   std::cerr << "Usage: build_gbwt [options] input1 [input2 ...]" << std::endl;
   std::cerr << "  -b N  Insert in batches of N million nodes (default: " << (DynamicGBWT::INSERT_BATCH_SIZE / MILLION) << ")" << std::endl;
   std::cerr << "  -i X  Insert the sequences into an existing index with base name X" << std::endl;

@@ -1,4 +1,5 @@
 /*
+  Copyright (c) 2017 Jouni Siren
   Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -192,6 +193,20 @@ struct Verbosity
   const static size_type EXTENDED = 2;
   const static size_type DEFAULT  = 3;
   const static size_type FULL     = 3;
+};
+
+//------------------------------------------------------------------------------
+
+struct Version
+{
+  static std::string str(bool verbose = false);
+  static void print(std::ostream& out, const std::string& tool_name, bool verbose = false, size_type new_lines = 2);
+
+  const static size_type MAJOR_VERSION = 0;
+  const static size_type MINOR_VERSION = 1;
+  const static size_type PATCH_VERSION = 0;
+
+  const static size_type GBWT_VERSION  = 1;
 };
 
 //------------------------------------------------------------------------------

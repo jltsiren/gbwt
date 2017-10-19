@@ -31,16 +31,15 @@ using namespace gbwt;
 
 //------------------------------------------------------------------------------
 
+const std::string tool_name = "GBWT benchmark";
+
 const size_type RANDOM_SEED  = 0xDEADBEEF;
 const size_type QUERIES      = 20000;
 const size_type QUERY_LENGTH = 60;
 
 void printUsage(int exit_code = EXIT_SUCCESS);
 
-std::vector<std::vector<node_type>> generateQueries(const std::string& base_name);
-
-template<class GBWTType>
-std::vector<SearchState> findBenchmark(const GBWTType& index, const std::vector<std::vector<node_type>>& queries);
+std::vector<SearchState> findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& base_name);
 
 size_type totalLength(const std::vector<SearchState>& states);
 
@@ -57,8 +56,7 @@ main(int argc, char** argv)
   if(argc < 3) { printUsage(); }
   std::string index_base = argv[1], query_base = argv[2];
 
-  std::cout << "GBWT benchmark" << std::endl;
-  std::cout << std::endl;
+  Version::print(std::cout, tool_name);
 
   printHeader("Index name"); std::cout << index_base << std::endl;
   printHeader("Query name"); std::cout << query_base << std::endl;
@@ -74,12 +72,7 @@ main(int argc, char** argv)
   sdsl::load_from_file(dynamic_index, index_base + DynamicGBWT::EXTENSION);
   printStatistics(dynamic_index, index_base);
 
-  std::cout << "find() benchmarks:" << std::endl;
-  std::vector<std::vector<node_type>> queries = generateQueries(query_base);
-  std::vector<SearchState> results = findBenchmark(compressed_index, queries);
-  findBenchmark(dynamic_index, queries);
-  std::cout << results.size() << " ranges of total length " << totalLength(results) << std::endl;
-  std::cout << std::endl;
+  std::vector<SearchState> results = findBenchmark(compressed_index, dynamic_index, query_base);
 
   locateBenchmark(compressed_index, results);
   locateBenchmark(dynamic_index, results);
@@ -98,6 +91,8 @@ main(int argc, char** argv)
 void
 printUsage(int exit_code)
 {
+  Version::print(std::cerr, tool_name);
+
   std::cerr << "Usage: benchmark index_base query_base" << std::endl;
   std::cerr << std::endl;
 
@@ -164,19 +159,42 @@ totalLength(const std::vector<SearchState>& states)
 //------------------------------------------------------------------------------
 
 template<class GBWTType>
-std::vector<SearchState>
-findBenchmark(const GBWTType& index, const std::vector<std::vector<node_type>>& queries)
+size_type
+findBenchmark(const GBWTType& index, const std::vector<std::vector<node_type>>& queries, std::vector<SearchState>& results)
 {
-  std::vector<SearchState> results(queries.size());
-
   double start = readTimer();
+  size_type total_length = 0;
   for(size_type i = 0; i < queries.size(); i++)
   {
     results[i] = index.find(queries[i].begin(), queries[i].end());
+    total_length += Range::length(results[i]);
   }
   double seconds = readTimer() - start;
-
   printTime(indexType(index), queries.size(), seconds);
+  return total_length;
+}    
+
+std::vector<SearchState>
+findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& base_name)
+{
+  std::cout << "find() benchmarks:" << std::endl;
+
+  std::vector<std::vector<node_type>> queries = generateQueries(base_name);
+  std::vector<SearchState> results(queries.size());
+
+  size_type compressed_length = findBenchmark(compressed_index, queries, results);
+  size_type dynamic_length = findBenchmark(dynamic_index, queries, results);
+
+  if(compressed_length != dynamic_length)
+  {
+    std::cerr << "findBenchmark(): Total length mismatch: "
+              << compressed_length << " (" << indexType(compressed_index) << "), "
+              << dynamic_length << " (" << indexType(dynamic_index) << ")" << std::endl;
+  }
+
+  std::cout << results.size() << " ranges of total length " << compressed_length << std::endl;
+  std::cout << std::endl;
+
   return results;
 }
 

@@ -1,4 +1,5 @@
 /*
+  Copyright (c) 2017 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -29,6 +30,8 @@
 using namespace gbwt;
 
 //------------------------------------------------------------------------------
+
+const std::string tool_name = "GBWT merging";
 
 void printUsage(int exit_code = EXIT_SUCCESS);
 
@@ -64,8 +67,7 @@ main(int argc, char** argv)
   std::string first_input = argv[optind]; optind++;
   if(input_files <= 1 || output.empty()) { printUsage(EXIT_FAILURE); }
 
-  std::cout << "GBWT merging" << std::endl;
-  std::cout << std::endl;
+  Version::print(std::cout, tool_name);
 
   printHeader("Input files"); std::cout << input_files << std::endl;
   printHeader("Output name"); std::cout << output << std::endl;
@@ -103,6 +105,8 @@ main(int argc, char** argv)
 void
 printUsage(int exit_code)
 {
+  Version::print(std::cerr, tool_name);
+
   std::cerr << "Usage: merge_gbwt [options] -o output input1 input2 [input3 ...]" << std::endl;
   std::cerr << "  -b N  Use batches of N sequences for merging (default: " << DynamicGBWT::MERGE_BATCH_SIZE << ")" << std::endl;
   std::cerr << "  -o X  Use X as the base name for output (required)" << std::endl;
