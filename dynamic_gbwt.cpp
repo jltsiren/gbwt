@@ -772,7 +772,7 @@ DynamicGBWT::locate(SearchState state) const
   {
     size_type tail = 0;
     node_type curr = invalid_node();
-    DynamicRecord current;
+    const DynamicRecord* current = 0;
     std::vector<sample_type>::const_iterator sample;
     edge_type LF_result;
     range_type LF_range;
@@ -781,21 +781,21 @@ DynamicGBWT::locate(SearchState state) const
     {
       if(positions[i].first != curr)  // Node changed.
       {
-        curr = positions[i].first; current = this->record(curr);
-        sample = current.nextSample(positions[i].second);
+        curr = positions[i].first; current = &(this->record(curr));
+        sample = current->nextSample(positions[i].second);
         LF_range.first = positions[i].second;
-        LF_result = current.runLF(positions[i].second, LF_range.second);
+        LF_result = current->runLF(positions[i].second, LF_range.second);
       }
-      while(sample != current.ids.end() && sample->first < positions[i].second)  // Went past the sample.
+      while(sample != current->ids.end() && sample->first < positions[i].second)  // Went past the sample.
       {
         ++sample;
       }
-      if(sample == current.ids.end() || sample->first > positions[i].second) // Not sampled.
+      if(sample == current->ids.end() || sample->first > positions[i].second) // Not sampled.
       {
         if(positions[i].second > LF_range.second) // Went past the existing LF() result.
         {
           LF_range.first = positions[i].second;
-          LF_result = current.runLF(positions[i].second, LF_range.second);
+          LF_result = current->runLF(positions[i].second, LF_range.second);
         }
         positions[tail] = edge_type(LF_result.first, LF_result.second + positions[i].second - LF_range.first);
         tail++;
