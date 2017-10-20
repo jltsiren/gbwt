@@ -167,7 +167,7 @@ findBenchmark(const GBWTType& index, const std::vector<std::vector<node_type>>& 
   for(size_type i = 0; i < queries.size(); i++)
   {
     results[i] = index.find(queries[i].begin(), queries[i].end());
-    total_length += Range::length(results[i]);
+    total_length += Range::length(results[i].range);
   }
   double seconds = readTimer() - start;
   printTime(indexType(index), queries.size(), seconds);

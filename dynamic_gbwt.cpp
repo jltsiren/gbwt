@@ -266,7 +266,6 @@ DynamicGBWT::recode()
     std::cerr << "DynamicGBWT::recode(): Sorting the outgoing edges" << std::endl;
   }
 
-  #pragma omp parallel for schedule(static)
   for(comp_type comp = 0; comp < this->effective(); comp++) { this->bwt[comp].recode(); }
 }
 
@@ -424,7 +423,7 @@ nextPosition(std::vector<Sequence>& seqs, const DynamicGBWT& source)
 void
 sortSequences(std::vector<Sequence>& seqs)
 {
-  chooseBestSort(seqs.begin(), seqs.end());
+  sequentialSort(seqs.begin(), seqs.end());
   size_type head = 0;
   while(head < seqs.size() && seqs[head].next == ENDMARKER) { head++; }
   if(head > 0)
