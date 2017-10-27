@@ -38,6 +38,21 @@ namespace gbwt
 //------------------------------------------------------------------------------
 
 /*
+  A simple encoding between (node id, orientation) <-> node_type. Not used by GBWT itself.
+*/
+struct Node
+{
+  const static node_type REVERSE_MASK = 0x1;
+  const static size_type ID_SHIFT     = 1;
+
+  static size_type id(node_type node) { return (node >> ID_SHIFT); }
+  static bool reverse(node_type node) { return (node & REVERSE_MASK); }
+  static node_type encode(size_type node_id, bool is_reverse) { return ((node_id << ID_SHIFT) | is_reverse); }
+};
+
+//------------------------------------------------------------------------------
+
+/*
   The part of the BWT corresponding to a single node (the suffixes starting with / the
   prefixes ending with that node).
 
