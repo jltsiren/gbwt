@@ -46,8 +46,9 @@ struct Node
   const static size_type ID_SHIFT     = 1;
 
   static size_type id(node_type node) { return (node >> ID_SHIFT); }
-  static bool reverse(node_type node) { return (node & REVERSE_MASK); }
-  static node_type encode(size_type node_id, bool is_reverse) { return ((node_id << ID_SHIFT) | is_reverse); }
+  static bool is_reverse(node_type node) { return (node & REVERSE_MASK); }
+  static node_type encode(size_type node_id, bool reversed) { return ((node_id << ID_SHIFT) | reversed); }
+  static node_type reverse(node_type node) { return (node ^ REVERSE_MASK); }
 };
 
 /*
@@ -55,12 +56,13 @@ struct Node
 */
 struct Path
 {
-  const static node_type REVERSE_MASK = 0x1;
+  const static size_type REVERSE_MASK = 0x1;
   const static size_type ID_SHIFT     = 1;
 
   static size_type id(size_type path) { return (path >> ID_SHIFT); }
-  static bool reverse(size_type path) { return (path & REVERSE_MASK); }
-  static size_type encode(size_type path_id, bool is_reverse) { return ((path_id << ID_SHIFT) | is_reverse); }
+  static bool is_reverse(size_type path) { return (path & REVERSE_MASK); }
+  static size_type encode(size_type path_id, bool reversed) { return ((path_id << ID_SHIFT) | reversed); }
+  static size_type reverse(size_type path) { return (path ^ REVERSE_MASK); }
 };
 
 //------------------------------------------------------------------------------
