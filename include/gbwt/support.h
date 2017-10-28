@@ -50,6 +50,19 @@ struct Node
   static node_type encode(size_type node_id, bool is_reverse) { return ((node_id << ID_SHIFT) | is_reverse); }
 };
 
+/*
+  A simple encoding between (path id, orientation) <-> size_type. Not used by GBWT itself.
+*/
+struct Path
+{
+  const static node_type REVERSE_MASK = 0x1;
+  const static size_type ID_SHIFT     = 1;
+
+  static size_type id(size_type path) { return (path >> ID_SHIFT); }
+  static bool reverse(size_type path) { return (path & REVERSE_MASK); }
+  static size_type encode(size_type path_id, bool is_reverse) { return ((path_id << ID_SHIFT) | is_reverse); }
+};
+
 //------------------------------------------------------------------------------
 
 /*
