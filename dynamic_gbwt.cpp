@@ -546,17 +546,19 @@ insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source)
 
 /*
   Insert a batch of sequences with ids (in the current insertion) starting from 'start_id'.
-  The template parameter should be an integer vector.
+  The template parameter should be an integer vector. Because resizing text_type always
+  causes a reallocation, 'text_length' is used to pass the actual length of the text.
+  This function assumes that text.size() >= text_length.
 */
 
 template<class IntegerVector>
 void
-insertBatch(DynamicGBWT& index, const IntegerVector& text, size_type start_id)
+insertBatch(DynamicGBWT& index, const IntegerVector& text, size_type text_length, size_type start_id)
 {
   double start = readTimer();
 
-  if(text.empty()) { return; }
-  if(text[text.size() - 1] != ENDMARKER)
+  if(text_length == 0) { return; }
+  if(text[text_length - 1] != ENDMARKER)
   {
     std::cerr << "insertBatch(): The text must end with an endmarker" << std::endl;
     std::exit(EXIT_FAILURE);
@@ -570,7 +572,7 @@ insertBatch(DynamicGBWT& index, const IntegerVector& text, size_type start_id)
   node_type min_node = (index.empty() ? ~(node_type)0 : index.header.offset + 1);
   node_type max_node = (index.empty() ? 0 : index.sigma() - 1);
   std::vector<Sequence> seqs;
-  for(size_type i = 0; i < text.size(); i++)
+  for(size_type i = 0; i < text_length; i++)
   {
     if(seq_start)
     {
@@ -610,7 +612,27 @@ DynamicGBWT::insert(const text_type& text)
     }
     return;
   }
-  gbwt::insertBatch(*this, text, 0);
+  gbwt::insertBatch(*this, text, text.size(), 0);
+  this->recode();
+}
+
+void
+DynamicGBWT::insert(const text_type& text, size_type text_length)
+{
+  if(text_length == 0)
+  {
+    if(Verbosity::level >= Verbosity::FULL)
+    {
+      std::cerr << "DynamicGBWT::insert(): The input text is empty" << std::endl;
+    }
+    return;
+  }
+  if(text_length > text.size())
+  {
+    std::cerr << "DynamicGBWT::insert(): Specified text length is larger than container size" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  gbwt::insertBatch(*this, text, text_length, 0);
   this->recode();
 }
 
@@ -625,7 +647,7 @@ DynamicGBWT::insert(const std::vector<node_type>& text)
     }
     return;
   }
-  gbwt::insertBatch(*this, text, 0);
+  gbwt::insertBatch(*this, text, text.size(), 0);
   this->recode();
 }
 
@@ -661,7 +683,7 @@ DynamicGBWT::insert(text_buffer_type& text, size_type batch_size)
     }
     text_type batch(limit - start_offset, 0, text.width());
     for(size_type i = start_offset; i < limit; i++) { batch[i - start_offset] = text[i]; }
-    gbwt::insertBatch(*this, batch, this->sequences() - old_sequences);
+    gbwt::insertBatch(*this, batch, batch.size(), this->sequences() - old_sequences);
     start_offset = limit;
   }
 

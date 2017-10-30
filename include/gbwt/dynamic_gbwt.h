@@ -70,6 +70,7 @@ public:
     from this->sequences().
   */
   void insert(const text_type& text);
+  void insert(const text_type& text, size_type text_length);
   void insert(const std::vector<node_type>& text);
 
   /*
