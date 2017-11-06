@@ -665,30 +665,24 @@ DynamicGBWT::insert(text_buffer_type& text, size_type batch_size)
     return;
   }
   if(batch_size == 0) { batch_size = text.size(); }
-
-  // Find the last endmarker in the batch, read the batch into memory, and insert the sequences.
   size_type old_sequences = this->sequences();
-  for(size_type start_offset = 0; start_offset < text.size(); )
-  {
-    size_type limit = std::min(text.size(), start_offset + batch_size);
-    while(limit > start_offset)
-    {
-      if(text[limit - 1] == ENDMARKER) { break; }
-      limit--;
-    }
-    if(limit <= start_offset)
-    {
-      std::cerr << "DynamicGBWT::insert(): Cannot find an endmarker in the batch starting from offset " << start_offset << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    text_type batch(limit - start_offset, 0, text.width());
-    for(size_type i = start_offset; i < limit; i++) { batch[i - start_offset] = text[i]; }
-    gbwt::insertBatch(*this, batch, batch.size(), this->sequences() - old_sequences);
-    start_offset = limit;
-  }
 
-  // Finally sort the outgoing edges.
-  this->recode();
+  // Create a builder using this index.
+  GBWTBuilder builder(text.width(), batch_size);
+  builder.index.swap(*this);
+
+  // Insert all sequences.
+  std::vector<node_type> sequence;
+  for(size_type node : text)
+  {
+    if(node == ENDMARKER) { builder.insert(sequence); sequence.clear(); }
+    else { sequence.push_back(node); }
+  }
+  if(!(sequence.empty())) { builder.insert(sequence); sequence.clear(); }
+
+  // Finish the construction and get the index contents back.
+  builder.finish();
+  this->swap(builder.index);
 
   if(Verbosity::level >= Verbosity::BASIC)
   {
@@ -848,6 +842,85 @@ printStatistics(const DynamicGBWT& gbwt, const std::string& name)
   printHeader("Runs"); std::cout << gbwt.runs() << std::endl;
   printHeader("Samples"); std::cout << gbwt.samples() << std::endl;
   std::cout << std::endl;
+}
+
+//------------------------------------------------------------------------------
+
+GBWTBuilder::GBWTBuilder(size_type node_width, size_type buffer_size) :
+  input_buffer(buffer_size, 0, node_width), construction_buffer(buffer_size, 0, node_width),
+  input_tail(0), construction_tail(0),
+  inserted_sequences(0), batch_sequences(0)
+{
+}
+
+GBWTBuilder::~GBWTBuilder()
+{
+  // Wait for the construction thread to finish.
+  if(this->builder.joinable()) { this->builder.join(); }
+}
+
+void
+GBWTBuilder::insert(std::vector<node_type>& sequence, bool both_orientations)
+{
+  size_type space_required = sequence.size() + 1;
+  if(both_orientations) { space_required *= 2; }
+  if(space_required > this->input_buffer.size())
+  {
+    std::cerr << "GBWTBuilder::insert(): Sequence is too long for the buffer, skipping" << std::endl;
+    return;
+  }
+
+  // Flush the buffer if necessary.
+  if(this->input_tail + space_required > this->input_buffer.size())
+  {
+    this->flush();
+  }
+
+  // Forward orientation.
+  for(node_type node : sequence) { this->input_buffer[this->input_tail] = node; this->input_tail++; }
+  this->input_buffer[this->input_tail] = ENDMARKER; this->input_tail++;
+  this->batch_sequences++;
+
+  // Reverse orientation.
+  if(both_orientations)
+  {
+    for(auto iter = sequence.rbegin(); iter != sequence.rend(); ++iter) { this->input_buffer[this->input_tail] = Node::reverse(*iter); this->input_tail++; }
+    this->input_buffer[this->input_tail] = ENDMARKER; this->input_tail++;
+    this->batch_sequences++;
+  }
+}
+
+void
+GBWTBuilder::finish()
+{
+  // Flush the buffer if necessary.
+  this->flush();
+
+  // Wait for the construction thread to finish.
+  if(this->builder.joinable()) { this->builder.join(); }
+
+  // Finally recode the index to make it serializable.
+  this->index.recode();
+}
+
+void
+GBWTBuilder::flush()
+{
+  // Wait for the construction thread to finish.
+  if(this->builder.joinable()) { this->builder.join(); }
+
+  // Swap the input buffer and the construction buffer.
+  this->input_buffer.swap(this->construction_buffer);
+  this->construction_tail = this->input_tail;
+  this->input_tail = 0;
+
+  // Launch a new construction thread if necessary.
+  if(this->construction_tail > 0)
+  {
+    this->builder = std::thread(gbwt::insertBatch<text_type>, std::ref(this->index), std::cref(this->construction_buffer), this->construction_tail, this->inserted_sequences);
+    this->inserted_sequences += this->batch_sequences;
+    this->batch_sequences = 0;
+  }
 }
 
 //------------------------------------------------------------------------------

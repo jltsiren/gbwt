@@ -26,6 +26,8 @@
 #ifndef GBWT_DYNAMIC_GBWT_H
 #define GBWT_DYNAMIC_GBWT_H
 
+#include <thread>
+
 #include <gbwt/gbwt.h>
 
 namespace gbwt
@@ -36,6 +38,8 @@ namespace gbwt
 */
 
 //------------------------------------------------------------------------------
+
+class GBWTBuilder;
 
 class DynamicGBWT
 {
@@ -250,11 +254,37 @@ private:
   */
   void recode();
 
+  friend class GBWTBuilder;
+
 //------------------------------------------------------------------------------
 
 }; // class DynamicGBWT
 
 void printStatistics(const DynamicGBWT& gbwt, const std::string& name);
+
+//------------------------------------------------------------------------------
+
+class GBWTBuilder
+{
+public:
+  GBWTBuilder(size_type node_width, size_type batch_size = DynamicGBWT::INSERT_BATCH_SIZE);
+  ~GBWTBuilder();
+
+  void insert(std::vector<node_type>& sequence, bool both_orientations = false);
+  void finish();
+
+  DynamicGBWT index;
+  text_type   input_buffer, construction_buffer;
+  size_type   input_tail, construction_tail;
+  size_type   inserted_sequences, batch_sequences;
+  std::thread builder;
+
+  GBWTBuilder(const GBWTBuilder&) = delete;
+  GBWTBuilder& operator= (const GBWTBuilder&) = delete;
+
+private:
+  void flush();
+}; // class GBWTBuilder
 
 //------------------------------------------------------------------------------
 
