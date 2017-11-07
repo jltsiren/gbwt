@@ -652,7 +652,7 @@ DynamicGBWT::insert(const std::vector<node_type>& text)
 }
 
 void
-DynamicGBWT::insert(text_buffer_type& text, size_type batch_size)
+DynamicGBWT::insert(text_buffer_type& text, size_type batch_size, bool both_orientations)
 {
   double start = readTimer();
 
@@ -675,7 +675,7 @@ DynamicGBWT::insert(text_buffer_type& text, size_type batch_size)
   std::vector<node_type> sequence;
   for(size_type node : text)
   {
-    if(node == ENDMARKER) { builder.insert(sequence); sequence.clear(); }
+    if(node == ENDMARKER) { builder.insert(sequence, both_orientations); sequence.clear(); }
     else { sequence.push_back(node); }
   }
   if(!(sequence.empty())) { builder.insert(sequence); sequence.clear(); }

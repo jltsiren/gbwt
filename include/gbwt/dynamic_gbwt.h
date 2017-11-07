@@ -79,9 +79,10 @@ public:
 
   /*
     Use the above to insert the sequences in batches of up to 'batch_size' nodes. Use batch
-    size 0 to insert the entire text at once.
+    size 0 to insert the entire text at once. By default, the sequences are only inserted in
+    forward orientation. Set both_orientations = true to insert the reverse complement as well.
   */
-  void insert(text_buffer_type& text, size_type batch_size = INSERT_BATCH_SIZE);
+  void insert(text_buffer_type& text, size_type batch_size = INSERT_BATCH_SIZE, bool both_orientations = false);
 
   /*
     Insert the sequences from the other GBWT into this. Use batch size 0 to insert all

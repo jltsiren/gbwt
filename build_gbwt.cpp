@@ -56,19 +56,23 @@ main(int argc, char** argv)
   if(argc < 2) { printUsage(); }
 
   size_type batch_size = DynamicGBWT::INSERT_BATCH_SIZE / MILLION;
-  bool verify_index = false;
+  bool verify_index = false, both_orientations = false;
   std::string index_base, input_base, output_base;
   int c = 0;
-  while((c = getopt(argc, argv, "b:i:o:v")) != -1)
+  while((c = getopt(argc, argv, "b:fi:o:rv")) != -1)
   {
     switch(c)
     {
     case 'b':
       batch_size = std::stoul(optarg); break;
+    case 'f':
+      both_orientations = false; break;
     case 'i':
       index_base = optarg; break;
     case 'o':
       output_base = optarg; break;
+    case 'r':
+      both_orientations = true; break;
     case 'v':
       verify_index = true; break;
     case '?':
@@ -94,6 +98,7 @@ main(int argc, char** argv)
   printHeader("Input files"); std::cout << input_files << std::endl;
   printHeader("Output name"); std::cout << output_base << std::endl;
   if(batch_size != 0) { printHeader("Batch size"); std::cout << batch_size << " million" << std::endl; }
+  printHeader("Orientation"); std::cout << (both_orientations ? "both" : "forward only") << std::endl;
   std::cout << std::endl;
 
   double start = readTimer();
@@ -111,7 +116,7 @@ main(int argc, char** argv)
     printHeader("Input name"); std::cout << input_base << std::endl;
     text_buffer_type input(input_base);
     input_size += input.size();
-    dynamic_index.insert(input, batch_size * MILLION);
+    dynamic_index.insert(input, batch_size * MILLION, both_orientations);
     optind++;
   }
   std::cout << std::endl;
@@ -126,7 +131,8 @@ main(int argc, char** argv)
   std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;
   std::cout << std::endl;
 
-  if(verify_index)
+  // FIXME verify both orientations
+  if(verify_index && !both_orientations)
   {
     std::cout << "Verifying the index..." << std::endl;
     double verify_start = readTimer();
@@ -160,8 +166,10 @@ printUsage(int exit_code)
 
   std::cerr << "Usage: build_gbwt [options] input1 [input2 ...]" << std::endl;
   std::cerr << "  -b N  Insert in batches of N million nodes (default: " << (DynamicGBWT::INSERT_BATCH_SIZE / MILLION) << ")" << std::endl;
+  std::cerr << "  -f    Index the sequences only in forward orientation (default)" << std::endl;
   std::cerr << "  -i X  Insert the sequences into an existing index with base name X" << std::endl;
   std::cerr << "  -o X  Use base name X for output (default: the only input)" << std::endl;
+  std::cerr << "  -r    Index the sequences also in reverse orientation" << std::endl;
   std::cerr << "  -v    Verify the index after construction" << std::endl;
   std::cerr << std::endl;
 
