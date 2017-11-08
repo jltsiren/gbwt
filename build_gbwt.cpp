@@ -45,7 +45,7 @@ void printUsage(int exit_code = EXIT_SUCCESS);
 
 std::vector<SearchState> verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& query_base);
 void verifyLocate(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<SearchState>& queries);
-void verifyExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& base_name);
+void verifyExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& base_name, bool both_orientations);
 void verifySamples(const GBWT& compressed_index, const DynamicGBWT& dynamic_index);
 
 //------------------------------------------------------------------------------
@@ -115,7 +115,7 @@ main(int argc, char** argv)
     input_base = argv[optind];
     printHeader("Input name"); std::cout << input_base << std::endl;
     text_buffer_type input(input_base);
-    input_size += input.size();
+    input_size += input.size() * (both_orientations ? 2 : 1);
     dynamic_index.insert(input, batch_size * MILLION, both_orientations);
     optind++;
   }
@@ -131,8 +131,7 @@ main(int argc, char** argv)
   std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;
   std::cout << std::endl;
 
-  // FIXME verify both orientations
-  if(verify_index && !both_orientations)
+  if(verify_index)
   {
     std::cout << "Verifying the index..." << std::endl;
     double verify_start = readTimer();
@@ -145,7 +144,7 @@ main(int argc, char** argv)
 
     std::vector<SearchState> results = verifyFind(compressed_index, dynamic_index, input_base);
     verifyLocate(compressed_index, dynamic_index, results);
-    verifyExtract(compressed_index, dynamic_index, input_base);
+    verifyExtract(compressed_index, dynamic_index, input_base, both_orientations);
     verifySamples(compressed_index, dynamic_index);
 
     double verify_seconds = readTimer() - verify_start;
@@ -235,6 +234,10 @@ totalLength(const std::vector<SearchState>& states)
 
 //------------------------------------------------------------------------------
 
+/*
+  find() queries: Ensure that both index types give the same results.
+*/
+
 std::vector<SearchState>
 verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& query_base)
 {
@@ -269,6 +272,10 @@ verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const
 }
 
 //------------------------------------------------------------------------------
+
+/*
+  locate() queries: Ensure that both index types and both algorithms give the same results.
+*/
 
 template<class GBWTType>
 size_type
@@ -342,79 +349,83 @@ verifyLocate(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, con
 
 //------------------------------------------------------------------------------
 
-template<class GBWTType>
-void
-extractFail(const GBWTType& index, size_type sequence, size_type i, node_type expected, node_type result)
-{
-  std::cerr << "verifyExtract(): " << indexType(index) << ": Verification failed with sequence " << sequence << ", offset " << i << std::endl;
-  std::cerr << "verifyExtract(): Expected " << expected << ", got " << result << std::endl;
-}
+/*
+  extract() queries: Ensure that the index contains the correct sequences.
+*/
 
 void
-tryExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, text_buffer_type& text, const std::vector<size_type>& offsets, size_type sequence)
+tryExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index,
+           text_buffer_type& text, const std::vector<size_type>& offsets,
+           size_type sequence, bool both_orientations, bool is_reverse)
 {
-  std::vector<node_type> compressed_result = compressed_index.extract(sequence);
-  std::vector<node_type> dynamic_result = dynamic_index.extract(sequence);
-  if(compressed_result.size() != dynamic_result.size())
+  if(is_reverse && !both_orientations) { return; }
+  size_type seq_id = (both_orientations ? Path::encode(sequence, is_reverse) : sequence);
+
+  // Extract the sequences.
+  std::vector<node_type> compressed_result = compressed_index.extract(seq_id);
+  std::vector<node_type> dynamic_result = dynamic_index.extract(seq_id);
+  std::vector<node_type> correct_sequence; correct_sequence.reserve(compressed_result.size());
+  for(size_type i = offsets[sequence]; text[i] != ENDMARKER; i++) { correct_sequence.push_back(text[i]); }
+  if(is_reverse)
   {
-    errors++;
-    if(errors <= MAX_ERRORS)
+    std::reverse(correct_sequence.begin(), correct_sequence.end());
+    for(node_type& node : correct_sequence) { node = Node::reverse(node); }
+  }
+
+  // Compare the lengths.
+  if(compressed_result.size() != correct_sequence.size() || compressed_result.size() != dynamic_result.size())
+  {
+    #pragma omp critical
     {
-      std::cerr << "verifyExtract(): Sequence length mismatch" << std::endl;
-      std::cerr << "verifyExtract(): " << indexType(compressed_index) << ": " << compressed_result.size() << ", "
-        << indexType(dynamic_index) << ": " << dynamic_result.size() << std::endl;
+      errors++;
+      if(errors <= MAX_ERRORS)
+      {
+        std::cerr << "verifyExtract(): Length mismatch with sequence " << sequence << (is_reverse ? " (reverse)" : " (forward)") << std::endl;
+        std::cerr << "verifyExtract(): Text: " << correct_sequence.size() << ", "
+          << indexType(compressed_index) << ": " << compressed_result.size() << ", "
+            << indexType(dynamic_index) << ": " << dynamic_result.size() << std::endl;
+      }
     }
     return;
   }
 
+  // Compare the sequences.
   for(size_type i = 0; i < compressed_result.size(); i++)
   {
-    node_type expected = text[offsets[sequence] + i];
-    if(compressed_result[i] != expected)
+    if(compressed_result[i] != correct_sequence[i] || compressed_result[i] != dynamic_result[i])
     {
       #pragma omp critical
       {
         errors++;
-        if(errors <= MAX_ERRORS) { extractFail(compressed_index, sequence, i, expected, compressed_result[i]); }
+        if(errors <= MAX_ERRORS)
+        {
+          std::cerr << "verifyExtract(): Mismatch at sequence " << sequence << ", offset " << i << (is_reverse ? " (reverse)" : " (forward)") << std::endl;
+          std::cerr << "verifyExtract(): Text: " << correct_sequence[i] << ", "
+            << indexType(compressed_index) << ": " << compressed_result[i] << ", "
+            << indexType(dynamic_index) << ": " << dynamic_result[i] << std::endl;
+        }
       }
-      break;
-    }
-    if(dynamic_result[i] != expected)
-    {
-      #pragma omp critical
-      {
-        errors++;
-        if(errors <= MAX_ERRORS) { extractFail(dynamic_index, sequence, i, expected, dynamic_result[i]); }
-      }
-      break;
-    }
-  }
-  if(text[offsets[sequence] + compressed_result.size()] != ENDMARKER)
-  {
-    node_type expected = text[offsets[sequence] + compressed_result.size()];
-    #pragma omp critical
-    {
-      errors++;
-      if(errors <= MAX_ERRORS) { extractFail(compressed_index, sequence, compressed_result.size(), expected, ENDMARKER); }
+      return;
     }
   }
 }
 
 void
-verifyExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& base_name)
+verifyExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& base_name, bool both_orientations)
 {
   std::cout << "Verifying extract()..." << std::endl;
 
   double start = readTimer();
   size_type initial_errors = errors;
   std::vector<size_type> offsets = startOffsets(base_name);
-  if(compressed_index.sequences() != offsets.size() || compressed_index.sequences() != dynamic_index.sequences())
+  size_type expected_sequences = offsets.size() * (both_orientations ? 2 : 1);
+  if(compressed_index.sequences() != expected_sequences || compressed_index.sequences() != dynamic_index.sequences())
   {
     errors++;
     if(errors <= MAX_ERRORS)
     {
       std::cerr << "verifyExtract(): Mismatching number of sequences" << std::endl;
-      std::cerr << "verifyExtract(): Input: " << offsets.size() << ", "
+      std::cerr << "verifyExtract(): Input: " << expected_sequences << ", "
                 << indexType(compressed_index) << ": " << compressed_index.sequences() << ", "
                 << indexType(dynamic_index) << ": " << dynamic_index.sequences() << std::endl;
     }
@@ -429,7 +440,8 @@ verifyExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, co
     text_buffer_type text(base_name);
     for(size_type sequence = blocks[block].first; sequence <= blocks[block].second; sequence++)
     {
-      tryExtract(compressed_index, dynamic_index, text, offsets, sequence);
+      tryExtract(compressed_index, dynamic_index, text, offsets, sequence, both_orientations, false);
+      tryExtract(compressed_index, dynamic_index, text, offsets, sequence, both_orientations, true);
     }
   }
 
@@ -440,6 +452,10 @@ verifyExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, co
 }
 
 //------------------------------------------------------------------------------
+
+/*
+  Ensure that all samples have the correct sequence identifiers.
+*/
 
 template<class GBWTType>
 bool
