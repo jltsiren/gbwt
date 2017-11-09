@@ -669,7 +669,7 @@ DynamicGBWT::insert(text_buffer_type& text, size_type batch_size, bool both_orie
 
   // Create a builder using this index.
   GBWTBuilder builder(text.width(), batch_size);
-  builder.index.swap(*this);
+  builder.swapIndex(*this);
 
   // Insert all sequences.
   std::vector<node_type> sequence;
@@ -682,7 +682,7 @@ DynamicGBWT::insert(text_buffer_type& text, size_type batch_size, bool both_orie
 
   // Finish the construction and get the index contents back.
   builder.finish();
-  this->swap(builder.index);
+  builder.swapIndex(*this);
 
   if(Verbosity::level >= Verbosity::BASIC)
   {
@@ -857,6 +857,12 @@ GBWTBuilder::~GBWTBuilder()
 {
   // Wait for the construction thread to finish.
   if(this->builder.joinable()) { this->builder.join(); }
+}
+
+void
+GBWTBuilder::swapIndex(DynamicGBWT& another_index)
+{
+  this->index.swap(another_index);
 }
 
 void

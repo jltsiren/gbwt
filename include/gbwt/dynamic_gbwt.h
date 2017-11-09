@@ -271,6 +271,8 @@ public:
   GBWTBuilder(size_type node_width, size_type batch_size = DynamicGBWT::INSERT_BATCH_SIZE);
   ~GBWTBuilder();
 
+  void swapIndex(DynamicGBWT& another_index);
+
   void insert(std::vector<node_type>& sequence, bool both_orientations = false);
   void finish();
 
