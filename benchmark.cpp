@@ -53,13 +53,14 @@ void extractBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_i
 int
 main(int argc, char** argv)
 {
-  if(argc < 3) { printUsage(); }
-  std::string index_base = argv[1], query_base = argv[2];
+  if(argc < 2) { printUsage(); }
+  std::string index_base = argv[1], query_base;
+  if(argc > 2) { query_base = argv[2]; }
 
   Version::print(std::cout, tool_name);
 
   printHeader("Index name"); std::cout << index_base << std::endl;
-  printHeader("Query name"); std::cout << query_base << std::endl;
+  if(!(query_base.empty())) { printHeader("Query name"); std::cout << query_base << std::endl; }
   std::cout << std::endl;
 
   double start = readTimer();
@@ -67,6 +68,7 @@ main(int argc, char** argv)
   GBWT compressed_index;
   sdsl::load_from_file(compressed_index, index_base + GBWT::EXTENSION);
   printStatistics(compressed_index, index_base);
+  if(query_base.empty()) { return 0; }
 
   DynamicGBWT dynamic_index;
   sdsl::load_from_file(dynamic_index, index_base + DynamicGBWT::EXTENSION);
@@ -93,7 +95,7 @@ printUsage(int exit_code)
 {
   Version::print(std::cerr, tool_name);
 
-  std::cerr << "Usage: benchmark index_base query_base" << std::endl;
+  std::cerr << "Usage: benchmark index_base [query_base]" << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);
