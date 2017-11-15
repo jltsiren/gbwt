@@ -118,6 +118,102 @@ GBWT::copy(const GBWT& source)
 
 //------------------------------------------------------------------------------
 
+GBWT::GBWT(const std::vector<GBWT>& sources)
+{
+  if(sources.empty()) { return; }
+
+  // Merge the headers.
+  size_type valid_sources = 0;
+  size_type data_size = 0;
+  for(const GBWT& source : sources)
+  {
+    if(source.empty()) { continue; }
+    this->header.sequences += source.header.sequences;
+    this->header.size += source.header.size;
+    if(valid_sources == 0)
+    {
+      this->header.offset = source.header.offset;
+      this->header.alphabet_size = source.header.alphabet_size;
+    }
+    else
+    {
+      this->header.offset = std::min(this->header.offset, source.header.offset);
+      this->header.alphabet_size = std::max(this->header.alphabet_size, source.header.alphabet_size);
+    }
+    data_size += source.bwt.data.size();
+    valid_sources++;
+  }
+  if(valid_sources == 0) { return; }
+
+  // Determine the origin of each record.
+  sdsl::int_vector<0> origin(this->effective(), sources.size(), bit_length(sources.size()));
+  for(size_type source_id = 0; source_id < sources.size(); source_id++)
+  {
+    const GBWT& source = sources[source_id];
+    for(comp_type source_comp = 1; source_comp < source.effective(); source_comp++)
+    {
+      comp_type merged_comp = this->toCompInternal(source.toNodeInternal(source_comp));
+      if(origin[merged_comp] != sources.size())
+      {
+        std::cerr << "GBWT::GBWT(): Sources " << origin[merged_comp] << " and " << source_id << " both have node " << this->toNode(merged_comp) << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      origin[merged_comp] = source_id;
+    }
+  }
+
+  // Merge the endmarkers.
+  std::vector<size_type> limits(sources.size(), 0); // Pointers to the end of the current records.
+  {
+    DynamicRecord merged;
+    for(size_type i = 0; i < sources.size(); i++)
+    {
+      const GBWT& source = sources[i];
+      CompressedRecord record = source.record(ENDMARKER);
+      for(CompressedRecordIterator iter(record); !(iter.end()); ++iter)
+      {
+        run_type run = *iter; run.first += merged.outdegree();
+        merged.body.push_back(run); merged.body_size += run.second;
+      }
+      for(edge_type outedge : record.outgoing)
+      {
+        merged.outgoing.push_back(outedge);
+      }
+      limits[i] = source.bwt.limit(0);
+    }
+    merged.recode();
+    merged.writeBWT(this->bwt.data);
+  }
+
+  // Merge the BWTs.
+  this->bwt.data.reserve(data_size + this->bwt.data.size());
+  std::vector<size_type> offsets(this->effective(), 0);
+  for(comp_type comp = 1; comp < this->effective(); comp++)
+  {
+    offsets[comp] = this->bwt.data.size();
+    if(origin[comp] >= sources.size())
+    {
+      this->bwt.data.push_back(0);  // Empty record, outdegree 0.
+      continue;
+    }
+    const GBWT& source = sources[origin[comp]];
+    size_type start = limits[origin[comp]], limit = source.bwt.limit(source.toCompInternal(this->toNodeInternal(comp)));
+    limits[origin[comp]] = limit;
+    for(size_type i = start; i < limit; i++)
+    {
+      this->bwt.data.push_back(source.bwt.data[i]);
+    }
+  }
+
+  // Build the index for the BWT.
+  this->bwt.buildIndex(offsets);
+  offsets = std::vector<size_type>();
+
+  // FIXME samples
+}
+
+//------------------------------------------------------------------------------
+
 size_type
 GBWT::runs() const
 {

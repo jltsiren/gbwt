@@ -69,6 +69,26 @@ DynamicRecord::recode()
   for(run_type& run : this->body) { run.first = this->edgeTo(run.first); }
 }
 
+void
+DynamicRecord::writeBWT(std::vector<byte_type>& data) const
+{
+  // Write the outgoing edges.
+  ByteCode::write(data, this->outdegree());
+  node_type prev = 0;
+  for(edge_type outedge : this->outgoing)
+  {
+    ByteCode::write(data, outedge.first - prev);
+    prev = outedge.first;
+    ByteCode::write(data, outedge.second);
+  }
+
+  // Write the body.
+  if(this->outdegree() > 0)
+  {
+    Run encoder(this->outdegree());
+    for(run_type run : this->body) { encoder.write(data, run); }
+  }
+}
 //------------------------------------------------------------------------------
 
 edge_type
@@ -390,27 +410,20 @@ RecordArray::RecordArray(const std::vector<DynamicRecord>& bwt) :
   for(size_type i = 0; i < bwt.size(); i++)
   {
     offsets[i] = this->data.size();
-    const DynamicRecord& current = bwt[i];
-
-    // Write the outgoing edges.
-    ByteCode::write(this->data, current.outdegree());
-    node_type prev = 0;
-    for(edge_type outedge : current.outgoing)
-    {
-      ByteCode::write(this->data, outedge.first - prev);
-      prev = outedge.first;
-      ByteCode::write(this->data, outedge.second);
-    }
-
-    // Write the body.
-    if(current.outdegree() > 0)
-    {
-      Run encoder(current.outdegree());
-      for(run_type run : current.body) { encoder.write(this->data, run); }
-    }
+    bwt[i].writeBWT(this->data);
   }
 
-  // Compress the index.
+  this->buildIndex(offsets);
+}
+
+RecordArray::RecordArray(size_type array_size) :
+  records(array_size)
+{  
+}
+
+void
+RecordArray::buildIndex(const std::vector<size_type>& offsets)
+{
   sdsl::sd_vector_builder builder(this->data.size(), offsets.size());
   for(size_type offset : offsets) { builder.set(offset); }
   this->index = sdsl::sd_vector<>(builder);

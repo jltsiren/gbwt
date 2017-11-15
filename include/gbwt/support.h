@@ -104,6 +104,9 @@ struct DynamicRecord
   // Sort the outgoing edges if they are not sorted.
   void recode();
 
+  // Write the compressed representation.
+  void writeBWT(std::vector<byte_type>& data) const;
+
 //------------------------------------------------------------------------------
 
   // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
@@ -222,6 +225,10 @@ struct RecordArray
   ~RecordArray();
 
   explicit RecordArray(const std::vector<DynamicRecord>& bwt);
+
+  // Set the number of records, build the data manually, and give the offsets to build the index.
+  explicit RecordArray(size_type array_size);
+  void buildIndex(const std::vector<size_type>& offsets);
 
   void swap(RecordArray& another);
   RecordArray& operator=(const RecordArray& source);

@@ -49,6 +49,7 @@ public:
   GBWT();
   GBWT(const GBWT& source);
   GBWT(GBWT&& source);
+  GBWT(const std::vector<GBWT>& sources);
   ~GBWT();
 
   void swap(GBWT& another);
@@ -133,6 +134,7 @@ public:
   }
 
   comp_type toComp(node_type node) const { return (node == 0 ? node : node - this->header.offset); }
+  node_type toNode(comp_type comp) const { return (comp == 0 ? comp : comp + this->header.offset); }
 
   size_type nodeSize(node_type node) const { return this->record(node).size(); }
 
@@ -211,6 +213,10 @@ public:
 
 private:
   void copy(const GBWT& source);
+
+  // These assume that the node/comp is not the endmarker.
+  comp_type toCompInternal(node_type node) const { return node - this->header.offset; }
+  node_type toNodeInternal(comp_type comp) const { return comp + this->header.offset; }
 }; // class GBWT
 
 //------------------------------------------------------------------------------
