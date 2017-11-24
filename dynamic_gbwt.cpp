@@ -151,23 +151,15 @@ DynamicGBWT::load(std::istream& in)
   {
     DASamples samples;
     samples.load(in);
-    sdsl::sd_vector<>::select_1_type offset_select(&(samples.sampled_offsets));
-    size_type record_rank = 0, max_rank = samples.record_rank(samples.sampled_records.size());
-    size_type record_start = 0;
-    size_type sample_rank = 0;
-    for(comp_type comp = 0; comp < this->effective(); comp++)
+    SampleIterator sample_iter(samples);
+    for(SampleRangeIterator range_iter(samples); !(range_iter.end()); ++range_iter)
     {
-      if(samples.sampled_records[comp] == 0) { continue; }
-      DynamicRecord& current = this->bwt[comp];
-      size_type limit = (record_rank + 1 < max_rank ? samples.bwt_select(record_rank + 2) : samples.bwt_ranges.size());
-      while(sample_rank < samples.size())
+      DynamicRecord& current = this->bwt[range_iter.record()];
+      while(!(sample_iter.end()) && sample_iter.offset() < range_iter.limit())
       {
-        size_type sample_offset = offset_select(sample_rank + 1);
-        if(sample_offset >= limit) { break; }
-        current.ids.push_back(sample_type(sample_offset - record_start, samples.array[sample_rank]));
-        sample_rank++;
+        current.ids.push_back(sample_type(sample_iter.offset() - range_iter.start(), *sample_iter));
+        ++sample_iter;
       }
-      record_rank++; record_start = limit;
     }
   }
 

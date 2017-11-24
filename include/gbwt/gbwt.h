@@ -213,10 +213,6 @@ public:
 
 private:
   void copy(const GBWT& source);
-
-  // These assume that the node/comp is not the endmarker.
-  comp_type toCompInternal(node_type node) const { return node - this->header.offset; }
-  node_type toNodeInternal(comp_type comp) const { return comp + this->header.offset; }
 }; // class GBWT
 
 //------------------------------------------------------------------------------

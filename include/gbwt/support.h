@@ -225,6 +225,7 @@ struct RecordArray
   ~RecordArray();
 
   explicit RecordArray(const std::vector<DynamicRecord>& bwt);
+  RecordArray(const std::vector<RecordArray const*> sources, const sdsl::int_vector<0>& origins, const std::vector<size_type>& record_offsets);
 
   // Set the number of records, build the data manually, and give the offsets to build the index.
   explicit RecordArray(size_type array_size);
@@ -274,6 +275,7 @@ struct DASamples
   ~DASamples();
 
   explicit DASamples(const std::vector<DynamicRecord>& bwt);
+  DASamples(const std::vector<DASamples const*> sources, const sdsl::int_vector<0>& origins, const std::vector<size_type>& record_offsets, const std::vector<size_type>& sequence_counts);
 
   void swap(DASamples& another);
   DASamples& operator=(const DASamples& source);
@@ -282,6 +284,7 @@ struct DASamples
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
 
+  size_type records() const { return this->sampled_records.size(); }
   size_type size() const { return this->array.size(); }
 
   // Returns invalid_sequence() if there is no sample.
@@ -289,6 +292,14 @@ struct DASamples
 
   // Returns the first sample at >= offset or invalid_sample() if there is no sample.
   sample_type nextSample(size_type record, size_type offset) const;
+
+  bool isSampled(size_type record) const { return this->sampled_records[record]; }
+
+  // We assume that 'record' has samples.
+  size_type start(size_type record) const { return this->bwt_select(this->record_rank(record) + 1); }
+
+  // Upper bound for the range of a record, given its rank among records with samples.
+  size_type limit(size_type rank) const;
 
 private:
   void copy(const DASamples& source);

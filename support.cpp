@@ -416,6 +416,59 @@ RecordArray::RecordArray(const std::vector<DynamicRecord>& bwt) :
   this->buildIndex(offsets);
 }
 
+RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sdsl::int_vector<0>& origins, const std::vector<size_type>& record_offsets)
+{
+  size_type data_size = 0;
+  for(auto source : sources) { data_size += source->data.size(); }
+
+  // Merge the endmarkers.
+  std::vector<size_type> limits(sources.size(), 0); // Pointers to the end of the current records.
+  {
+    DynamicRecord merged;
+    for(size_type i = 0; i < sources.size(); i++)
+    {
+      size_type start = sources[i]->start(ENDMARKER), limit = sources[i]->limit(ENDMARKER);
+      CompressedRecord record(sources[i]->data, start, limit);
+      for(CompressedRecordIterator iter(record); !(iter.end()); ++iter)
+      {
+        run_type run = *iter; run.first += merged.outdegree();
+        merged.body.push_back(run); merged.body_size += run.second;
+      }
+      for(edge_type outedge : record.outgoing)
+      {
+        merged.outgoing.push_back(outedge);
+      }
+      limits[i] = limit;
+    }
+    merged.recode();
+    merged.writeBWT(this->data);
+  }
+
+  // Merge the BWTs.
+  this->data.reserve(data_size + this->data.size());
+  std::vector<size_type> offsets(origins.size(), 0);
+  for(comp_type comp = 1; comp < origins.size(); comp++)
+  {
+    offsets[comp] = this->data.size();
+    size_type origin = origins[comp];
+    if(origin >= sources.size())
+    {
+      this->data.push_back(0);  // Empty record, outdegree 0.
+      continue;
+    }
+    size_type start = limits[origin], limit = sources[origin]->limit(comp - record_offsets[origin]);
+    limits[origin] = limit;
+    for(size_type i = start; i < limit; i++)
+    {
+      this->data.push_back(sources[origin]->data[i]);
+    }
+  }
+
+  // Build the index for the BWT.
+  this->buildIndex(offsets);
+}
+
+
 RecordArray::RecordArray(size_type array_size) :
   records(array_size)
 {  
@@ -530,21 +583,21 @@ DASamples::~DASamples()
 DASamples::DASamples(const std::vector<DynamicRecord>& bwt)
 {
   // Determine the statistics and mark the sampled nodes.
-  size_type records = 0, offsets = 0, sample_count = 0;
+  size_type record_count = 0, bwt_offsets = 0, sample_count = 0;
   this->sampled_records = sdsl::bit_vector(bwt.size(), 0);
   for(size_type i = 0; i < bwt.size(); i++)
   {
     if(bwt[i].samples() > 0)
     {
-      records++; offsets += bwt[i].size(); sample_count += bwt[i].samples();
+      record_count++; bwt_offsets += bwt[i].size(); sample_count += bwt[i].samples();
       this->sampled_records[i] = 1;
     }
   }
   sdsl::util::init_support(this->record_rank, &(this->sampled_records));
 
   // Build the bitvectors over BWT offsets.
-  sdsl::sd_vector_builder range_builder(offsets, records);
-  sdsl::sd_vector_builder offset_builder(offsets, sample_count);
+  sdsl::sd_vector_builder range_builder(bwt_offsets, record_count);
+  sdsl::sd_vector_builder offset_builder(bwt_offsets, sample_count);
   size_type offset = 0, max_sample = 0;
   for(const DynamicRecord& record : bwt)
   {
@@ -574,6 +627,73 @@ DASamples::DASamples(const std::vector<DynamicRecord>& bwt)
       for(sample_type sample : record.ids) { this->array[curr] = sample.second; curr++; }
     }
   }
+}
+
+DASamples::DASamples(const std::vector<DASamples const*> sources, const sdsl::int_vector<0>& origins, const std::vector<size_type>& record_offsets, const std::vector<size_type>& sequence_counts)
+{
+  // FIXME handle ENDMARKER as a special case
+
+  // Compute statistics and build iterators over the sources.
+  size_type sample_count = 0, total_sequences = 0;
+  std::vector<size_type> sequence_offsets(sources.size(), 0);
+  std::vector<SampleIterator> sample_iterators;
+  std::vector<SampleRangeIterator> range_iterators;
+  for(size_type i = 0; i < sources.size(); i++)
+  {
+    sample_count += sources[i]->size();
+    sequence_offsets[i] = total_sequences;
+    total_sequences += sequence_counts[i];
+    sample_iterators.push_back(SampleIterator(*(sources[i])));
+    range_iterators.push_back(SampleRangeIterator(*(sources[i])));
+  }
+
+  // Compute statistics over the records and mark the sampled nodes.
+  size_type record_count = 0, bwt_offsets = 0;
+  this->sampled_records = sdsl::bit_vector(origins.size(), 0);
+  for(size_type i = 0; i < origins.size(); i++)
+  {
+    size_type origin = origins[i];
+    if(origin >= sources.size()) { continue; }  // No record.
+    if(sources[origin]->isSampled(i - record_offsets[origin]))
+    {
+      record_count++;
+      bwt_offsets += range_iterators[origin].length();
+      this->sampled_records[i] = 1;
+      ++range_iterators[origin];
+    }
+  }
+  sdsl::util::init_support(this->record_rank, &(this->sampled_records));
+
+  // Reset the range iterators.
+  range_iterators.clear();
+  for(size_type i = 0; i < sources.size(); i++)
+  {
+    range_iterators.push_back(SampleRangeIterator(*(sources[i])));
+  }
+
+  // Build the bitvectors over BWT offsets and store the samples.
+  sdsl::sd_vector_builder range_builder(bwt_offsets, record_count);
+  sdsl::sd_vector_builder offset_builder(bwt_offsets, sample_count);
+  this->array = sdsl::int_vector<0>(sample_count, 0, bit_length(total_sequences - 1));
+  size_type record_start = 0, curr = 0;
+  for(size_type i = 0; i < origins.size(); i++)
+  {
+    if(!(this->isSampled(i))) { continue; }
+    size_type origin = origins[i];
+    range_builder.set(record_start);
+    while(!(sample_iterators[origin].end()) && sample_iterators[origin].offset() < range_iterators[origin].limit())
+    {
+      offset_builder.set((sample_iterators[origin].offset() - range_iterators[origin].start()) + record_start);
+      this->array[curr] = *(sample_iterators[origin]) + sequence_offsets[origin]; curr++;
+      ++sample_iterators[origin];
+    }
+    record_start += range_iterators[origin].length();
+    ++range_iterators[origin];
+  }
+  this->bwt_ranges = sdsl::sd_vector<>(range_builder);
+  sdsl::util::init_support(this->bwt_select, &(this->bwt_ranges));
+  this->sampled_offsets = sdsl::sd_vector<>(offset_builder);
+  sdsl::util::init_support(this->sample_rank, &(this->sampled_offsets));
 }
 
 void
@@ -686,9 +806,9 @@ DASamples::setVectors()
 size_type
 DASamples::tryLocate(size_type record, size_type offset) const
 {
-  if(this->sampled_records[record] == 0) { return invalid_sequence(); }
+  if(!(this->isSampled(record))) { return invalid_sequence(); }
 
-  size_type record_start = this->bwt_select(this->record_rank(record) + 1);
+  size_type record_start = this->start(record);
   if(this->sampled_offsets[record_start + offset])
   {
     return this->array[this->sample_rank(record_start + offset)];
@@ -699,9 +819,9 @@ DASamples::tryLocate(size_type record, size_type offset) const
 sample_type
 DASamples::nextSample(size_type record, size_type offset) const
 {
-  if(this->sampled_records[record] == 0) { return invalid_sample(); }
+  if(!(this->isSampled(record))) { return invalid_sample(); }
 
-  size_type record_start = this->bwt_select(this->record_rank(record) + 1);
+  size_type record_start = this->start(record);
   size_type rank = this->sample_rank(record_start + offset);
   if(rank < this->array.size())
   {
@@ -709,6 +829,13 @@ DASamples::nextSample(size_type record, size_type offset) const
     return sample_type(sample_select(rank + 1) - record_start, this->array[rank]);
   }
   return invalid_sample();
+}
+
+size_type
+DASamples::limit(size_type rank) const
+{
+  size_type rank_limit = this->record_rank(this->sampled_records.size());
+  return (rank + 1 < rank_limit ? this->bwt_select(rank + 2) : this->bwt_ranges.size());
 }
 
 //------------------------------------------------------------------------------
