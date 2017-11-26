@@ -416,7 +416,8 @@ RecordArray::RecordArray(const std::vector<DynamicRecord>& bwt) :
   this->buildIndex(offsets);
 }
 
-RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sdsl::int_vector<0>& origins, const std::vector<size_type>& record_offsets)
+RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sdsl::int_vector<0>& origins, const std::vector<size_type>& record_offsets) :
+  records(origins.size())
 {
   size_type data_size = 0;
   for(auto source : sources) { data_size += source->data.size(); }
@@ -528,7 +529,7 @@ RecordArray::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::str
   // Serialize the data.
   size_type data_bytes = this->data.size() * sizeof(byte_type);
   sdsl::structure_tree_node* data_node =
-    sdsl::structure_tree::add_child(child, "data", "std::vector<gbwt::byte_type>");
+  sdsl::structure_tree::add_child(child, "data", "std::vector<gbwt::byte_type>");
   out.write((const char*)(this->data.data()), data_bytes);
   sdsl::structure_tree::add_size(data_node, data_bytes);
   written_bytes += data_bytes;
@@ -631,8 +632,6 @@ DASamples::DASamples(const std::vector<DynamicRecord>& bwt)
 
 DASamples::DASamples(const std::vector<DASamples const*> sources, const sdsl::int_vector<0>& origins, const std::vector<size_type>& record_offsets, const std::vector<size_type>& sequence_counts)
 {
-  // FIXME handle ENDMARKER as a special case
-
   // Compute statistics and build iterators over the sources.
   size_type sample_count = 0, total_sequences = 0;
   std::vector<size_type> sequence_offsets(sources.size(), 0);
@@ -648,9 +647,25 @@ DASamples::DASamples(const std::vector<DASamples const*> sources, const sdsl::in
   }
 
   // Compute statistics over the records and mark the sampled nodes.
+  // Note that the endmarker requires special treatment.
   size_type record_count = 0, bwt_offsets = 0;
   this->sampled_records = sdsl::bit_vector(origins.size(), 0);
-  for(size_type i = 0; i < origins.size(); i++)
+  bool sample_endmarker = false;
+  for(size_type origin = 0; origin < sources.size(); origin++)
+  {
+    if(sources[origin]->isSampled(ENDMARKER))
+    {
+      sample_endmarker = true;
+      ++range_iterators[origin];
+    }
+  }
+  if(sample_endmarker)
+  {
+    record_count++;
+    bwt_offsets += total_sequences;
+    this->sampled_records[ENDMARKER] = 1;
+  }
+  for(size_type i = 1; i < origins.size(); i++)
   {
     size_type origin = origins[i];
     if(origin >= sources.size()) { continue; }  // No record.
@@ -672,11 +687,28 @@ DASamples::DASamples(const std::vector<DASamples const*> sources, const sdsl::in
   }
 
   // Build the bitvectors over BWT offsets and store the samples.
+  // The endmarker requires special treatment again.
   sdsl::sd_vector_builder range_builder(bwt_offsets, record_count);
   sdsl::sd_vector_builder offset_builder(bwt_offsets, sample_count);
   this->array = sdsl::int_vector<0>(sample_count, 0, bit_length(total_sequences - 1));
   size_type record_start = 0, curr = 0;
-  for(size_type i = 0; i < origins.size(); i++)
+  if(sample_endmarker)
+  {
+    range_builder.set(record_start);
+    for(size_type origin = 0; origin < sources.size(); origin++)
+    {
+      if(!(sources[origin]->isSampled(ENDMARKER))) { continue; }
+      while(!(sample_iterators[origin].end()) && sample_iterators[origin].offset() < range_iterators[origin].limit())
+      {
+        offset_builder.set((sample_iterators[origin]).offset() + sequence_offsets[origin]);
+        this->array[curr] = *(sample_iterators[origin]) + sequence_offsets[origin]; curr++;
+        ++sample_iterators[origin];
+      }
+      ++range_iterators[origin];
+    }
+    record_start += total_sequences;
+  }
+  for(size_type i = 1; i < origins.size(); i++)
   {
     if(!(this->isSampled(i))) { continue; }
     size_type origin = origins[i];

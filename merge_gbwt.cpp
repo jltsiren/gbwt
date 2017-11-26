@@ -35,8 +35,6 @@ const std::string tool_name = "GBWT merging";
 
 void printUsage(int exit_code = EXIT_SUCCESS);
 
-size_type insert(DynamicGBWT& index, const std::string input_name, size_type batch_size);
-
 //------------------------------------------------------------------------------
 
 int
@@ -45,14 +43,17 @@ main(int argc, char** argv)
   if(argc < 5) { printUsage(); }
 
   size_type batch_size = DynamicGBWT::MERGE_BATCH_SIZE;
+  bool fast_merging = false;
   std::string output;
   int c = 0;
-  while((c = getopt(argc, argv, "b:o:")) != -1)
+  while((c = getopt(argc, argv, "b:fo:")) != -1)
   {
     switch(c)
     {
     case 'b':
       batch_size = std::stoul(optarg); break;
+    case 'f':
+      fast_merging = true; break;
     case 'o':
       output = optarg; break;
     case '?':
@@ -64,7 +65,6 @@ main(int argc, char** argv)
 
   size_type input_files = argc - optind;
   size_type total_inserted = 0;
-  std::string first_input = argv[optind]; optind++;
   if(input_files <= 1 || output.empty()) { printUsage(EXIT_FAILURE); }
 
   Version::print(std::cout, tool_name);
@@ -76,19 +76,42 @@ main(int argc, char** argv)
 
   double start = readTimer();
 
-  DynamicGBWT index;
-  sdsl::load_from_file(index, first_input + DynamicGBWT::EXTENSION);
-  printStatistics(index, first_input);
-
-  while(optind < argc)
+  if(fast_merging)
   {
-    std::string input_name = argv[optind];
-    total_inserted += insert(index, input_name, batch_size);
-    optind++;
+    std::vector<GBWT> indexes(argc - optind);
+    for(int i = optind; i < argc; i++)
+    {
+      std::string input_name = argv[i];
+      sdsl::load_from_file(indexes[i - optind], input_name + GBWT::EXTENSION);
+      printStatistics(indexes[i - optind], input_name);
+      total_inserted += indexes[i - optind].size();
+    }
+    GBWT merged(indexes);
+    sdsl::store_to_file(merged, output + GBWT::EXTENSION);
+    printStatistics(merged, output);
   }
-
-  sdsl::store_to_file(index, output + DynamicGBWT::EXTENSION);
-  printStatistics(index, output);
+  else
+  {
+    DynamicGBWT index;
+    {
+      std::string input_name = argv[optind];
+      sdsl::load_from_file(index, input_name + DynamicGBWT::EXTENSION);
+      printStatistics(index, input_name);
+      optind++;
+    }
+    while(optind < argc)
+    {
+      std::string input_name = argv[optind];
+      GBWT next;
+      sdsl::load_from_file(next, input_name + GBWT::EXTENSION);
+      printStatistics(next, input_name);
+      index.merge(next, batch_size);
+      total_inserted += next.size();
+      optind++;
+    }
+    sdsl::store_to_file(index, output + DynamicGBWT::EXTENSION);
+    printStatistics(index, output);
+  }
 
   double seconds = readTimer() - start;
 
@@ -109,22 +132,13 @@ printUsage(int exit_code)
 
   std::cerr << "Usage: merge_gbwt [options] -o output input1 input2 [input3 ...]" << std::endl;
   std::cerr << "  -b N  Use batches of N sequences for merging (default: " << DynamicGBWT::MERGE_BATCH_SIZE << ")" << std::endl;
+  std::cerr << "  -f    Fast merging algorithm (node ids must not overlap)" << std::endl;
   std::cerr << "  -o X  Use X as the base name for output (required)" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Use base names for the inputs and the output." << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);
-}
-
-size_type
-insert(DynamicGBWT& index, const std::string input_name, size_type batch_size)
-{
-  GBWT next;
-  sdsl::load_from_file(next, input_name + GBWT::EXTENSION);
-  printStatistics(next, input_name);
-  index.merge(next, batch_size);
-  return next.size();
 }
 
 //------------------------------------------------------------------------------
