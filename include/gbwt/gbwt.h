@@ -49,8 +49,10 @@ public:
   GBWT();
   GBWT(const GBWT& source);
   GBWT(GBWT&& source);
-  GBWT(const std::vector<GBWT>& sources);
   ~GBWT();
+
+  // Merge the sources, assuming that node ids do not overlap.
+  GBWT(const std::vector<GBWT>& sources);
 
   void swap(GBWT& another);
   GBWT& operator=(const GBWT& source);

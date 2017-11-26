@@ -69,9 +69,10 @@ main(int argc, char** argv)
 
   Version::print(std::cout, tool_name);
 
+  printHeader("Algorithm"); std::cout << (fast_merging ? "fast" : "insert") << std::endl;
   printHeader("Input files"); std::cout << input_files << std::endl;
   printHeader("Output name"); std::cout << output << std::endl;
-  printHeader("Batch size"); std::cout << batch_size << std::endl;
+  if(!fast_merging) { printHeader("Batch size"); std::cout << batch_size << std::endl; }
   std::cout << std::endl;
 
   double start = readTimer();
