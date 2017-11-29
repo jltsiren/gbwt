@@ -52,7 +52,7 @@ public:
   ~GBWT();
 
   // Merge the sources, assuming that node ids do not overlap.
-  GBWT(const std::vector<GBWT>& sources);
+  explicit GBWT(const std::vector<GBWT>& sources);
 
   void swap(GBWT& another);
   GBWT& operator=(const GBWT& source);
@@ -116,8 +116,8 @@ public:
 //------------------------------------------------------------------------------
 
   /*
-    Low-level interface: Nodes. The interface assumes that node identifiers are valid.
-    This can be checked with contains().
+    Low-level interface: Nodes. The interface assumes that node identifiers are valid,
+    except in contains() / hasEdge(). This can be checked with contains().
   */
 
   bool contains(node_type node) const
@@ -133,6 +133,11 @@ public:
   bool contains(SearchState state) const
   {
     return (this->contains(state.node) && !(state.empty()) && state.range.second < this->nodeSize(state.node));
+  }
+
+  bool hasEdge(node_type from, node_type to) const
+  {
+    return (this->contains(from) && this->record(from).hasEdge(to));
   }
 
   comp_type toComp(node_type node) const { return (node == 0 ? node : node - this->header.offset); }

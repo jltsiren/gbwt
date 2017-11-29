@@ -206,6 +206,16 @@ DynamicRecord::operator[](size_type i) const
 
 //------------------------------------------------------------------------------
 
+bool
+DynamicRecord::hasEdge(node_type to) const
+{
+  for(rank_type outrank = 0; outrank < this->outdegree(); outrank++)
+  {
+    if(this->successor(outrank) == to) { return true; }
+  }
+  return false;
+}
+
 rank_type
 DynamicRecord::edgeTo(node_type to) const
 {
@@ -369,6 +379,16 @@ CompressedRecord::operator[](size_type i) const
     if(iter.offset() > i) { return this->successor(iter->first); }
   }
   return ENDMARKER;
+}
+
+bool
+CompressedRecord::hasEdge(node_type to) const
+{
+  for(rank_type outrank = 0; outrank < this->outdegree(); outrank++)
+  {
+    if(this->successor(outrank) == to) { return true; }
+  }
+  return false;
 }
 
 rank_type

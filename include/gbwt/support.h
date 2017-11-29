@@ -126,6 +126,8 @@ struct DynamicRecord
 
 //------------------------------------------------------------------------------
 
+  bool hasEdge(node_type to) const;
+
   // Maps successor nodes to outranks.
   rank_type edgeTo(node_type to) const;
 
@@ -199,6 +201,8 @@ struct CompressedRecord
 
   // Returns BWT[i] within the record.
   node_type operator[](size_type i) const;
+
+  bool hasEdge(node_type to) const;
 
   // Maps successor nodes to outranks.
   rank_type edgeTo(node_type to) const;
