@@ -282,7 +282,7 @@ public:
 
   void swapIndex(DynamicGBWT& another_index);
 
-  void insert(std::vector<node_type>& sequence, bool both_orientations = false);
+  void insert(const std::vector<node_type>& sequence, bool both_orientations = false);
   void finish();
 
   DynamicGBWT index;

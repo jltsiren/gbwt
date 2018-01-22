@@ -858,7 +858,7 @@ GBWTBuilder::swapIndex(DynamicGBWT& another_index)
 }
 
 void
-GBWTBuilder::insert(std::vector<node_type>& sequence, bool both_orientations)
+GBWTBuilder::insert(const std::vector<node_type>& sequence, bool both_orientations)
 {
   size_type space_required = sequence.size() + 1;
   if(both_orientations) { space_required *= 2; }
