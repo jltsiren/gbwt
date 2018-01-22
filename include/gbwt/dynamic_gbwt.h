@@ -167,6 +167,11 @@ public:
     return (this->contains(from) && this->record(from).hasEdge(to));
   }
 
+  std::vector<edge_type> edges(node_type from) const
+  {
+    return this->record(from).outgoing;
+  }
+
   comp_type toComp(node_type node) const { return (node == 0 ? node : node - this->header.offset); }
   node_type toNode(comp_type comp) const { return (comp == 0 ? comp : comp + this->header.offset); }
 

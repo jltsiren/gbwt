@@ -87,7 +87,7 @@ struct DynamicRecord
 
 //------------------------------------------------------------------------------
 
-  DynamicRecord() : body_size(0) {}
+  DynamicRecord();
 
   size_type size() const { return this->body_size; }
   bool empty() const { return (this->size() == 0); }

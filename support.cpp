@@ -30,6 +30,11 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
+DynamicRecord::DynamicRecord() :
+  body_size(0)
+{
+}
+
 void
 DynamicRecord::clear()
 {
