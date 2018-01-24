@@ -92,6 +92,8 @@ public:
     extract  empty vector
   */
 
+  SearchState find(node_type node) const { return gbwt::find(*this, node); }
+
   template<class Iterator>
   SearchState find(Iterator begin, Iterator end) const { return gbwt::find(*this, begin, end); }
 
