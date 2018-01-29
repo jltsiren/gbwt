@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017 Jouni Siren
+  Copyright (c) 2017, 2018 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -555,7 +555,7 @@ RecordArray::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::str
   size_type data_bytes = this->data.size() * sizeof(byte_type);
   sdsl::structure_tree_node* data_node =
   sdsl::structure_tree::add_child(child, "data", "std::vector<gbwt::byte_type>");
-  out.write((const char*)(this->data.data()), data_bytes);
+  if(this->data.size() > 0) { out.write(reinterpret_cast<const char*>(this->data.data()), data_bytes); }
   sdsl::structure_tree::add_size(data_node, data_bytes);
   written_bytes += data_bytes;
 
@@ -574,7 +574,7 @@ RecordArray::load(std::istream& in)
 
   // Read the data.
   this->data.resize(this->index.size());
-  in.read((char*)(this->data.data()), this->data.size() * sizeof(byte_type));
+  if(this->data.size() > 0) { in.read(reinterpret_cast<char*>(this->data.data()), this->data.size() * sizeof(byte_type)); }
 }
 
 void

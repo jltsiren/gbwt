@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017 Jouni Siren
+  Copyright (c) 2017, 2018 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -780,7 +780,7 @@ DynamicGBWT::locate(SearchState state) const
   {
     size_type tail = 0;
     node_type curr = invalid_node();
-    const DynamicRecord* current = 0;
+    const DynamicRecord* current = nullptr;
     std::vector<sample_type>::const_iterator sample;
     edge_type LF_result;
     range_type LF_range;

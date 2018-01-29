@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017 Jouni Siren
+  Copyright (c) 2017, 2018 Jouni Siren
   Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -23,13 +23,13 @@
   SOFTWARE.
 */
 
+#include <gbwt/utils.h>
+
 #include <cstdio>
 #include <cstdlib>
 
 #include <sys/resource.h>
 #include <unistd.h>
-
-#include <gbwt/utils.h>
 
 namespace gbwt
 {
