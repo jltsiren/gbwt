@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017 Jouni Siren
+  Copyright (c) 2017, 2018 Jouni Siren
   Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -34,6 +34,46 @@ namespace gbwt
 /*
   support.h: Internal support structures.
 */
+
+//------------------------------------------------------------------------------
+
+/*
+  Reads and writes are done in blocks of 1048576 elements to avoid the bug with
+  large reads in GCC / macOS.
+*/
+
+struct DiskIO
+{
+  const static size_type block_size;
+
+  template<class Element>
+  static bool read(std::istream& in, Element* data, size_type n = 1)
+  {
+    for(size_type offset = 0; offset < n; offset += block_size)
+    {
+      size_type bytes = std::min(block_size, n - offset) * sizeof(Element);
+      in.read(reinterpret_cast<char*>(data + offset), bytes);
+      size_type read_bytes = in.gcount();
+      if(read_bytes < bytes) { return false; }
+    }
+    return true;
+  }
+
+  template<class Element>
+  static void write(std::ostream& out, const Element* data, size_type n = 1)
+  {
+    for(size_type offset = 0; offset < n; offset += block_size)
+    {
+      size_type bytes = std::min(block_size, n - offset) * sizeof(Element);
+      out.write(reinterpret_cast<const char*>(data + offset), bytes);
+      if(out.fail())
+      {
+        std::cerr << "DiskIO::write(): Write failed" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    }
+  }
+};
 
 //------------------------------------------------------------------------------
 

@@ -554,8 +554,8 @@ RecordArray::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::str
   // Serialize the data.
   size_type data_bytes = this->data.size() * sizeof(byte_type);
   sdsl::structure_tree_node* data_node =
-  sdsl::structure_tree::add_child(child, "data", "std::vector<gbwt::byte_type>");
-  if(this->data.size() > 0) { out.write(reinterpret_cast<const char*>(this->data.data()), data_bytes); }
+    sdsl::structure_tree::add_child(child, "data", "std::vector<gbwt::byte_type>");
+  if(this->data.size() > 0) { DiskIO::write(out, this->data.data(), this->data.size()); }
   sdsl::structure_tree::add_size(data_node, data_bytes);
   written_bytes += data_bytes;
 
@@ -574,7 +574,7 @@ RecordArray::load(std::istream& in)
 
   // Read the data.
   this->data.resize(this->index.size());
-  if(this->data.size() > 0) { in.read(reinterpret_cast<char*>(this->data.data()), this->data.size() * sizeof(byte_type)); }
+  if(this->data.size() > 0) { DiskIO::read(in, this->data.data(), this->data.size()); }
 }
 
 void
