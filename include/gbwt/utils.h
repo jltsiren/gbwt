@@ -34,7 +34,6 @@
 
 #include <sdsl/bit_vectors.hpp>
 
-#include <atomic>
 #include <omp.h>
 
 namespace gbwt
@@ -280,17 +279,6 @@ double readTimer();       // Seconds from an arbitrary time point.
 size_type memoryUsage();  // Peak memory usage in bytes.
 
 //------------------------------------------------------------------------------
-
-struct TempFile
-{
-  static std::atomic<size_type> counter;
-  static std::string            temp_dir;
-  const static std::string      DEFAULT_TEMP_DIR;
-
-  static void setDirectory(const std::string& directory);
-  static std::string getName(const std::string& name_part);
-  static void remove(std::string& filename);
-};
 
 // Returns the total length of the rows, excluding line ends.
 size_type readRows(const std::string& filename, std::vector<std::string>& rows, bool skip_empty_rows);

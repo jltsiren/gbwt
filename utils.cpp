@@ -146,41 +146,6 @@ memoryUsage()
 
 //------------------------------------------------------------------------------
 
-std::atomic<size_type> TempFile::counter(0);
-
-const std::string TempFile::DEFAULT_TEMP_DIR = ".";
-std::string TempFile::temp_dir = TempFile::DEFAULT_TEMP_DIR;
-
-void
-TempFile::setDirectory(const std::string& directory)
-{
-  if(directory.empty()) { temp_dir = DEFAULT_TEMP_DIR; }
-  else if(directory[directory.length() - 1] != '/') { temp_dir = directory; }
-  else { temp_dir = directory.substr(0, directory.length() - 1); }
-}
-
-std::string
-TempFile::getName(const std::string& name_part)
-{
-  char hostname[32];
-  gethostname(hostname, 32); hostname[31] = 0;
-
-  return temp_dir + '/' + name_part + '_'
-    + std::string(hostname) + '_'
-    + sdsl::util::to_string(sdsl::util::pid()) + '_'
-    + sdsl::util::to_string(counter++);
-}
-
-void
-TempFile::remove(std::string& filename)
-{
-  if(!(filename.empty()))
-  {
-    std::remove(filename.c_str());
-    filename.clear();
-  }
-}
-
 size_type
 readRows(const std::string& filename, std::vector<std::string>& rows, bool skip_empty_rows)
 {

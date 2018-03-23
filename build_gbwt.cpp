@@ -26,6 +26,8 @@
 #include <random>
 #include <unistd.h>
 
+#include <atomic>
+
 #include <gbwt/dynamic_gbwt.h>
 
 using namespace gbwt;
