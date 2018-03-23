@@ -36,6 +36,11 @@
 
 #include <omp.h>
 
+// Parallel sorting is only available with GCC.
+#if (defined(__GNUC__) && !defined(__clang__))
+#include <parallel/algorithm>
+#endif
+
 namespace gbwt
 {
 
@@ -291,18 +296,16 @@ size_type fileSize(std::ofstream& file);
 /*
   parallelQuickSort() uses less working space than parallelMergeSort(). Calling omp_set_nested(1)
   improves the speed of parallelQuickSort().
-
-  Sequential sorting is typically better with less than 1000 elements per thread.
 */
 
 template<class Iterator, class Comparator>
 void
 parallelQuickSort(Iterator first, Iterator last, const Comparator& comp)
 {
-#ifdef _GLIBCXX_PARALLEL
+#if (defined(__GNUC__) && !defined(__clang__))
   int nested = omp_get_nested();
   omp_set_nested(1);
-  std::sort(first, last, comp, __gnu_parallel::balanced_quicksort_tag());
+  __gnu_parallel::sort(first, last, comp, __gnu_parallel::balanced_quicksort_tag());
   omp_set_nested(nested);
 #else
   std::sort(first, last, comp);
@@ -313,10 +316,10 @@ template<class Iterator>
 void
 parallelQuickSort(Iterator first, Iterator last)
 {
-#ifdef _GLIBCXX_PARALLEL
+#if (defined(__GNUC__) && !defined(__clang__))
   int nested = omp_get_nested();
   omp_set_nested(1);
-  std::sort(first, last, __gnu_parallel::balanced_quicksort_tag());
+  __gnu_parallel::sort(first, last, __gnu_parallel::balanced_quicksort_tag());
   omp_set_nested(nested);
 #else
   std::sort(first, last);
@@ -327,8 +330,8 @@ template<class Iterator, class Comparator>
 void
 parallelMergeSort(Iterator first, Iterator last, const Comparator& comp)
 {
-#ifdef _GLIBCXX_PARALLEL
-  std::sort(first, last, comp, __gnu_parallel::multiway_mergesort_tag());
+#if (defined(__GNUC__) && !defined(__clang__))
+  __gnu_parallel::sort(first, last, comp, __gnu_parallel::multiway_mergesort_tag());
 #else
   std::sort(first, last, comp);
 #endif
@@ -338,8 +341,8 @@ template<class Iterator>
 void
 parallelMergeSort(Iterator first, Iterator last)
 {
-#ifdef _GLIBCXX_PARALLEL
-  std::sort(first, last, __gnu_parallel::multiway_mergesort_tag());
+#if (defined(__GNUC__) && !defined(__clang__))
+  __gnu_parallel::sort(first, last, __gnu_parallel::multiway_mergesort_tag());
 #else
   std::sort(first, last);
 #endif
@@ -349,8 +352,8 @@ template<class Iterator, class Comparator>
 void
 sequentialSort(Iterator first, Iterator last, const Comparator& comp)
 {
-#ifdef _GLIBCXX_PARALLEL
-  std::sort(first, last, comp, __gnu_parallel::sequential_tag());
+#if (defined(__GNUC__) && !defined(__clang__))
+  __gnu_parallel::sort(first, last, comp, __gnu_parallel::sequential_tag());
 #else
   std::sort(first, last, comp);
 #endif
@@ -360,39 +363,11 @@ template<class Iterator>
 void
 sequentialSort(Iterator first, Iterator last)
 {
-#ifdef _GLIBCXX_PARALLEL
-  std::sort(first, last, __gnu_parallel::sequential_tag());
+#if (defined(__GNUC__) && !defined(__clang__))
+  __gnu_parallel::sort(first, last, __gnu_parallel::sequential_tag());
 #else
   std::sort(first, last);
 #endif
-}
-
-const size_type PARALLEL_SORT_THRESHOLD = 1024;
-
-template<class Iterator, class Comparator>
-void
-chooseBestSort(Iterator first, Iterator last, const Comparator& comp)
-{
-  size_type old_threads = omp_get_max_threads();
-  size_type new_threads = ((last - first) + PARALLEL_SORT_THRESHOLD / 2) / PARALLEL_SORT_THRESHOLD;
-  if(new_threads <= 1) { sequentialSort(first, last, comp); return; }
-
-  if(new_threads < old_threads) { omp_set_num_threads(new_threads); }
-  parallelQuickSort(first, last, comp);
-  if(new_threads < old_threads) { omp_set_num_threads(old_threads); }
-}
-
-template<class Iterator>
-void
-chooseBestSort(Iterator first, Iterator last)
-{
-  size_type old_threads = omp_get_max_threads();
-  size_type new_threads = ((last - first) + PARALLEL_SORT_THRESHOLD / 2) / PARALLEL_SORT_THRESHOLD;
-  if(new_threads <= 1) { sequentialSort(first, last); return; }
-
-  if(new_threads < old_threads) { omp_set_num_threads(new_threads); }
-  parallelQuickSort(first, last);
-  if(new_threads < old_threads) { omp_set_num_threads(old_threads); }
 }
 
 template<class Element>
