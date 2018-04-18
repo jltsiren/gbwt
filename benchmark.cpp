@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017 Jouni Siren
+  Copyright (c) 2017, 2018 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -34,19 +34,15 @@ using namespace gbwt;
 const std::string tool_name = "GBWT benchmark";
 
 const size_type RANDOM_SEED  = 0xDEADBEEF;
-const size_type QUERIES      = 20000;
-const size_type QUERY_LENGTH = 60;
 
 void printUsage(int exit_code = EXIT_SUCCESS);
 
-std::vector<SearchState> findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& base_name);
-
-size_type totalLength(const std::vector<SearchState>& states);
+std::vector<SearchState> findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type find_queries, size_type pattern_length);
 
 template<class GBWTType>
 void locateBenchmark(const GBWTType& index, const std::vector<SearchState>& queries);
 
-void extractBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index);
+void extractBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type extract_queries);
 
 //------------------------------------------------------------------------------
 
@@ -54,36 +50,92 @@ int
 main(int argc, char** argv)
 {
   if(argc < 2) { printUsage(); }
-  std::string index_base = argv[1], query_base;
-  if(argc > 2) { query_base = argv[2]; }
+
+  int c = 0;
+  bool find = false, locate = false, extract = false;
+  size_type find_queries = 0, pattern_length = 0, extract_queries = 0;
+  while((c = getopt(argc, argv, "f:p:le:")) != -1)
+  {
+    switch(c)
+    {
+    case 'f':
+      find = true;
+      find_queries = std::stoul(optarg); break;
+    case 'p':
+      pattern_length = std::stoul(optarg); break;
+    case 'l':
+      locate = true; break;
+    case 'e':
+      extract = true;
+      extract_queries = std::stoul(optarg); break;
+    case '?':
+      std::exit(EXIT_FAILURE);
+    default:
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
+  if(optind >= argc) { printUsage(EXIT_FAILURE); }
+  std::string index_base = argv[optind];
+  if(find)
+  {
+    if(find_queries == 0 || pattern_length == 0)
+    {
+      std::cerr << "benchmark: Number of queries and pattern length must be non-zero" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+  if(locate)
+  {
+    if(!find)
+    {
+      std::cerr << "benchmark: Cannot benchmark locate() queries without find() queries" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+  if(extract)
+  {
+    if(extract_queries == 0)
+    {
+      std::cerr << "benchmark: Number of queries must be non-zero" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
 
   Version::print(std::cout, tool_name);
-
   printHeader("Index name"); std::cout << index_base << std::endl;
-  if(!(query_base.empty())) { printHeader("Query name"); std::cout << query_base << std::endl; }
+  if(find || locate || extract)
+  {
+    printHeader("Queries");
+    if(find) { std::cout << "find(" << find_queries << ", " << pattern_length << ") "; }
+    if(locate) { std::cout << "locate() "; }
+    if(extract) { std::cout << "extract(" << extract_queries << ") "; }
+    std::cout << std::endl;
+  }
   std::cout << std::endl;
-
-  double start = readTimer();
 
   GBWT compressed_index;
   sdsl::load_from_file(compressed_index, index_base + GBWT::EXTENSION);
   printStatistics(compressed_index, index_base);
-  if(query_base.empty()) { return 0; }
+  if(!(find || locate || extract)) { return 0; }
 
   DynamicGBWT dynamic_index;
   sdsl::load_from_file(dynamic_index, index_base + DynamicGBWT::EXTENSION);
   printStatistics(dynamic_index, index_base);
 
-  std::vector<SearchState> results = findBenchmark(compressed_index, dynamic_index, query_base);
-
-  locateBenchmark(compressed_index, results);
-  locateBenchmark(dynamic_index, results);
-
-  extractBenchmark(compressed_index, dynamic_index);
-
-  double seconds = readTimer() - start;
-  std::cout << "Benchmarks completed in " << seconds << " seconds" << std::endl;
-  std::cout << std::endl;
+  if(find)
+  {
+    std::vector<SearchState> results = findBenchmark(compressed_index, dynamic_index, find_queries, pattern_length);
+    if(locate)
+    {
+      locateBenchmark(compressed_index, results);
+      locateBenchmark(dynamic_index, results);
+    }
+  }
+  if(extract)
+  {
+    extractBenchmark(compressed_index, dynamic_index, extract_queries);    
+  }
 
   return 0;
 }
@@ -95,68 +147,40 @@ printUsage(int exit_code)
 {
   Version::print(std::cerr, tool_name);
 
-  std::cerr << "Usage: benchmark index_base [query_base]" << std::endl;
+  std::cerr << "Usage: benchmark [options] index_base" << std::endl;
+  std::cerr << "  -f N  Benchmark N find() queries (requires -p)" << std::endl;
+  std::cerr << "  -p N  Use patterns of length N" << std::endl;
+  std::cerr << "  -l    Benchmark locate() queries (requires -f)" << std::endl;
+  std::cerr << "  -e N  Benchmark N extract() queries" << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);
 }
 
-std::vector<size_type>
-startOffsets(const std::string& base_name)
-{
-  std::vector<size_type> offsets;
-  text_buffer_type text(base_name);
-  bool seq_start = true;
-  for(size_type i = 0; i < text.size(); i++)
-  {
-    if(seq_start) { offsets.push_back(i); seq_start = false; }
-    if(text[i] == ENDMARKER) { seq_start = true; }
-  }
-
-  std::cout << "Found the starting offsets for " << offsets.size() << " sequences" << std::endl;
-  return offsets;
-}
-
 std::vector<std::vector<node_type>>
-generateQueries(const std::string& base_name)
+generateQueries(const DynamicGBWT& index, size_type find_queries, size_type pattern_length)
 {
   std::mt19937_64 rng(RANDOM_SEED);
   std::vector<std::vector<node_type>> result;
-  text_buffer_type text(base_name);
-  if(text.size() <= QUERY_LENGTH)
-  {
-    std::cerr << "generateQueries(): Text length " << text.size() << " is too small for query length " << QUERY_LENGTH << std::endl;
-    return result;
-  }
 
   size_type attempts = 0;
-  while(result.size() < QUERIES && attempts < 2 * QUERIES)
+  while(result.size() < find_queries && attempts < 2 * find_queries)
   {
-    size_type start_offset = rng() % (text.size() - QUERY_LENGTH);  // We do not want queries containing the final endmarker.
-    std::vector<node_type> candidate(text.begin() + start_offset, text.begin() + start_offset + QUERY_LENGTH);
-    bool ok = true;
-    for(node_type node : candidate)
+    std::vector<node_type> sequence = index.extract(rng() % index.sequences());
+    if(sequence.size() >= pattern_length)
     {
-      if(node == ENDMARKER) { ok = false; break; }
+      size_type start_offset = rng() % (sequence.size() + 1 - pattern_length);
+      result.push_back(std::vector<node_type>(sequence.begin() + start_offset, sequence.begin() + start_offset + pattern_length));
     }
-    if(ok) { result.push_back(candidate); }
     attempts++;
   }
 
-  std::cout << "Generated " << result.size() << " queries of total length " << (result.size() * QUERY_LENGTH) << std::endl;
+  std::cout << "Generated " << result.size() << " queries of total length " << (result.size() * pattern_length) << std::endl;
   return result;
 }
 
 std::string indexType(const GBWT&) { return "Compressed GBWT"; }
 std::string indexType(const DynamicGBWT&) { return "Dynamic GBWT"; }
-
-size_type
-totalLength(const std::vector<SearchState>& states)
-{
-  size_type result = 0;
-  for(SearchState state : states) { result += state.size(); }
-  return result;
-}
 
 //------------------------------------------------------------------------------
 
@@ -165,23 +189,24 @@ size_type
 findBenchmark(const GBWTType& index, const std::vector<std::vector<node_type>>& queries, std::vector<SearchState>& results)
 {
   double start = readTimer();
-  size_type total_length = 0;
+  size_type total_length = 0, total_size = 0;
   for(size_type i = 0; i < queries.size(); i++)
   {
     results[i] = index.find(queries[i].begin(), queries[i].end());
-    total_length += Range::length(results[i].range);
+    total_length += queries[i].size();
+    total_size += Range::length(results[i].range);
   }
   double seconds = readTimer() - start;
-  printTime(indexType(index), queries.size(), seconds);
-  return total_length;
+  printTimeLength(indexType(index), queries.size(), total_length, seconds);
+  return total_size;
 }    
 
 std::vector<SearchState>
-findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& base_name)
+findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type find_queries, size_type pattern_length)
 {
   std::cout << "find() benchmarks:" << std::endl;
 
-  std::vector<std::vector<node_type>> queries = generateQueries(base_name);
+  std::vector<std::vector<node_type>> queries = generateQueries(dynamic_index, find_queries, pattern_length);
   std::vector<SearchState> results(queries.size());
 
   size_type compressed_length = findBenchmark(compressed_index, queries, results);
@@ -194,7 +219,7 @@ findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, co
               << dynamic_length << " (" << indexType(dynamic_index) << ")" << std::endl;
   }
 
-  std::cout << results.size() << " ranges of total length " << compressed_length << std::endl;
+  std::cout << "Found " << results.size() << " ranges of total length " << compressed_length << std::endl;
   std::cout << std::endl;
 
   return results;
@@ -244,30 +269,33 @@ locateBenchmark(const GBWTType& index, const std::vector<SearchState>& queries)
 //------------------------------------------------------------------------------
 
 template<class GBWTType>
-void
-extractBenchmark(const GBWTType& index)
+size_type
+extractBenchmark(const GBWTType& index, size_type extract_queries)
 {
   double start = readTimer();
+  std::mt19937_64 rng(RANDOM_SEED);
   size_type total_length = 0;
-  for(size_type i = 0; i < index.sequences(); i++)
+  for(size_type i = 0; i < extract_queries; i++)
   {
-    std::vector<node_type> sequence = index.extract(i);
-    total_length += sequence.size() + 1;
+    std::vector<node_type> sequence = index.extract(rng() % index.sequences());
+    total_length += sequence.size();
   }
   double seconds = readTimer() - start;
-  printTime(indexType(index), index.sequences(), seconds);
-  if(total_length != index.size())
-  {
-    std::cerr << "extractBenchmark(): " << indexType(index) << ": Total length " << total_length << ", expected " << index.size() << std::endl;
-  }
+  printTimeLength(indexType(index), extract_queries, total_length, seconds);
+  return total_length;
 }
 
 void
-extractBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index)
+extractBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type extract_queries)
 {
   std::cout << "extract() benchmarks:" << std::endl;
-  extractBenchmark(compressed_index);
-  extractBenchmark(dynamic_index);
+  size_type compressed_length = extractBenchmark(compressed_index, extract_queries);
+  size_type dynamic_length = extractBenchmark(dynamic_index, extract_queries);
+  if(compressed_length != dynamic_length)
+  {
+    std::cerr << "extractBenchmark(): Total length " << compressed_length << " (" << indexType(compressed_index) << "), "
+      << dynamic_length << " (" << indexType(dynamic_index) << ")" << std::endl;
+  }
   std::cout << std::endl;
 }
 

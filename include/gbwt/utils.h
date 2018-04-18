@@ -277,6 +277,7 @@ const size_type DEFAULT_INDENT = 18;
 
 void printHeader(const std::string& header, size_type indent = DEFAULT_INDENT);
 void printTime(const std::string& header, size_type queries, double seconds, size_type indent = DEFAULT_INDENT);
+void printTimeLength(const std::string& header, size_type queries, size_type total_length, double seconds, size_type indent = DEFAULT_INDENT);
 
 //------------------------------------------------------------------------------
 

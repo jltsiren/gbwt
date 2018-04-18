@@ -124,6 +124,14 @@ printTime(const std::string& header, size_type queries, double seconds, size_typ
             << inMicroseconds(seconds / queries) << " µs/query)" << std::endl;
 }
 
+void
+printTimeLength(const std::string& header, size_type queries, size_type total_length, double seconds, size_type indent)
+{
+  printHeader(header, indent);
+  std::cout << queries << " queries of total length " << total_length << " in " << seconds << " seconds ("
+            << inMicroseconds(seconds / total_length) << " µs/character)" << std::endl;
+}
+
 //------------------------------------------------------------------------------
 
 double
