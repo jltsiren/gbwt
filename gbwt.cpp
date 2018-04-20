@@ -59,6 +59,7 @@ GBWT::swap(GBWT& another)
     this->header.swap(another.header);
     this->bwt.swap(another.bwt);
     this->da_samples.swap(another.da_samples);
+    this->cacheEndmarker(); another.cacheEndmarker();
   }
 }
 
@@ -77,6 +78,7 @@ GBWT::operator=(GBWT&& source)
     this->header = std::move(source.header);
     this->bwt = std::move(source.bwt);
     this->da_samples = std::move(source.da_samples);
+    this->cacheEndmarker();
   }
   return *this;
 }
@@ -106,6 +108,8 @@ GBWT::load(std::istream& in)
 
   this->bwt.load(in);
   this->da_samples.load(in);
+
+  this->cacheEndmarker();
 }
 
 void
@@ -114,6 +118,7 @@ GBWT::copy(const GBWT& source)
   this->header = source.header;
   this->bwt = source.bwt;
   this->da_samples = source.da_samples;
+  this->cacheEndmarker();
 }
 
 //------------------------------------------------------------------------------
@@ -188,6 +193,8 @@ GBWT::GBWT(const std::vector<GBWT>& sources)
     }
     this->da_samples = DASamples(sample_sources, origins, record_offsets, sequence_counts);
   }
+
+  this->cacheEndmarker();
 }
 
 //------------------------------------------------------------------------------
@@ -275,6 +282,12 @@ GBWT::record(node_type node) const
   comp_type comp = this->toComp(node);
   size_type start = this->bwt.start(comp), limit = this->bwt.limit(comp);
   return CompressedRecord(this->bwt.data, start, limit);
+}
+
+void
+GBWT::cacheEndmarker()
+{
+  this->endmarker_record = this->record(ENDMARKER);
 }
 
 //------------------------------------------------------------------------------

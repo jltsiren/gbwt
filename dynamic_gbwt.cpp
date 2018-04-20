@@ -706,7 +706,7 @@ DynamicGBWT::merge(const GBWT& source, size_type batch_size)
   this->resize(source.header.offset, source.sigma());
 
   // Insert the sequences in batches.
-  const CompressedRecord endmarker = source.record(ENDMARKER);
+  const CompressedRecord& endmarker = source.endmarker();
   CompressedRecordIterator iter(endmarker);
   size_type source_id = 0, run_offset = 0;
   while(source_id < source.sequences())
