@@ -131,6 +131,9 @@ struct DynamicRecord
   // Maps successor nodes to outranks.
   rank_type edgeTo(node_type to) const;
 
+  // This version works when the edges are not sorted.
+  rank_type edgeToLinear(node_type to) const;
+
   // These assume that 'outrank' is a valid outgoing edge.
   node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
 #ifdef GBWT_SAVE_MEMORY

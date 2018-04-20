@@ -301,7 +301,7 @@ updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, size_type iteratio
     size_type insert_count = 0;
     while(i < seqs.size() && seqs[i].curr == curr)
     {
-      rank_type outrank = current.edgeTo(seqs[i].next);
+      rank_type outrank = current.edgeToLinear(seqs[i].next);
       if(outrank >= current.outdegree())  // Add edge (curr, next) if it does not exist.
       {
         current.outgoing.push_back(edge_type(seqs[i].next, 0));
@@ -445,7 +445,7 @@ rebuildOffsets(DynamicGBWT& gbwt, std::vector<Sequence>& seqs)
     for(edge_type inedge : gbwt.record(next).incoming)
     {
       DynamicRecord& predecessor = gbwt.record(inedge.first);
-      predecessor.offset(predecessor.edgeTo(next)) = offset;
+      predecessor.offset(predecessor.edgeToLinear(next)) = offset;
       offset += inedge.second;
     }
   }
@@ -453,7 +453,7 @@ rebuildOffsets(DynamicGBWT& gbwt, std::vector<Sequence>& seqs)
   for(Sequence& seq : seqs)
   {
     const DynamicRecord& current = gbwt.record(seq.curr);
-    seq.offset += current.offset(current.edgeTo(seq.next));
+    seq.offset += current.offset(current.edgeToLinear(seq.next));
   }
 }
 
