@@ -103,34 +103,40 @@ DynamicRecord::LF(size_type i) const
   return this->runLF(i, run_end);
 }
 
+template<class Array>
+edge_type LFLoop(Array& result, const std::vector<edge_type>& body, size_type i, size_type& run_end)
+{
+  rank_type last_edge = 0;
+  size_type offset = 0;
+  for(run_type run : body)
+  {
+    last_edge = run.first;
+    result[run.first].second += run.second;
+    offset += run.second;
+    if(offset > i) { break; }
+  }
+
+  result[last_edge].second -= (offset - i);
+  run_end = offset - 1;
+  return result[last_edge];
+}
+
 edge_type
 DynamicRecord::runLF(size_type i, size_type& run_end) const
 {
   if(i >= this->size()) { return invalid_edge(); }
 
-  // Find the outrank at offset i.
-  size_type outrank = this->outdegree();
-  size_type offset = 0;
-  for(run_type run : this->body)
+  if(this->outdegree() <= CompressedRecordArrayIterator::MAX_OUTDEGREE)
   {
-    offset += run.second;
-    if(offset > i) { outrank = run.first; break; }
+    edge_type result[CompressedRecordArrayIterator::MAX_OUTDEGREE];
+    for(size_type i = 0; i < this->outdegree(); i++) { result[i] = this->outgoing[i]; }
+    return LFLoop(result, this->body, i, run_end);
   }
-  if(outrank >= this->outdegree()) { return invalid_edge(); }
-
-  // Compute LF(i, successor(outrank)).
-  offset = 0;
-  edge_type result(this->successor(outrank), this->offset(outrank));
-  for(run_type run : this->body)
+  else
   {
-    if(run.first == outrank) { result.second += run.second; }
-    offset += run.second;
-    if(offset > i) { break;}
+    std::vector<edge_type> result(this->outgoing);
+    return LFLoop(result, this->body, i, run_end);
   }
-
-  result.second -= (offset - i);
-  run_end = offset - 1;
-  return result;
 }
 
 size_type
@@ -352,19 +358,20 @@ CompressedRecord::runLF(size_type i, size_type& run_end) const
 {
   if(this->outdegree() == 0) { return invalid_edge(); }
 
-  // Find the outrank at offset i.
-  size_type outrank = this->outdegree();
-  for(CompressedRecordIterator iter(*this); !(iter.end()); ++iter)
+  if(this->outdegree() <= CompressedRecordArrayIterator::MAX_OUTDEGREE)
   {
-    if(iter.offset() > i) { outrank = iter->first; break; }
+    CompressedRecordArrayIterator iter(*this);
+    edge_type result = iter.edgeAt(i);
+    if(result != invalid_edge()) { run_end = iter.offset() - 1; }
+    return result;
   }
-  if(outrank >= this->outdegree()) { return invalid_edge(); }
-
-  // Compute LF(i, successor(outrank)).
-  CompressedRecordRankIterator result_iter(*this, outrank);
-  edge_type result(this->successor(outrank), result_iter.rankAt(i));
-  run_end = result_iter.offset() - 1;
-  return result;
+  else
+  {
+    CompressedRecordFullIterator iter(*this);
+    edge_type result = iter.edgeAt(i);
+    if(result != invalid_edge()) { run_end = iter.offset() - 1; }
+    return result;
+  }
 }
 
 size_type

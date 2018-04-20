@@ -266,6 +266,8 @@ struct Sequence
   - CompressedRecordRankIterator keeps track of the rank for one successor node.
   - CompressedRecordFullIterator is the slowest, as it keeps track of the ranks
     for all successor nodes.
+  - CompressedRecordArrayIterator is a faster version of the full iterator for
+    records with outdegree <= MAX_OUTDEGREE.
 
   FIXME a single iterator with a RankCalculator as a template parameter.
 */
@@ -421,6 +423,83 @@ struct CompressedRecordFullIterator
   const CompressedRecord& record;
   Run                     decoder;
   std::vector<edge_type>  ranks;
+
+  size_type               record_offset;
+  size_type               curr_offset, next_offset;
+  run_type                run;
+
+private:
+  void read()
+  {
+    if(!(this->end()))
+    {
+      this->run = this->decoder.read(this->record.body, this->next_offset);
+      this->record_offset += this->run.second;
+      this->ranks[this->run.first].second += this->run.second;
+    }
+  }
+};
+
+struct CompressedRecordArrayIterator
+{
+  const static size_type MAX_OUTDEGREE = 4;
+
+  explicit CompressedRecordArrayIterator(const CompressedRecord& source) :
+    record(source), decoder(source.outdegree()),
+    record_offset(0), curr_offset(0), next_offset(0)
+  {
+    for(size_type i = 0; i < source.outdegree(); i++) { this->ranks[i] = source.outgoing[i]; }
+    this->read();
+  }
+
+  bool end() const { return (this->curr_offset >= this->record.data_size); }
+  void operator++() { this->curr_offset = this->next_offset; this->read(); }
+
+  run_type operator*() const { return this->run; }
+  const run_type* operator->() { return &(this->run); }
+
+  // After the current run.
+  size_type offset() const { return this->record_offset; }
+  size_type rank() const { return this->rank(this->run.first); }
+  size_type rank(rank_type outrank) const { return this->ranks[outrank].second; }
+  edge_type edge() const { return this->edge(this->run.first); }
+  edge_type edge(rank_type outrank) const { return this->ranks[outrank]; }
+
+  // Intended for positions i covered by or after the current run. May advance the iterator.
+  size_type rankAt(size_type i)
+  {
+    while(this->offset() <= i)  // We need <= to get BWT[i].
+    {
+      if(this->end()) { return invalid_offset(); }
+      this->curr_offset = this->next_offset;
+      this->run = this->decoder.read(this->record.body, this->next_offset);
+      this->record_offset += this->run.second;
+      this->ranks[this->run.first].second += this->run.second;
+    }
+
+    return this->rank() - (this->offset() - i);
+  }
+
+  // Intended for positions i covered by or after the current run. May advance the iterator.
+  edge_type edgeAt(size_type i)
+  {
+    while(this->offset() <= i)  // We need <= to get BWT[i].
+    {
+      if(this->end()) { return invalid_edge(); }
+      this->curr_offset = this->next_offset;
+      this->run = this->decoder.read(this->record.body, this->next_offset);
+      this->record_offset += this->run.second;
+      this->ranks[this->run.first].second += this->run.second;
+    }
+
+    edge_type temp = this->edge();
+    temp.second -= (this->offset() - i);
+    return temp;
+  }
+
+  const CompressedRecord& record;
+  Run                     decoder;
+  edge_type               ranks[MAX_OUTDEGREE];
 
   size_type               record_offset;
   size_type               curr_offset, next_offset;
