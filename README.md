@@ -6,7 +6,12 @@ The implementation uses [Succinct Data Structures Library 2.0](https://github.co
 
 See [the wiki](https://github.com/jltsiren/gbwt/wiki) for further documentation.
 
-## References
+## Citing GBWT
+
+Jouni Sirén, Erik Garrison, Adam M. Novak, Benedict Paten, and Richard Durbin: **Haplotype-aware graph indexes**.
+[arXiv:1805.03834](https://arxiv.org/abs/1805.03834), 2018.
+
+## Other references
 
 Richard Durbin: **Efficient haplotype matching and storage using the Positional Burrows-Wheeler Transform (PBWT)**.
 Bioinformatics 30(9):1266-1272, 2014.
