@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017 Jouni Siren
+  Copyright (c) 2017, 2018 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -56,6 +56,26 @@ struct SearchState
 };
 
 std::ostream& operator<<(std::ostream& out, SearchState state);
+
+//------------------------------------------------------------------------------
+
+struct BidirectionalState
+{
+  SearchState forward, backward;
+
+  BidirectionalState() {}
+  BidirectionalState(SearchState forward_state, SearchState backward_state) : forward(forward_state), backward(backward_state) {}
+
+  size_type size() const { return this->forward.size(); }
+  bool empty() const { return this->forward.empty(); }
+
+  void flip() { std::swap(this->forward, this->backward); }
+
+  bool operator==(BidirectionalState another) const { return (this->forward == another.forward && this->backward == another.backward); }
+  bool operator!=(BidirectionalState another) const { return (this->forward != another.forward || this->backward != another.backward); }
+};
+
+std::ostream& operator<<(std::ostream& out, BidirectionalState state);
 
 //------------------------------------------------------------------------------
 
@@ -124,6 +144,85 @@ prefix(const GBWTType& index, Iterator begin, Iterator end)
 {
   SearchState state(ENDMARKER, 0, index.sequences() - 1);
   return gbwt::extend(index, state, begin, end);
+}
+
+//------------------------------------------------------------------------------
+
+/*
+  If the parameters are invalid or if there are no matches, the search algorithms return an
+  empty BidirectionalState. Bidirectional search expects an index with both orientations of
+  each sequence.
+
+  Template parameters:
+    GBWTType  GBWT or DynamicGBWT
+    Iterator  BidirectionalIterator
+*/
+
+template<class GBWTType>
+BidirectionalState
+bdExtendForward(const GBWTType& index, BidirectionalState state, node_type node)
+{
+  if(state.empty() || !(index.contains(node))) { return BidirectionalState(); }
+  // FIXME implement
+  return state;
+}
+
+template<class GBWTType>
+BidirectionalState
+bdExtendBackward(const GBWTType& index, BidirectionalState state, node_type node)
+{
+  state.flip();
+  bdExtendForward(index, state, Node::reverse(node));
+  state.flip();
+  return state;
+}
+
+template<class GBWTType, class Iterator>
+BidirectionalState
+bdExtendForward(const GBWTType& index, BidirectionalState state, Iterator begin, Iterator end)
+{
+  while(begin != end && !(state.empty()))
+  {
+    state = gbwt::bdExtendForward(index, state, *begin);
+    ++begin;
+  }
+  return state;
+}
+
+template<class GBWTType, class Iterator>
+BidirectionalState
+bdExtendBackward(const GBWTType& index, BidirectionalState state, Iterator begin, Iterator end)
+{
+  state.flip();
+  while(begin != end && !(state.empty()))
+  {
+    --end;
+    state = gbwt::bdExtendForward(index, state, Node::reverse(*end));
+  }
+  state.flip();
+  return state;
+}
+
+template<class GBWTType>
+BidirectionalState
+bdFind(const GBWTType& index, node_type node)
+{
+  if(!(index.contains(node))) { return BidirectionalState(); }
+  SearchState forward(node, 0, index.nodeSize(node) - 1);
+  SearchState backward(Node::reverse(node), forward.range);
+  return BidirectionalState(forward, backward);
+}
+
+template<class GBWTType, class Iterator>
+BidirectionalState
+bdFind(const GBWTType& index, Iterator begin, Iterator end)
+{
+  if(begin == end) { return BidirectionalState(); }
+
+  SearchState state = gbwt::bdFind(index, *begin);
+  ++begin;
+
+  return gbwt::bdExtendForward(index, state, begin, end);
 }
 
 //------------------------------------------------------------------------------

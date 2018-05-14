@@ -368,11 +368,7 @@ tryExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index,
   std::vector<node_type> dynamic_result = dynamic_index.extract(seq_id);
   std::vector<node_type> correct_sequence; correct_sequence.reserve(compressed_result.size());
   for(size_type i = offsets[sequence]; text[i] != ENDMARKER; i++) { correct_sequence.push_back(text[i]); }
-  if(is_reverse)
-  {
-    std::reverse(correct_sequence.begin(), correct_sequence.end());
-    for(node_type& node : correct_sequence) { node = Node::reverse(node); }
-  }
+  if(is_reverse) { reversePath(correct_sequence); }
 
   // Compare the lengths.
   if(compressed_result.size() != correct_sequence.size() || compressed_result.size() != dynamic_result.size())

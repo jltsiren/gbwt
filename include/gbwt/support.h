@@ -65,6 +65,16 @@ struct Path
   static size_type reverse(size_type path) { return (path ^ REVERSE_MASK); }
 };
 
+/*
+  Create a path traversing the reverse nodes in reverse order:
+    - in place
+    - appending it to the to the output vector
+    - inserting it to the tail of the output text, updating the tail
+*/
+void reversePath(std::vector<node_type>& path); // FIXME implement
+void reversePath(const std::vector<node_type>& path, std::vector<node_type>& output);
+void reversePath(const std::vector<node_type>& path, text_type& output, size_type& tail);
+
 //------------------------------------------------------------------------------
 
 /*

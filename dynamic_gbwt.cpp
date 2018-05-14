@@ -882,7 +882,7 @@ GBWTBuilder::insert(const std::vector<node_type>& sequence, bool both_orientatio
   // Reverse orientation.
   if(both_orientations)
   {
-    for(auto iter = sequence.rbegin(); iter != sequence.rend(); ++iter) { this->input_buffer[this->input_tail] = Node::reverse(*iter); this->input_tail++; }
+    reversePath(sequence, this->input_buffer, this->input_tail);
     this->input_buffer[this->input_tail] = ENDMARKER; this->input_tail++;
     this->batch_sequences++;
   }

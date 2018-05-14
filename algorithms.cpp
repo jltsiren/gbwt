@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017 Jouni Siren
+  Copyright (c) 2017, 2018 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -33,6 +33,13 @@ std::ostream&
 operator<<(std::ostream& out, SearchState state)
 {
   return out << "(" << state.node << ", " << state.range << ")";
+}
+
+
+std::ostream&
+operator<<(std::ostream& out, BidirectionalState state)
+{
+  return out << "(" << state.forward << ", " << state.backward << ")";
 }
 
 //------------------------------------------------------------------------------
