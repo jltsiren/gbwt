@@ -27,6 +27,7 @@
 
 namespace gbwt
 {
+
 //------------------------------------------------------------------------------
 
 void
@@ -36,12 +37,14 @@ reversePath(std::vector<node_type>& path)
   for(node_type& node : path) { node = Node::reverse(node); }
 }
 
-void reversePath(const std::vector<node_type>& path, std::vector<node_type>& output)
+void
+reversePath(const std::vector<node_type>& path, std::vector<node_type>& output)
 {
   for(auto iter = path.rbegin(); iter != path.rend(); ++iter) { output.push_back(Node::reverse(*iter)); }
 }
 
-void reversePath(const std::vector<node_type>& path, text_type& output, size_type& tail)
+void
+reversePath(const std::vector<node_type>& path, text_type& output, size_type& tail)
 {
   for(auto iter = path.rbegin(); iter != path.rend(); ++iter) { output[tail] = Node::reverse(*iter); tail++; }
 }
@@ -144,9 +147,9 @@ DynamicRecord::runLF(size_type i, size_type& run_end) const
 {
   if(i >= this->size()) { return invalid_edge(); }
 
-  if(this->outdegree() <= CompressedRecordArrayIterator::MAX_OUTDEGREE)
+  if(this->outdegree() <= MAX_OUTDEGREE_FOR_ARRAY)
   {
-    edge_type result[CompressedRecordArrayIterator::MAX_OUTDEGREE];
+    edge_type result[MAX_OUTDEGREE_FOR_ARRAY];
     for(size_type i = 0; i < this->outdegree(); i++) { result[i] = this->outgoing[i]; }
     return LFLoop(result, this->body, i, run_end);
   }
@@ -376,7 +379,7 @@ CompressedRecord::runLF(size_type i, size_type& run_end) const
 {
   if(this->outdegree() == 0) { return invalid_edge(); }
 
-  if(this->outdegree() <= CompressedRecordArrayIterator::MAX_OUTDEGREE)
+  if(this->outdegree() <= MAX_OUTDEGREE_FOR_ARRAY)
   {
     CompressedRecordArrayIterator iter(*this);
     edge_type result = iter.edgeAt(i);

@@ -26,6 +26,8 @@
 #ifndef GBWT_INTERNAL_H
 #define GBWT_INTERNAL_H
 
+#include <array>
+
 #include <gbwt/support.h>
 
 namespace gbwt
@@ -267,53 +269,16 @@ struct Sequence
   - CompressedRecordFullIterator is the slowest, as it keeps track of the ranks
     for all successor nodes.
   - CompressedRecordArrayIterator is a faster version of the full iterator for
-    records with outdegree <= MAX_OUTDEGREE.
-
-  FIXME a single iterator with a RankCalculator as a template parameter.
+    records with outdegree <= MAX_OUTDEGREE_FOR_ARRAY.
 */
 
-struct CompressedRecordIterator
+template<class RankSupport>
+struct CompressedRecordGenericIterator
 {
-  explicit CompressedRecordIterator(const CompressedRecord& source) :
-    record(source), decoder(source.outdegree()),
-    record_offset(0), curr_offset(0), next_offset(0)
-  {
-    this->read();
-  }
-
-  bool end() const { return (this->curr_offset >= this->record.data_size); }
-  void operator++() { this->curr_offset = this->next_offset; this->read(); }
-
-  run_type operator*() const { return this->run; }
-  const run_type* operator->() { return &(this->run); }
-
-  // After the current run.
-  size_type offset() const { return this->record_offset; }
-
-  const CompressedRecord& record;
-  Run                     decoder;
-
-  size_type               record_offset;
-  size_type               curr_offset, next_offset;
-  run_type                run;
-
-private:
-  void read()
-  {
-    if(!(this->end()))
-    {
-      this->run = this->decoder.read(this->record.body, this->next_offset);
-      this->record_offset += this->run.second;
-    }
-  }
-};
-
-struct CompressedRecordRankIterator
-{
-  explicit CompressedRecordRankIterator(const CompressedRecord& source, rank_type outrank) :
+  explicit CompressedRecordGenericIterator(const CompressedRecord& source, rank_type outrank = 0) :
     record(source), decoder(source.outdegree()),
     record_offset(0), curr_offset(0), next_offset(0),
-    value(outrank), result(source.offset(outrank))
+    rank_support(source, outrank)
   {
     this->read();
   }
@@ -321,28 +286,39 @@ struct CompressedRecordRankIterator
   bool end() const { return (this->curr_offset >= this->record.data_size); }
   void operator++() { this->curr_offset = this->next_offset; this->read(); }
 
-  run_type operator*() const { return this->run; }
-  const run_type* operator->() { return &(this->run); }
-
-  // After the current run.
-  size_type offset() const { return this->record_offset; }
-  size_type rank() const { return this->result; }
-
-  // Intended for positions i covered by or after the current run. May advance the iterator.
-  size_type rankAt(size_type i)
+  // Read while offset < i.
+  void readUntil(size_type i)
   {
     while(this->offset() < i && !(this->end()))
     {
       this->curr_offset = this->next_offset;
-      this->run = this->decoder.read(this->record.body, this->next_offset);
-      this->record_offset += this->run.second;
-      if(this->run.first == this->value) { this->result += this->run.second; }
+      this->readUnsafe();
     }
-
-    size_type temp = this->rank();
-    if(i < this->offset() && this->run.first == this->value) { temp -= (this->offset() - i); }
-    return temp;
   }
+
+  // Read while offset <= i.
+  void readPast(size_type i)
+  {
+    while(this->offset() <= i && !(this->end()))
+    {
+      this->curr_offset = this->next_offset;
+      this->readUnsafe();
+    }
+  }
+
+  run_type operator*() const { return this->run; }
+  const run_type* operator->() { return &(this->run); }
+
+  // After the current run.
+  size_type offset() const { return this->record_offset; }
+  size_type rank() const { return this->rank_support.rank(*this); }
+  size_type rank(rank_type outrank) const { return this->rank_support.rank(outrank); }
+  edge_type edge() const { return this->rank_support.edge(*this); }
+  edge_type edge(rank_type outrank) const { return this->rank_support.edge(outrank); }
+
+  // Intended for positions i covered by or after the current run. May advance the iterator.
+  size_type rankAt(size_type i) { return this->rank_support.rankAt(*this, i); }
+  edge_type edgeAt(size_type i) { return this->rank_support.edgeAt(*this, i); }
 
   const CompressedRecord& record;
   Run                     decoder;
@@ -350,172 +326,130 @@ struct CompressedRecordRankIterator
   size_type               record_offset;
   size_type               curr_offset, next_offset;
   run_type                run;
+
+  RankSupport             rank_support;
+
+private:
+  void read()
+  {
+    if(!(this->end()))
+    {
+      this->readUnsafe();
+    }
+  }
+
+  void readUnsafe()
+  {
+    this->run = this->decoder.read(this->record.body, this->next_offset);
+    this->record_offset += this->run.second;
+    this->rank_support.handle(this->run);
+  }
+};
+
+struct DummyRankSupport
+{
+  typedef CompressedRecordGenericIterator<DummyRankSupport> Iterator;
+
+  DummyRankSupport(const CompressedRecord&, rank_type) {}
+
+  void handle(run_type) {}
+
+  size_type rank(const Iterator&) const { return invalid_offset(); }
+  size_type rank(rank_type) const { return invalid_offset(); }
+  edge_type edge(const Iterator&) const { return invalid_edge(); }
+  edge_type edge(rank_type) const { return invalid_edge(); }
+
+  size_type rankAt(Iterator&, size_type) { return invalid_offset(); }
+  edge_type edgeAt(Iterator&, size_type) { return invalid_edge(); }
+};
+
+struct OccurrenceCounter
+{
+  typedef CompressedRecordGenericIterator<OccurrenceCounter> Iterator;
+
+  OccurrenceCounter(const CompressedRecord& source, rank_type outrank) : value(outrank), result(source.offset(outrank)) {}
+
+  void handle(run_type run)
+  {
+    if(run.first == this->value) { this->result += run.second; }
+  }
+
+  size_type rank(const Iterator&) const { return this->result; }
+  size_type rank(rank_type) const { return invalid_offset(); }
+  edge_type edge(const Iterator&) const { return invalid_edge(); }
+  edge_type edge(rank_type) const { return invalid_edge(); }
+
+  size_type rankAt(Iterator& iter, size_type i)
+  {
+    iter.readUntil(i);
+    size_type temp = this->rank(iter);
+    if(i < iter.offset() && iter.run.first == this->value) { temp -= (iter.offset() - i); }
+    return temp;
+  }
+
+  edge_type edgeAt(Iterator&, size_type) { return invalid_edge(); }
 
   rank_type               value;
   size_type               result;
-
-private:
-  void read()
-  {
-    if(!(this->end()))
-    {
-      this->run = this->decoder.read(this->record.body, this->next_offset);
-      this->record_offset += this->run.second;
-      if(this->run.first == value) { this->result += this->run.second; }
-    }
-  }
 };
 
-struct CompressedRecordFullIterator
+inline void
+copyEdges(const std::vector<edge_type>& from, std::vector<edge_type>& to)
 {
-  explicit CompressedRecordFullIterator(const CompressedRecord& source) :
-    record(source), decoder(source.outdegree()), ranks(source.outgoing),
-    record_offset(0), curr_offset(0), next_offset(0)
+  to = from;
+}
+
+constexpr size_type MAX_OUTDEGREE_FOR_ARRAY = 4;
+
+inline void
+copyEdges(const std::vector<edge_type>& from, std::array<edge_type, MAX_OUTDEGREE_FOR_ARRAY>& to)
+{
+  for(size_type i = 0; i < from.size(); i++) { to[i] = from[i]; }
+}
+
+template<class ArrayType>
+struct FullRankSupport
+{
+  typedef CompressedRecordGenericIterator<FullRankSupport<ArrayType>> Iterator;
+
+  FullRankSupport(const CompressedRecord& source, rank_type)
   {
-    this->read();
+    copyEdges(source.outgoing, this->ranks);
   }
 
-  bool end() const { return (this->curr_offset >= this->record.data_size); }
-  void operator++() { this->curr_offset = this->next_offset; this->read(); }
+  void handle(run_type run)
+  {
+    this->ranks[run.first].second += run.second;
+  }
 
-  run_type operator*() const { return this->run; }
-  const run_type* operator->() { return &(this->run); }
-
-  // After the current run.
-  size_type offset() const { return this->record_offset; }
-  size_type rank() const { return this->rank(this->run.first); }
+  size_type rank(const Iterator& iter) const { return this->rank(iter.run.first); }
   size_type rank(rank_type outrank) const { return this->ranks[outrank].second; }
-  edge_type edge() const { return this->edge(this->run.first); }
+  edge_type edge(const Iterator& iter) const { return this->edge(iter.run.first); }
   edge_type edge(rank_type outrank) const { return this->ranks[outrank]; }
 
-  // Intended for positions i covered by or after the current run. May advance the iterator.
-  size_type rankAt(size_type i)
+  size_type rankAt(Iterator& iter, size_type i)
   {
-    while(this->offset() <= i)  // We need <= to get BWT[i].
-    {
-      if(this->end()) { return invalid_offset(); }
-      this->curr_offset = this->next_offset;
-      this->run = this->decoder.read(this->record.body, this->next_offset);
-      this->record_offset += this->run.second;
-      this->ranks[this->run.first].second += this->run.second;
-    }
-
-    return this->rank() - (this->offset() - i);
+    iter.readPast(i); // We read past offset i to get BWT[i].
+    if(iter.end()) { return invalid_offset(); }
+    return this->rank(iter) - (iter.offset() - i);
   }
 
-  // Intended for positions i covered by or after the current run. May advance the iterator.
-  edge_type edgeAt(size_type i)
+  edge_type edgeAt(Iterator& iter, size_type i)
   {
-    while(this->offset() <= i)  // We need <= to get BWT[i].
-    {
-      if(this->end()) { return invalid_edge(); }
-      this->curr_offset = this->next_offset;
-      this->run = this->decoder.read(this->record.body, this->next_offset);
-      this->record_offset += this->run.second;
-      this->ranks[this->run.first].second += this->run.second;
-    }
-
-    edge_type temp = this->edge();
-    temp.second -= (this->offset() - i);
+    iter.readPast(i); // We read past offset i to get BWT[i].
+    if(iter.end()) { return invalid_edge(); }
+    edge_type temp = this->edge(iter);
+    temp.second -= (iter.offset() - i);
     return temp;
   }
 
-  const CompressedRecord& record;
-  Run                     decoder;
-  std::vector<edge_type>  ranks;
-
-  size_type               record_offset;
-  size_type               curr_offset, next_offset;
-  run_type                run;
-
-private:
-  void read()
-  {
-    if(!(this->end()))
-    {
-      this->run = this->decoder.read(this->record.body, this->next_offset);
-      this->record_offset += this->run.second;
-      this->ranks[this->run.first].second += this->run.second;
-    }
-  }
+  ArrayType ranks;
 };
 
-struct CompressedRecordArrayIterator
-{
-  const static size_type MAX_OUTDEGREE = 4;
-
-  explicit CompressedRecordArrayIterator(const CompressedRecord& source) :
-    record(source), decoder(source.outdegree()),
-    record_offset(0), curr_offset(0), next_offset(0)
-  {
-    for(size_type i = 0; i < source.outdegree(); i++) { this->ranks[i] = source.outgoing[i]; }
-    this->read();
-  }
-
-  bool end() const { return (this->curr_offset >= this->record.data_size); }
-  void operator++() { this->curr_offset = this->next_offset; this->read(); }
-
-  run_type operator*() const { return this->run; }
-  const run_type* operator->() { return &(this->run); }
-
-  // After the current run.
-  size_type offset() const { return this->record_offset; }
-  size_type rank() const { return this->rank(this->run.first); }
-  size_type rank(rank_type outrank) const { return this->ranks[outrank].second; }
-  edge_type edge() const { return this->edge(this->run.first); }
-  edge_type edge(rank_type outrank) const { return this->ranks[outrank]; }
-
-  // Intended for positions i covered by or after the current run. May advance the iterator.
-  size_type rankAt(size_type i)
-  {
-    while(this->offset() <= i)  // We need <= to get BWT[i].
-    {
-      if(this->end()) { return invalid_offset(); }
-      this->curr_offset = this->next_offset;
-      this->run = this->decoder.read(this->record.body, this->next_offset);
-      this->record_offset += this->run.second;
-      this->ranks[this->run.first].second += this->run.second;
-    }
-
-    return this->rank() - (this->offset() - i);
-  }
-
-  // Intended for positions i covered by or after the current run. May advance the iterator.
-  edge_type edgeAt(size_type i)
-  {
-    while(this->offset() <= i)  // We need <= to get BWT[i].
-    {
-      if(this->end()) { return invalid_edge(); }
-      this->curr_offset = this->next_offset;
-      this->run = this->decoder.read(this->record.body, this->next_offset);
-      this->record_offset += this->run.second;
-      this->ranks[this->run.first].second += this->run.second;
-    }
-
-    edge_type temp = this->edge();
-    temp.second -= (this->offset() - i);
-    return temp;
-  }
-
-  const CompressedRecord& record;
-  Run                     decoder;
-  edge_type               ranks[MAX_OUTDEGREE];
-
-  size_type               record_offset;
-  size_type               curr_offset, next_offset;
-  run_type                run;
-
-private:
-  void read()
-  {
-    if(!(this->end()))
-    {
-      this->run = this->decoder.read(this->record.body, this->next_offset);
-      this->record_offset += this->run.second;
-      this->ranks[this->run.first].second += this->run.second;
-    }
-  }
-};
+typedef CompressedRecordGenericIterator<DummyRankSupport> CompressedRecordIterator;
+typedef CompressedRecordGenericIterator<OccurrenceCounter> CompressedRecordRankIterator;
+typedef CompressedRecordGenericIterator<FullRankSupport<std::vector<edge_type>>> CompressedRecordFullIterator;
+typedef CompressedRecordGenericIterator<FullRankSupport<std::array<edge_type, MAX_OUTDEGREE_FOR_ARRAY>>> CompressedRecordArrayIterator;
 
 //------------------------------------------------------------------------------
 

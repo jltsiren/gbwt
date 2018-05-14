@@ -28,7 +28,7 @@
 
 #include <map>
 
-#include <gbwt/utils.h>
+#include <gbwt/support.h>
 
 namespace gbwt
 {
