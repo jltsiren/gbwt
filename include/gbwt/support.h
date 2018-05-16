@@ -71,7 +71,7 @@ struct Path
     - appending it to the to the output vector
     - inserting it to the tail of the output text, updating the tail
 */
-void reversePath(std::vector<node_type>& path); // FIXME implement
+void reversePath(std::vector<node_type>& path);
 void reversePath(const std::vector<node_type>& path, std::vector<node_type>& output);
 void reversePath(const std::vector<node_type>& path, text_type& output, size_type& tail);
 
@@ -130,6 +130,10 @@ struct DynamicRecord
 
   // Returns Range::empty_range() if the range is empty or the destination is invalid.
   range_type LF(range_type range, node_type to) const;
+
+  // As above, but also returns the number of characters x with
+  // Node::reverse(x) < Node::reverse(to) in the range.
+  range_type bdLF(range_type range, node_type to, size_type& reverse_offset) const;
 
   // Returns BWT[i] within the record.
   node_type operator[](size_type i) const;
@@ -211,6 +215,11 @@ struct CompressedRecord
 
   // Returns Range::empty_range() if the range is empty or the destination is invalid.
   range_type LF(range_type range, node_type to) const;
+
+  // As above, but also returns the number of characters x with
+  // Node::reverse(x) < Node::reverse(to) in the range.
+  // FIXME implement
+  range_type bdLF(range_type range, node_type to, size_type& reverse_offset) const;
 
   // Returns BWT[i] within the record.
   node_type operator[](size_type i) const;

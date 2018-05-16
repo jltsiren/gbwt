@@ -307,7 +307,7 @@ struct CompressedRecordGenericIterator
   }
 
   run_type operator*() const { return this->run; }
-  const run_type* operator->() { return &(this->run); }
+  const run_type* operator->() const { return &(this->run); }
 
   // After the current run.
   size_type offset() const { return this->record_offset; }
@@ -383,7 +383,7 @@ struct OccurrenceCounter
   {
     iter.readUntil(i);
     size_type temp = this->rank(iter);
-    if(i < iter.offset() && iter.run.first == this->value) { temp -= (iter.offset() - i); }
+    if(i < iter.offset() && iter->first == this->value) { temp -= (iter.offset() - i); }
     return temp;
   }
 
@@ -422,9 +422,9 @@ struct FullRankSupport
     this->ranks[run.first].second += run.second;
   }
 
-  size_type rank(const Iterator& iter) const { return this->rank(iter.run.first); }
+  size_type rank(const Iterator& iter) const { return this->rank(iter->first); }
   size_type rank(rank_type outrank) const { return this->ranks[outrank].second; }
-  edge_type edge(const Iterator& iter) const { return this->edge(iter.run.first); }
+  edge_type edge(const Iterator& iter) const { return this->edge(iter->first); }
   edge_type edge(rank_type outrank) const { return this->ranks[outrank]; }
 
   size_type rankAt(Iterator& iter, size_type i)

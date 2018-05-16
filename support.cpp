@@ -160,24 +160,31 @@ DynamicRecord::runLF(size_type i, size_type& run_end) const
   }
 }
 
+// run is *(--iter); offset and result are for the beginning of the run at iter.
+size_type
+LFLoop(std::vector<run_type>::const_iterator& iter, std::vector<run_type>::const_iterator end,
+       size_type i, rank_type outrank, run_type& run, size_type& offset, size_type& result)
+{
+  while(iter != end && offset < i)
+  {
+    run = *iter; ++iter;
+    offset += run.second;
+    if(run.first == outrank) { result += run.second; }
+  }
+  return result - (run.first == outrank ? offset - i : 0);
+}
+
 size_type
 DynamicRecord::LF(size_type i, node_type to) const
 {
-  size_type outrank = this->edgeTo(to);
+  rank_type outrank = this->edgeTo(to);
   if(outrank >= this->outdegree()) { return invalid_offset(); }
 
-  size_type result = this->offset(outrank), offset = 0;
-  for(run_type run : this->body)
-  {
-    if(run.first == outrank) { result += run.second; }
-    offset += run.second;
-    if(offset >= i)
-    {
-      if(run.first == outrank) { result -= offset - i; }
-      break;
-    }
-  }
-  return result;
+  std::vector<run_type>::const_iterator iter = this->body.begin();
+  run_type run(0, 0);
+  size_type offset = 0, result = this->offset(outrank);
+
+  return LFLoop(iter, this->body.end(), i, outrank, run, offset, result);
 }
 
 range_type
@@ -185,35 +192,69 @@ DynamicRecord::LF(range_type range, node_type to) const
 {
   if(Range::empty(range)) { return Range::empty_range(); }
 
-  size_type outrank = this->edgeTo(to);
+  rank_type outrank = this->edgeTo(to);
   if(outrank >= this->outdegree()) { return Range::empty_range(); }
 
   std::vector<run_type>::const_iterator iter = this->body.begin();
-  run_type run = *iter;
-  size_type result = this->offset(outrank) + (run.first == outrank ? run.second : 0), offset = run.second;
+  run_type run(0, 0);
+  size_type offset = 0, result = this->offset(outrank);
 
-  while(iter != body.end() && offset < range.first)
-  {
-    ++iter;
-    if(iter == body.end()) { break; }
-    run = *iter;
-    if(run.first == outrank) { result += run.second; }
-    offset += run.second;
-  }
-  range.first = result - (run.first == outrank ? offset - range.first : 0);
-
-  range.second++; // We compute LF(range.second + 1, to) - 1.
-  while(iter != body.end() && offset < range.second)
-  {
-    ++iter;
-    if(iter == body.end()) { break; }
-    run = *iter;
-    if(run.first == outrank) { result += run.second; }
-    offset += run.second;
-  }
-  range.second = result - (run.first == outrank ? offset - range.second : 0) - 1;
-
+  // [LF(range.first, to), LF(range.second + 1, to) - 1].
+  range.first = LFLoop(iter, this->body.end(), range.first, outrank, run, offset, result);
+  range.second = LFLoop(iter, this->body.end(), range.second + 1, outrank, run, offset, result) - 1;
   return range;
+}
+
+range_type
+DynamicRecord::bdLF(range_type range, node_type to, size_type& reverse_offset) const
+{
+  if(Range::empty(range)) { return Range::empty_range(); }
+
+  rank_type outrank = this->edgeTo(to);
+  if(outrank >= this->outdegree()) { return Range::empty_range(); }
+
+  // sp = LF(range.first, to)
+  std::vector<run_type>::const_iterator iter = this->body.begin();
+  run_type run(0, 0);
+  size_type offset = 0, result = this->offset(outrank);
+  size_type sp = LFLoop(iter, this->body.end(), range.first, outrank, run, offset, result);
+
+  /*
+    Count the number of occurrences of nodes x in the query range, where
+    Node::reverse(x) < Node::reverse(to), and store it in reverse_offset.
+
+    1. In the easy case, there are no edges to Node::reverse(to), so we only compute
+       the occurrences < outrank.
+    2. If there are edges to Node::reverse(to) and to is in forward orientation, we
+       count the occurrences <= reverse_rank except those of outrank.
+    3. If there are edges to Node::reverse(to), and to is in reverse orientation, we
+       count the occurrences < reverse_rank < outrank.
+  */
+  rank_type reverse_rank = this->edgeTo(Node::reverse(to));
+  bool subtract_equal = false;
+  if(reverse_rank >= this->outdegree()) { reverse_rank = outrank; }
+  else if(!Node::is_reverse(to)) { reverse_rank++; subtract_equal = true; }
+
+  // Previous run may go past range.first.
+  size_type equal = (run.first == outrank ? offset - range.first : 0);
+  reverse_offset = (run.first < reverse_rank ? offset - range.first : 0);
+
+  // ep + 1 = LF(range.second + 1, to)
+  range.second++;
+  while(iter != this->body.end() && offset < range.second)
+  {
+    run = *iter; ++iter;
+    offset += run.second;
+    if(run.first == outrank) { equal += run.second; }
+    if(run.first < reverse_rank) { reverse_offset += run.second; }
+  }
+
+  // Last run may go past range.second.
+  if(run.first == outrank) { equal -= (offset - range.second); }
+  if(run.first < reverse_rank) { reverse_offset -= (offset - range.second); }
+
+  if(subtract_equal) { reverse_offset -= equal; }
+  return range_type(sp, sp + equal - 1);
 }
 
 node_type
@@ -416,6 +457,49 @@ CompressedRecord::LF(range_type range, node_type to) const
   range.second = iter.rankAt(range.second + 1) - 1;
 
   return range;
+}
+
+range_type
+CompressedRecord::bdLF(range_type range, node_type to, size_type& reverse_offset) const
+{
+  if(Range::empty(range)) { return Range::empty_range(); }
+
+  size_type outrank = this->edgeTo(to);
+  if(outrank >= this->outdegree()) { return Range::empty_range(); }
+
+  CompressedRecordRankIterator iter(*this, outrank);
+  size_type sp = iter.rankAt(range.first);
+
+  /*
+    Count the number of occurrences of nodes x in the query range, where
+    Node::reverse(x) < Node::reverse(to), and store it in reverse_offset.
+
+    1. In the easy case, there are no edges to Node::reverse(to), so we only compute
+       the occurrences < outrank.
+    2. If there are edges to Node::reverse(to) and to is in forward orientation, we
+       count the occurrences <= reverse_rank except those of outrank.
+    3. If there are edges to Node::reverse(to), and to is in reverse orientation, we
+       count the occurrences < reverse_rank < outrank.
+  */
+  rank_type reverse_rank = this->edgeTo(Node::reverse(to));
+  if(reverse_rank >= this->outdegree()) { reverse_rank = outrank; }
+  else if(!Node::is_reverse(to)) { reverse_rank++; }
+
+  // Previous run may go past range.first.
+  if(iter->first < reverse_rank && iter->first != outrank) { reverse_offset = iter.offset() - range.first; }
+  else { reverse_offset = 0; }
+
+  range.second++; // We compute rank at range.second + 1.
+  while(!(iter.end()) && iter.offset() < range.second)
+  {
+    ++iter;
+    if(iter->first < reverse_rank && iter->first != outrank) { reverse_offset += iter->second; }
+  }
+
+  // Last run may go past range.second.
+  if(iter->first < reverse_rank && iter->first != outrank) { reverse_offset -= (iter.offset() - range.second); }
+
+  return range_type(sp, iter.rankAt(range.second) - 1);
 }
 
 node_type

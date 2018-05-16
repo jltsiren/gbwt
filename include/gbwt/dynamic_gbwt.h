@@ -259,6 +259,12 @@ public:
     return this->record(state.node).LF(state.range, to);
   }
 
+  // On error: Range::empty_range().
+  range_type bdLF(SearchState state, node_type to, size_type& reverse_offset) const
+  {
+    return this->record(state.node).bdLF(state.range, to, reverse_offset);
+  }
+
 //------------------------------------------------------------------------------
 
   /*

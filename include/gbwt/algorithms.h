@@ -163,7 +163,11 @@ BidirectionalState
 bdExtendForward(const GBWTType& index, BidirectionalState state, node_type node)
 {
   if(state.empty() || !(index.contains(node))) { return BidirectionalState(); }
-  // FIXME implement
+  size_type reverse_offset = 0;
+  state.forward.range = index.bdLF(state.forward, node, reverse_offset);
+  state.forward.node = node;
+  state.backward.range.first += reverse_offset;
+  state.backward.range.second = state.backward.range.first + state.forward.size() - 1;
   return state;
 }
 
