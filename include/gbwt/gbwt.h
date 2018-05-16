@@ -119,28 +119,14 @@ public:
 
   /*
     Bidirectional search interface. The queries check that the parameters are valid.
-    Iterators must be BidirectionalIterators. On error or failed search, the return
-    value is an empty bidirectional search state.
-
-    Note that:
-      - bdExtendForward(bdFind(a, b), b, c) == bdFind(a, c)
-      - bdExtendBackward(bdFind(b, c), a, b) == bdFind(a, c)
+    On error or failed search, the return value is an empty bidirectional search state.
   */
 
   BidirectionalState bdFind(node_type node) const { return gbwt::bdFind(*this, node); }
 
-  template<class Iterator>
-  BidirectionalState bdFind(Iterator begin, Iterator end) const { return gbwt::bdFind(*this, begin, end); }
-
   BidirectionalState bdExtendForward(BidirectionalState state, node_type node) const { return gbwt::bdExtendForward(*this, state, node); }
 
   BidirectionalState bdExtendBackward(BidirectionalState state, node_type node) const { return gbwt::bdExtendBackward(*this, state, node); }
-
-  template<class Iterator>
-  BidirectionalState bdExtendForward(BidirectionalState state, Iterator begin, Iterator end) const { return gbwt::bdExtendForward(*this, state, begin, end); }
-
-  template<class Iterator>
-  BidirectionalState bdExtendBackward(BidirectionalState state, Iterator begin, Iterator end) const { return gbwt::bdExtendBackward(*this, state, begin, end); }
 
 //------------------------------------------------------------------------------
 

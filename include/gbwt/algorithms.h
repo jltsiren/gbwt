@@ -155,7 +155,6 @@ prefix(const GBWTType& index, Iterator begin, Iterator end)
 
   Template parameters:
     GBWTType  GBWT or DynamicGBWT
-    Iterator  BidirectionalIterator
 */
 
 template<class GBWTType>
@@ -181,32 +180,6 @@ bdExtendBackward(const GBWTType& index, BidirectionalState state, node_type node
   return state;
 }
 
-template<class GBWTType, class Iterator>
-BidirectionalState
-bdExtendForward(const GBWTType& index, BidirectionalState state, Iterator begin, Iterator end)
-{
-  while(begin != end && !(state.empty()))
-  {
-    state = gbwt::bdExtendForward(index, state, *begin);
-    ++begin;
-  }
-  return state;
-}
-
-template<class GBWTType, class Iterator>
-BidirectionalState
-bdExtendBackward(const GBWTType& index, BidirectionalState state, Iterator begin, Iterator end)
-{
-  state.flip();
-  while(begin != end && !(state.empty()))
-  {
-    --end;
-    state = gbwt::bdExtendForward(index, state, Node::reverse(*end));
-  }
-  state.flip();
-  return state;
-}
-
 template<class GBWTType>
 BidirectionalState
 bdFind(const GBWTType& index, node_type node)
@@ -215,18 +188,6 @@ bdFind(const GBWTType& index, node_type node)
   SearchState forward(node, 0, index.nodeSize(node) - 1);
   SearchState backward(Node::reverse(node), forward.range);
   return BidirectionalState(forward, backward);
-}
-
-template<class GBWTType, class Iterator>
-BidirectionalState
-bdFind(const GBWTType& index, Iterator begin, Iterator end)
-{
-  if(begin == end) { return BidirectionalState(); }
-
-  SearchState state = gbwt::bdFind(index, *begin);
-  ++begin;
-
-  return gbwt::bdExtendForward(index, state, begin, end);
 }
 
 //------------------------------------------------------------------------------
