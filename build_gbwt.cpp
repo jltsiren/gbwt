@@ -45,7 +45,8 @@ const size_type QUERY_LENGTH = 60;
 
 void printUsage(int exit_code = EXIT_SUCCESS);
 
-std::vector<SearchState> verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& query_base);
+std::vector<SearchState> verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& query_base, std::vector<std::vector<node_type>>& queries);
+void verifyBidirectional(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<std::vector<node_type>>& queries, const std::vector<SearchState>& find_results);
 void verifyLocate(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<SearchState>& queries);
 void verifyExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& base_name, bool both_orientations);
 void verifySamples(const GBWT& compressed_index, const DynamicGBWT& dynamic_index);
@@ -58,10 +59,10 @@ main(int argc, char** argv)
   if(argc < 2) { printUsage(); }
 
   size_type batch_size = DynamicGBWT::INSERT_BATCH_SIZE / MILLION;
-  bool verify_index = false, both_orientations = false;
+  bool verify_index = false, both_orientations = false, build_index = true;
   std::string index_base, input_base, output_base;
   int c = 0;
-  while((c = getopt(argc, argv, "b:fi:o:rv")) != -1)
+  while((c = getopt(argc, argv, "b:fi:lo:rv")) != -1)
   {
     switch(c)
     {
@@ -71,6 +72,8 @@ main(int argc, char** argv)
       both_orientations = false; break;
     case 'i':
       index_base = optarg; break;
+    case 'l':
+      build_index = false; break;
     case 'o':
       output_base = optarg; break;
     case 'r':
@@ -93,6 +96,12 @@ main(int argc, char** argv)
     std::cerr << "build_gbwt: Verification only works with indexes for a single file" << std::endl;
     verify_index = false;
   }
+  if(!build_index && !verify_index)
+  {
+    std::cerr << "build_gbwt: Index can only be loaded for verification" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  std::string gbwt_name = output_base + DynamicGBWT::EXTENSION;
 
   Version::print(std::cout, tool_name);
 
@@ -103,35 +112,38 @@ main(int argc, char** argv)
   printHeader("Orientation"); std::cout << (both_orientations ? "both" : "forward only") << std::endl;
   std::cout << std::endl;
 
-  double start = readTimer();
-
-  DynamicGBWT dynamic_index;
-  if(!(index_base.empty()))
+  if(build_index)
   {
-    sdsl::load_from_file(dynamic_index, index_base + DynamicGBWT::EXTENSION);
-    printStatistics(dynamic_index, index_base);
+    double start = readTimer();
+
+    DynamicGBWT dynamic_index;
+    if(!(index_base.empty()))
+    {
+      sdsl::load_from_file(dynamic_index, index_base + DynamicGBWT::EXTENSION);
+      printStatistics(dynamic_index, index_base);
+    }
+
+    while(optind < argc)
+    {
+      input_base = argv[optind];
+      printHeader("Input name"); std::cout << input_base << std::endl;
+      text_buffer_type input(input_base);
+      input_size += input.size() * (both_orientations ? 2 : 1);
+      dynamic_index.insert(input, batch_size * MILLION, both_orientations);
+      optind++;
+    }
+    std::cout << std::endl;
+
+    sdsl::store_to_file(dynamic_index, gbwt_name);
+    printStatistics(dynamic_index, output_base);
+
+    double seconds = readTimer() - start;
+
+    std::cout << "Indexed " << input_size << " nodes in " << seconds << " seconds (" << (input_size / seconds) << " nodes/second)" << std::endl;
+    std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;
+    std::cout << std::endl;
   }
-
-  while(optind < argc)
-  {
-    input_base = argv[optind];
-    printHeader("Input name"); std::cout << input_base << std::endl;
-    text_buffer_type input(input_base);
-    input_size += input.size() * (both_orientations ? 2 : 1);
-    dynamic_index.insert(input, batch_size * MILLION, both_orientations);
-    optind++;
-  }
-  std::cout << std::endl;
-
-  std::string gbwt_name = output_base + DynamicGBWT::EXTENSION;
-  sdsl::store_to_file(dynamic_index, gbwt_name);
-  printStatistics(dynamic_index, output_base);
-
-  double seconds = readTimer() - start;
-
-  std::cout << "Indexed " << input_size << " nodes in " << seconds << " seconds (" << (input_size / seconds) << " nodes/second)" << std::endl;
-  std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;
-  std::cout << std::endl;
+  else { input_base = argv[optind]; }
 
   if(verify_index)
   {
@@ -141,10 +153,15 @@ main(int argc, char** argv)
 
     GBWT compressed_index;
     sdsl::load_from_file(compressed_index, gbwt_name);
-    sdsl::util::clear(dynamic_index);
+    DynamicGBWT dynamic_index;
     sdsl::load_from_file(dynamic_index, gbwt_name);
 
-    std::vector<SearchState> results = verifyFind(compressed_index, dynamic_index, input_base);
+    std::vector<std::vector<node_type>> queries;
+    std::vector<SearchState> results = verifyFind(compressed_index, dynamic_index, input_base, queries);
+    if(both_orientations)
+    {
+      verifyBidirectional(compressed_index, dynamic_index, queries, results);
+    }
     verifyLocate(compressed_index, dynamic_index, results);
     verifyExtract(compressed_index, dynamic_index, input_base, both_orientations);
     verifySamples(compressed_index, dynamic_index);
@@ -169,6 +186,7 @@ printUsage(int exit_code)
   std::cerr << "  -b N  Insert in batches of N million nodes (default: " << (DynamicGBWT::INSERT_BATCH_SIZE / MILLION) << ")" << std::endl;
   std::cerr << "  -f    Index the sequences only in forward orientation (default)" << std::endl;
   std::cerr << "  -i X  Insert the sequences into an existing index with base name X" << std::endl;
+  std::cerr << "  -l    Load an existing index instead of building it" << std::endl;
   std::cerr << "  -o X  Use base name X for output (default: the only input)" << std::endl;
   std::cerr << "  -r    Index the sequences also in reverse orientation" << std::endl;
   std::cerr << "  -v    Verify the index after construction" << std::endl;
@@ -241,13 +259,13 @@ totalLength(const std::vector<SearchState>& states)
 */
 
 std::vector<SearchState>
-verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& query_base)
+verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& query_base, std::vector<std::vector<node_type>>& queries)
 {
   std::cout << "Verifying find()..." << std::endl;
 
   double start = readTimer();
   size_type initial_errors = errors;
-  std::vector<std::vector<node_type>> queries = generateQueries(query_base);
+  queries = generateQueries(query_base);
   std::vector<SearchState> results(queries.size());
 
   for(size_type i = 0; i < queries.size(); i++)
@@ -271,6 +289,65 @@ verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const
   std::cout << std::endl;
 
   return results;
+}
+
+//------------------------------------------------------------------------------
+
+/*
+  Bidirectional queries: Ensure that both index types give the same results and that the
+  results match those returned by find() queries.
+*/
+
+template<class GBWTType>
+BidirectionalState
+bidirectionalSearch(const GBWTType& index, const std::vector<node_type>& query)
+{
+  if(query.empty()) { return BidirectionalState(); }
+
+  size_type midpoint = query.size() / 2;
+  BidirectionalState state = index.bdFind(query[midpoint]);
+  for(size_type i = midpoint + 1; !(state.empty()) && i < query.size(); i++)
+  {
+    state = index.bdExtendForward(state, query[i]);
+  }
+  for(size_type i = midpoint; !(state.empty()) && i > 0; i--)
+  {
+    state = index.bdExtendBackward(state, query[i - 1]);
+  }
+
+  return state;
+}
+
+void
+verifyBidirectional(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<std::vector<node_type>>& queries, const std::vector<SearchState>& find_results)
+{
+  std::cout << "Verifying bidirectional search..." << std::endl;
+
+  double start = readTimer();
+  size_type initial_errors = errors;
+
+  for(size_type i = 0; i < queries.size(); i++)
+  {
+    BidirectionalState compressed_state = bidirectionalSearch(compressed_index, queries[i]);
+    BidirectionalState dynamic_state = bidirectionalSearch(dynamic_index, queries[i]);
+    std::vector<node_type> reverse_query;
+    reversePath(queries[i], reverse_query);
+    BidirectionalState find_state(find_results[i], dynamic_index.find(reverse_query.begin(), reverse_query.end()));
+    if(compressed_state != dynamic_state || compressed_state != find_state)
+    {
+      errors++;
+      if(errors <= MAX_ERRORS)
+      {
+        std::cerr << "verifyBidirectional(): Mismatching results with query " << i << std::endl;
+        std::cerr << "verifyBidirectional(): " << indexType(compressed_index) << ": " << compressed_state << ", " << indexType(dynamic_index) << ": " << dynamic_state << ", find(): " << find_state << std::endl;
+      }
+    }
+  }
+
+  double seconds = readTimer() - start;
+  if(errors > initial_errors) { std::cout << "Bidirectional search verification failed" << std::endl; }
+  else { std::cout << "Bidirectional search verified in " << seconds << " seconds" << std::endl; }
+  std::cout << std::endl;
 }
 
 //------------------------------------------------------------------------------

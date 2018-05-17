@@ -175,7 +175,7 @@ BidirectionalState
 bdExtendBackward(const GBWTType& index, BidirectionalState state, node_type node)
 {
   state.flip();
-  bdExtendForward(index, state, Node::reverse(node));
+  state = bdExtendForward(index, state, Node::reverse(node));
   state.flip();
   return state;
 }

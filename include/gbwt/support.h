@@ -218,7 +218,6 @@ struct CompressedRecord
 
   // As above, but also returns the number of characters x with
   // Node::reverse(x) < Node::reverse(to) in the range.
-  // FIXME implement
   range_type bdLF(range_type range, node_type to, size_type& reverse_offset) const;
 
   // Returns BWT[i] within the record.
