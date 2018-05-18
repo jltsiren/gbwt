@@ -37,7 +37,9 @@ const size_type RANDOM_SEED  = 0xDEADBEEF;
 
 void printUsage(int exit_code = EXIT_SUCCESS);
 
-std::vector<SearchState> findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type find_queries, size_type pattern_length);
+std::vector<SearchState> findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type find_queries, size_type pattern_length, std::vector<std::vector<node_type>>& queries);
+
+void bidirectionalBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<std::vector<node_type>>& queries);
 
 template<class GBWTType>
 void locateBenchmark(const GBWTType& index, const std::vector<SearchState>& queries);
@@ -125,7 +127,13 @@ main(int argc, char** argv)
 
   if(find)
   {
-    std::vector<SearchState> results = findBenchmark(compressed_index, dynamic_index, find_queries, pattern_length);
+    std::vector<std::vector<node_type>> queries;
+    std::vector<SearchState> results = findBenchmark(compressed_index, dynamic_index, find_queries, pattern_length, queries);
+    if(compressed_index.bidirectional())
+    {
+      bidirectionalBenchmark(compressed_index, dynamic_index, queries);
+    }
+    queries.clear();
     if(locate)
     {
       locateBenchmark(compressed_index, results);
@@ -194,7 +202,7 @@ findBenchmark(const GBWTType& index, const std::vector<std::vector<node_type>>& 
   {
     results[i] = index.find(queries[i].begin(), queries[i].end());
     total_length += queries[i].size();
-    total_size += Range::length(results[i].range);
+    total_size += results[i].size();
   }
   double seconds = readTimer() - start;
   printTimeLength(indexType(index), queries.size(), total_length, seconds);
@@ -202,11 +210,11 @@ findBenchmark(const GBWTType& index, const std::vector<std::vector<node_type>>& 
 }    
 
 std::vector<SearchState>
-findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type find_queries, size_type pattern_length)
+findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type find_queries, size_type pattern_length, std::vector<std::vector<node_type>>& queries)
 {
   std::cout << "find() benchmarks:" << std::endl;
 
-  std::vector<std::vector<node_type>> queries = generateQueries(dynamic_index, find_queries, pattern_length);
+  queries = generateQueries(dynamic_index, find_queries, pattern_length);
   std::vector<SearchState> results(queries.size());
 
   size_type compressed_length = findBenchmark(compressed_index, queries, results);
@@ -223,6 +231,64 @@ findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, si
   std::cout << std::endl;
 
   return results;
+}
+
+//------------------------------------------------------------------------------
+
+template<class GBWTType>
+BidirectionalState
+bidirectionalSearch(const GBWTType& index, const std::vector<node_type>& query)
+{
+  if(query.empty()) { return BidirectionalState(); }
+
+  size_type midpoint = query.size() / 2;
+  BidirectionalState state = index.bdFind(query[midpoint]);
+  for(size_type i = midpoint + 1; !(state.empty()) && i < query.size(); i++)
+  {
+    state = index.bdExtendForward(state, query[i]);
+  }
+  for(size_type i = midpoint; !(state.empty()) && i > 0; i--)
+  {
+    state = index.bdExtendBackward(state, query[i - 1]);
+  }
+
+  return state;
+}
+
+template<class GBWTType>
+size_type
+bidirectionalBenchmark(const GBWTType& index, const std::vector<std::vector<node_type>>& queries)
+{
+  double start = readTimer();
+  size_type total_length = 0, total_size = 0;
+  for(size_type i = 0; i < queries.size(); i++)
+  {
+    BidirectionalState result = bidirectionalSearch(index, queries[i]);
+    total_length += queries[i].size();
+    total_size += result.size();
+  }
+  double seconds = readTimer() - start;
+  printTimeLength(indexType(index), queries.size(), total_length, seconds);
+  return total_size;
+}    
+
+void
+bidirectionalBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<std::vector<node_type>>& queries)
+{
+  std::cout << "Bidirectional benchmarks:" << std::endl;
+
+  size_type compressed_length = bidirectionalBenchmark(compressed_index, queries);
+  size_type dynamic_length = bidirectionalBenchmark(dynamic_index, queries);
+
+  if(compressed_length != dynamic_length)
+  {
+    std::cerr << "bidirectionalBenchmark(): Total length mismatch: "
+              << compressed_length << " (" << indexType(compressed_index) << "), "
+              << dynamic_length << " (" << indexType(dynamic_index) << ")" << std::endl;
+  }
+
+  std::cout << "Found " << queries.size() << " ranges of total length " << compressed_length << std::endl;
+  std::cout << std::endl;
 }
 
 //------------------------------------------------------------------------------
