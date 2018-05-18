@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
+  Copyright (c) 2015, 2016, 2017, 2018 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -29,11 +29,14 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
+/*
+  An empty index is bidirectional.
+*/
 GBWTHeader::GBWTHeader() :
   tag(TAG), version(VERSION),
   sequences(0), size(0),
   offset(0), alphabet_size(0),
-  flags(0)
+  flags(FLAG_BIDIRECTIONAL)
 {
 }
 
@@ -66,9 +69,18 @@ GBWTHeader::load(std::istream& in)
 }
 
 bool
-GBWTHeader::check(uint32_t expected_version) const
+GBWTHeader::check() const
 {
-  return (this->tag == TAG && this->version == expected_version && this->flags == 0);
+  if(this->tag != TAG) { return false; }
+  if(this->version == VERSION)
+  {
+    return ((this->flags & FLAG_MASK) == this->flags);
+  }
+  if(this->version >= MIN_VERSION && this->version < VERSION)
+  {
+    return (this->flags == 0);
+  }
+  return false;
 }
 
 bool

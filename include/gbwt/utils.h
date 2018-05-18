@@ -210,7 +210,7 @@ struct Version
   const static size_type MINOR_VERSION = 4;
   const static size_type PATCH_VERSION = 0;
 
-  const static size_type GBWT_VERSION  = 1;
+  const static size_type GBWT_VERSION  = 2;
 };
 
 //------------------------------------------------------------------------------

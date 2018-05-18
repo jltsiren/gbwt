@@ -105,6 +105,7 @@ GBWT::load(std::istream& in)
   {
     std::cerr << "GBWT::load(): Invalid header: " << this->header << std::endl;
   }
+  this->header.setVersion();  // Update to the current version.
 
   this->bwt.load(in);
   this->da_samples.load(in);
@@ -129,6 +130,7 @@ GBWT::GBWT(const std::vector<GBWT>& sources)
 
   // Merge the headers.
   size_type valid_sources = 0;
+  bool is_bidirectional = true;
   for(const GBWT& source : sources)
   {
     if(source.empty()) { continue; }
@@ -144,9 +146,12 @@ GBWT::GBWT(const std::vector<GBWT>& sources)
       this->header.offset = std::min(this->header.offset, source.header.offset);
       this->header.alphabet_size = std::max(this->header.alphabet_size, source.header.alphabet_size);
     }
+    if(!(source.bidirectional())) { is_bidirectional = false; }
     valid_sources++;
   }
   if(valid_sources == 0) { return; }
+  if(is_bidirectional) { this->header.set(GBWTHeader::FLAG_BIDIRECTIONAL); }
+  else { this->header.unset(GBWTHeader::FLAG_BIDIRECTIONAL); }
 
   // Determine the mapping between source comp values and merged comp values.
   std::vector<size_type> record_offsets(sources.size());
@@ -295,7 +300,9 @@ GBWT::cacheEndmarker()
 void
 printStatistics(const GBWT& gbwt, const std::string& name)
 {
-  printHeader("Compressed GBWT"); std::cout << name << std::endl;
+  printHeader("Compressed GBWT"); std::cout << name;
+  if(gbwt.bidirectional()) { std::cout << " (bidirectional)"; }
+  std::cout << std::endl;
   printHeader("Total length"); std::cout << gbwt.size() << std::endl;
   printHeader("Sequences"); std::cout << gbwt.sequences() << std::endl;
   printHeader("Alphabet size"); std::cout << gbwt.sigma() << std::endl;

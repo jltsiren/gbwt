@@ -72,15 +72,19 @@ public:
     Insert one or more sequences to the GBWT. The text must be a concatenation of sequences,
     each of which ends with an endmarker (0). The new sequences receive identifiers starting
     from this->sequences().
+
+    Set has_both_orientations to true if the text has both orientations of each sequence.
+    Both orientations are required for bidirectional search.
   */
-  void insert(const text_type& text);
-  void insert(const text_type& text, size_type text_length);
-  void insert(const std::vector<node_type>& text);
+  void insert(const text_type& text, bool has_both_orientations = false);
+  void insert(const text_type& text, size_type text_length, bool has_both_orientations = false);
+  void insert(const std::vector<node_type>& text, bool has_both_orientations = false);
 
   /*
     Use the above to insert the sequences in batches of up to 'batch_size' nodes. Use batch
     size 0 to insert the entire text at once. By default, the sequences are only inserted in
     forward orientation. Set both_orientations = true to insert the reverse complement as well.
+    Both orientations are required for bidirectional search.
   */
   void insert(text_buffer_type& text, size_type batch_size = INSERT_BATCH_SIZE, bool both_orientations = false);
 
@@ -104,6 +108,8 @@ public:
 
   size_type runs() const;     // Expensive.
   size_type samples() const;  // Expensive.
+
+  bool bidirectional() const { return this->header.get(GBWTHeader::FLAG_BIDIRECTIONAL); }
 
 //------------------------------------------------------------------------------
 
@@ -311,6 +317,7 @@ public:
   size_type   input_tail, construction_tail;
   size_type   inserted_sequences, batch_sequences;
   std::thread builder;
+  bool        has_both_orientations;
 
   GBWTBuilder(const GBWTBuilder&) = delete;
   GBWTBuilder& operator= (const GBWTBuilder&) = delete;

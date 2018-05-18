@@ -110,6 +110,7 @@ DynamicGBWT::load(std::istream& in)
   {
     std::cerr << "DynamicGBWT::load(): Invalid header: " << this->header << std::endl;
   }
+  this->header.setVersion();  // Update to the current version.
   this->bwt.resize(this->effective());
 
   // Read and decompress the BWT.
@@ -517,6 +518,8 @@ advancePosition(std::vector<Sequence>& seqs, const DynamicGBWT& source)
 /*
   Insert the sequences from the source to the GBWT. Maintains an invariant that
   the sequences are sorted by (curr, offset).
+
+  Update the bidirectional flag in the header before calling this.
 */
 
 template<class Source>
@@ -541,11 +544,14 @@ insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source)
   The template parameter should be an integer vector. Because resizing text_type always
   causes a reallocation, 'text_length' is used to pass the actual length of the text.
   This function assumes that text.size() >= text_length.
+
+  Flag has_both_orientations tells whether the text contains both orientations of each
+  sequence.
 */
 
 template<class IntegerVector>
 void
-insertBatch(DynamicGBWT& index, const IntegerVector& text, size_type text_length, size_type start_id)
+insertBatch(DynamicGBWT& index, const IntegerVector& text, size_type text_length, size_type start_id, bool has_both_orientations)
 {
   double start = readTimer();
 
@@ -555,6 +561,7 @@ insertBatch(DynamicGBWT& index, const IntegerVector& text, size_type text_length
     std::cerr << "insertBatch(): The text must end with an endmarker" << std::endl;
     std::exit(EXIT_FAILURE);
   }
+  if(!has_both_orientations) { index.header.unset(GBWTHeader::FLAG_BIDIRECTIONAL); }
 
   /*
     Find the start of each sequence and initialize the sequence objects at the endmarker node.
@@ -594,7 +601,7 @@ insertBatch(DynamicGBWT& index, const IntegerVector& text, size_type text_length
 //------------------------------------------------------------------------------
 
 void
-DynamicGBWT::insert(const text_type& text)
+DynamicGBWT::insert(const text_type& text, bool has_both_orientations)
 {
   if(text.empty())
   {
@@ -604,12 +611,12 @@ DynamicGBWT::insert(const text_type& text)
     }
     return;
   }
-  gbwt::insertBatch(*this, text, text.size(), 0);
+  gbwt::insertBatch(*this, text, text.size(), 0, has_both_orientations);
   this->recode();
 }
 
 void
-DynamicGBWT::insert(const text_type& text, size_type text_length)
+DynamicGBWT::insert(const text_type& text, size_type text_length, bool has_both_orientations)
 {
   if(text_length == 0)
   {
@@ -624,12 +631,12 @@ DynamicGBWT::insert(const text_type& text, size_type text_length)
     std::cerr << "DynamicGBWT::insert(): Specified text length is larger than container size" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  gbwt::insertBatch(*this, text, text_length, 0);
+  gbwt::insertBatch(*this, text, text_length, 0, has_both_orientations);
   this->recode();
 }
 
 void
-DynamicGBWT::insert(const std::vector<node_type>& text)
+DynamicGBWT::insert(const std::vector<node_type>& text, bool has_both_orientations)
 {
   if(text.empty())
   {
@@ -639,7 +646,7 @@ DynamicGBWT::insert(const std::vector<node_type>& text)
     }
     return;
   }
-  gbwt::insertBatch(*this, text, text.size(), 0);
+  gbwt::insertBatch(*this, text, text.size(), 0, has_both_orientations);
   this->recode();
 }
 
@@ -670,7 +677,7 @@ DynamicGBWT::insert(text_buffer_type& text, size_type batch_size, bool both_orie
     if(node == ENDMARKER) { builder.insert(sequence, both_orientations); sequence.clear(); }
     else { sequence.push_back(node); }
   }
-  if(!(sequence.empty())) { builder.insert(sequence); sequence.clear(); }
+  if(!(sequence.empty())) { builder.insert(sequence, both_orientations); sequence.clear(); }
 
   // Finish the construction and get the index contents back.
   builder.finish();
@@ -700,6 +707,9 @@ DynamicGBWT::merge(const GBWT& source, size_type batch_size)
     }
     return;
   }
+
+  // The merged index is bidirectional only if both indexes are bidirectional.
+  if(!(source.bidirectional())) { this->header.unset(GBWTHeader::FLAG_BIDIRECTIONAL); }
 
   // Increase alphabet size and decrease offset if necessary.
   if(batch_size == 0) { batch_size = source.sequences(); }
@@ -826,7 +836,9 @@ DynamicGBWT::locate(SearchState state) const
 void
 printStatistics(const DynamicGBWT& gbwt, const std::string& name)
 {
-  printHeader("Dynamic GBWT"); std::cout << name << std::endl;
+  printHeader("Dynamic GBWT"); std::cout << name;
+  if(gbwt.bidirectional()) { std::cout << " (bidirectional)"; }
+  std::cout << std::endl;
   printHeader("Total length"); std::cout << gbwt.size() << std::endl;
   printHeader("Sequences"); std::cout << gbwt.sequences() << std::endl;
   printHeader("Alphabet size"); std::cout << gbwt.sigma() << std::endl;
@@ -841,7 +853,8 @@ printStatistics(const DynamicGBWT& gbwt, const std::string& name)
 GBWTBuilder::GBWTBuilder(size_type node_width, size_type buffer_size) :
   input_buffer(buffer_size, 0, node_width), construction_buffer(buffer_size, 0, node_width),
   input_tail(0), construction_tail(0),
-  inserted_sequences(0), batch_sequences(0)
+  inserted_sequences(0), batch_sequences(0),
+  has_both_orientations(true)
 {
 }
 
@@ -867,6 +880,7 @@ GBWTBuilder::insert(const std::vector<node_type>& sequence, bool both_orientatio
     std::cerr << "GBWTBuilder::insert(): Sequence is too long for the buffer, skipping" << std::endl;
     return;
   }
+  this->has_both_orientations &= both_orientations;
 
   // Flush the buffer if necessary.
   if(this->input_tail + space_required > this->input_buffer.size())
@@ -915,7 +929,7 @@ GBWTBuilder::flush()
   // Launch a new construction thread if necessary.
   if(this->construction_tail > 0)
   {
-    this->builder = std::thread(gbwt::insertBatch<text_type>, std::ref(this->index), std::cref(this->construction_buffer), this->construction_tail, this->inserted_sequences);
+    this->builder = std::thread(gbwt::insertBatch<text_type>, std::ref(this->index), std::cref(this->construction_buffer), this->construction_tail, this->inserted_sequences, this->has_both_orientations);
     this->inserted_sequences += this->batch_sequences;
     this->batch_sequences = 0;
   }

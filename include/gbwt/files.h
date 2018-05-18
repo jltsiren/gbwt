@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017 Jouni Siren
+  Copyright (c) 2017, 2018 Jouni Siren
   Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -40,6 +40,10 @@ namespace gbwt
 /*
   GBWT file header.
 
+  Version 2:
+  - Includes a flag for a bidirectional index.
+  - Compatible with version 1.
+
   Version 1:
   - The first proper version.
   - Identical to version 0.
@@ -62,14 +66,23 @@ struct GBWTHeader
 
   const static std::uint32_t TAG = 0x6B376B37;
   const static std::uint32_t VERSION = Version::GBWT_VERSION;
-  const static std::uint32_t MIN_VERSION = 0;
+  const static std::uint32_t MIN_VERSION = 1;
+
+  const static std::uint64_t FLAG_MASK          = 0x0001;
+  const static std::uint64_t FLAG_BIDIRECTIONAL = 0x0001;
 
   GBWTHeader();
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
-  bool check(std::uint32_t expected_version = VERSION) const;
+  bool check() const;
   bool checkNew() const;
+
+  void setVersion() { this->version = VERSION; }
+
+  void set(std::uint64_t flag) { this->flags |= flag; }
+  void unset(std::uint64_t flag) { this->flags &= ~flag; }
+  bool get(std::uint64_t flag) const { return (this->flags & flag); }
 
   void swap(GBWTHeader& another);
 

@@ -78,6 +78,8 @@ public:
   size_type runs() const; // Expensive.
   size_type samples() const { return this->da_samples.size(); }
 
+  bool bidirectional() const { return this->header.get(GBWTHeader::FLAG_BIDIRECTIONAL); }
+
 //------------------------------------------------------------------------------
 
   /*
