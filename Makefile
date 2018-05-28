@@ -7,7 +7,7 @@ OTHER_FLAGS=$(PARALLEL_FLAGS)
 
 include $(SDSL_DIR)/Make.helper
 CXX_FLAGS=$(MY_CXX_FLAGS) $(OTHER_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(INC_DIR) -Iinclude
-LIBOBJS=algorithms.o dynamic_gbwt.o files.o gbwt.o internal.o support.o utils.o
+LIBOBJS=algorithms.o dynamic_gbwt.o files.o gbwt.o internal.o support.o utils.o variants.o
 SOURCES=$(wildcard *.cpp)
 HEADERS=$(wildcard include/gbwt/*.h)
 OBJS=$(SOURCES:.cpp=.o)
