@@ -585,6 +585,7 @@ RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sd
     DynamicRecord merged;
     for(size_type i = 0; i < sources.size(); i++)
     {
+      if(sources[i]->empty()) { continue; }
       size_type start = sources[i]->start(ENDMARKER), limit = sources[i]->limit(ENDMARKER);
       CompressedRecord record(sources[i]->data, start, limit);
       for(CompressedRecordIterator iter(record); !(iter.end()); ++iter)

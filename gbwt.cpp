@@ -292,6 +292,7 @@ GBWT::record(node_type node) const
 void
 GBWT::cacheEndmarker()
 {
+  if(this->empty()) { return; }
   this->endmarker_record = this->record(ENDMARKER);
 }
 

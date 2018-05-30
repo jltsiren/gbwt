@@ -263,11 +263,14 @@ struct RecordArray
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
 
+  size_type size() const { return this->records; }
+  bool empty() const { return (this->size() == 0); }
+
   // 0-based indexing.
   size_type start(size_type record) const { return this->select(record + 1); }
   size_type limit(size_type record) const
   {
-    return (record + 1 < this->records ? this->select(record + 2) : this->data.size());
+    return (record + 1 < this->size() ? this->select(record + 2) : this->data.size());
   }
 
 private:
