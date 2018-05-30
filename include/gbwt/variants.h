@@ -52,8 +52,8 @@ struct Haplotype
 //------------------------------------------------------------------------------
 
 /*
-  Paths corrensponding to the reference and the variants. Allele i corresponds to
-  alternate allele i+1 in the VCF file.
+  Paths corrensponding to the reference and the variants. Allele identifiers are 1-based;
+  0 corresponds to the reference, which is not stored as an allele.
 */
 
 struct VariantPaths
@@ -77,10 +77,13 @@ struct VariantPaths
   size_type size() const { return this->reference.size(); }
   size_type paths() const { return this->path_starts.size() - 1; }
   size_type sites() const { return this->site_starts.size() - 1; }
+
   size_type alleles(size_type site) const { return this->site_starts[site + 1] - this->site_starts[site]; }
+  size_type refStart(size_type site) const { return this->ref_starts[site]; }
+  size_type refEnd(size_type site) const { return this->ref_ends[site]; }
 
   void setReferenceSize(size_type size) { this->reference.reserve(size); }
-  void appendReference(node_type node) { this->reference.push_back(node); }
+  void appendToReference(node_type node) { this->reference.push_back(node); }
 
   void addSite(size_type ref_start, size_type ref_end);
   void addAllele(const std::vector<node_type>& path);
@@ -101,7 +104,7 @@ struct Phasing
   const static size_type PHASED   = 2;
 
   Phasing() {}
-  explicit Phasing(size_type allele) : first(allele), second(0), diploid(false), phased(false) {}
+  explicit Phasing(size_type allele) : first(allele), second(0), diploid(false), phased(true) {}
 
   Phasing(size_type first_allele, size_type second_allele, bool is_phased = true) :
     first(first_allele), second(second_allele), diploid(true), phased(is_phased)
@@ -123,7 +126,7 @@ struct PhasingInformation
 {
   // Header
   size_type sample_count, sample_offset; 
-  size_type sites;
+  size_type site_count;
 
   // File
   std::string                filename;
@@ -135,7 +138,10 @@ struct PhasingInformation
   std::vector<Phasing> phasings;
 
   explicit PhasingInformation(range_type sample_range);
+  PhasingInformation(PhasingInformation&& source);
   ~PhasingInformation();
+
+  PhasingInformation& operator= (PhasingInformation&& source);
 
   // Append the phasings for a new site.
   void append(const std::vector<Phasing>& new_site);
@@ -147,17 +153,21 @@ struct PhasingInformation
   size_type offset() const { return this->site; }
 
   // Statistics.
-  size_type samples() const { return this->sample_count; }
+  size_type size() const { return this->sample_count; }
   range_type range() const { return range_type(this->sample_offset, this->sample_offset + this->sample_count - 1); }
-  size_type size() const { return this->sites; }
-
-  // FIXME implement safe versions of these
-  PhasingInformation(const PhasingInformation&) = delete;
-  PhasingInformation& operator= (const PhasingInformation&) = delete;
+  size_type sites() const { return this->site_count; }
+  size_type bytes() const { return this->data.size(); }
 
 private:
   void read();
+
+  PhasingInformation(const PhasingInformation&) = delete;
+  PhasingInformation& operator= (const PhasingInformation&) = delete;
 };
+
+//------------------------------------------------------------------------------
+
+size_type testVariants();  // Unit tests.
 
 //------------------------------------------------------------------------------
 

@@ -25,6 +25,8 @@
 #include <gbwt/variants.h>
 #include <gbwt/internal.h>
 
+#include <functional>
+
 namespace gbwt
 {
 
@@ -55,6 +57,12 @@ VariantPaths::addAllele(const std::vector<node_type>& path)
 void
 VariantPaths::appendReferenceUntil(Haplotype& haplotype, size_type site) const
 {
+  if(site > this->sites())
+  {
+    std::cerr << "VariantPaths::appendReferenceUntil(): Invalid site: " << site << std::endl;
+    return;
+  }
+
   size_type until = this->ref_starts[site];
   if(haplotype.offset < until)
   {
@@ -66,10 +74,20 @@ VariantPaths::appendReferenceUntil(Haplotype& haplotype, size_type site) const
 void
 VariantPaths::appendVariant(Haplotype& haplotype, size_type site, size_type allele) const
 {
-  this->appendReferenceUntil(haplotype, site);
+  if(site >= this->sites())
+  {
+    std::cerr << "VariantPaths::appendVariant(): Invalid site: " << site << std::endl;
+    return;
+  }
+  if(allele == 0 || allele > this->alleles(site))
+  {
+    std::cerr << "VariantPaths::appendVariant(): Invalid allele at site " << site << ": " << allele << std::endl;
+    return;
+  }
 
+  this->appendReferenceUntil(haplotype, site);
   size_type site_start = this->site_starts[site];
-  size_type start = this->path_starts[site_start + allele], stop = this->path_starts[site_start + allele + 1];
+  size_type start = this->path_starts[site_start + allele - 1], stop = this->path_starts[site_start + allele];
   haplotype.path.insert(haplotype.path.end(), this->alt_paths.begin() + start, this->alt_paths.begin() + stop);
   haplotype.offset = this->ref_ends[site];
 }
@@ -80,8 +98,11 @@ size_type
 Phasing::encode(size_type max_allele) const
 {
   size_type code = HAPLOID;
-  if(this->phased) { code = PHASED; }
-  else if(this->diploid) { code = UNPHASED; }
+  if(this->diploid)
+  {
+    if(this->phased) { code = PHASED; }
+    else { code = UNPHASED; }
+  }
 
   size_type radix = 3;
   code += radix * this->first;
@@ -103,7 +124,7 @@ Phasing::decode(size_type code, size_type max_allele)
   code -= radix * this->first;
 
   this->diploid = (code != HAPLOID);
-  this->phased = (code == PHASED);
+  this->phased = (code != UNPHASED);
 }
 
 size_type
@@ -118,10 +139,15 @@ Phasing::maxCode(size_type max_allele)
 const std::string PhasingInformation::TEMP_FILE_PREFIX = "phasing";
 
 PhasingInformation::PhasingInformation(range_type sample_range) :
-  sample_count(Range::length(sample_range)), sample_offset(sample_range.first), sites(0),
+  sample_count(Range::length(sample_range)), sample_offset(sample_range.first), site_count(0),
   filename(TempFile::getName(TEMP_FILE_PREFIX)), data(filename, std::ios::out),
   site(0), data_offset(0), phasings(sample_count)
 {
+}
+
+PhasingInformation::PhasingInformation(PhasingInformation&& source)
+{
+  *this = std::move(source);
 }
 
 PhasingInformation::~PhasingInformation()
@@ -130,13 +156,35 @@ PhasingInformation::~PhasingInformation()
   TempFile::remove(this->filename);
 }
 
+PhasingInformation&
+PhasingInformation::operator=(PhasingInformation&& source)
+{
+  if(this != &source)
+  {
+    this->sample_count = source.sample_count;
+    this->sample_offset = source.sample_offset;
+    this->site_count = source.site_count;
+
+    // Transfer the ownership of the file.
+    this->filename = source.filename;
+    source.filename.clear();
+    source.data.close();
+    this->data = sdsl::int_vector_buffer<8>(this->filename, std::ios::in);
+
+    this->site = source.site;
+    this->data_offset = source.data_offset;
+    this->phasings = source.phasings;
+  }
+  return *this;
+}
+
 void
 PhasingInformation::append(const std::vector<Phasing>& new_site)
 {
   if(new_site.empty()) { return; }
-  if(new_site.size() != this->samples())
+  if(new_site.size() != this->size())
   {
-    std::cerr << "PhasingInformation::append(): Expected " << this->samples() << " samples, got " << new_site.size() << std::endl;
+    std::cerr << "PhasingInformation::append(): Expected " << this->size() << " samples, got " << new_site.size() << std::endl;
     return;
   }
 
@@ -164,7 +212,7 @@ PhasingInformation::append(const std::vector<Phasing>& new_site)
   }
   encoder.write(this->data, prev, run_length);  
 
-  this->sites++;
+  this->site_count++;
 }
 
 void PhasingInformation::read()
@@ -173,11 +221,179 @@ void PhasingInformation::read()
 
   Run decoder(Phasing::maxCode(max_allele));
   run_type run = decoder.read(this->data, this->data_offset);
-  for(size_type i = 0; i < this->samples(); i++)
+  for(size_type i = 0; i < this->size(); i++)
   {
     if(run.second == 0) { run = decoder.read(this->data, this->data_offset); }
     this->phasings[i].decode(run.first, max_allele); run.second--;
   }
+}
+
+//------------------------------------------------------------------------------
+
+void
+extractHaplotypes(const VariantPaths& variants, PhasingInformation& phasings, std::vector<Haplotype>& haplotypes, std::function<bool(const Phasing&)> condition)
+{
+  phasings.begin();
+  while(phasings.offset() < phasings.sites())
+  {
+    for(size_type sample = 0; sample < phasings.size(); sample++)
+    {
+      if(!condition(phasings[sample])) { continue; }
+      if(phasings[sample].first > 0 && variants.refStart(phasings.offset()) >= haplotypes[2 * sample].offset)
+      {
+        variants.appendVariant(haplotypes[2 * sample], phasings.offset(), phasings[sample].first);
+      }
+      if(phasings[sample].diploid && phasings[sample].second > 0 && variants.refStart(phasings.offset()) >= haplotypes[2 * sample + 1].offset)
+      {
+        variants.appendVariant(haplotypes[2 * sample + 1], phasings.offset(), phasings[sample].second);
+      }
+    }
+    ++phasings;
+  }
+  for(size_type sample = 0; sample < phasings.size(); sample++)
+  {
+    if(!condition(phasings[sample])) { continue; }
+    variants.appendReferenceUntil(haplotypes[2 * sample], variants.sites());
+    if(phasings[sample].diploid && phasings[sample].second > 0)
+    {
+      variants.appendReferenceUntil(haplotypes[2 * sample + 1], variants.sites());
+    }
+  }
+}
+
+size_type
+testVariants()
+{
+  size_type failures = 0;
+
+  // Add a reference.
+  std::vector<node_type> reference = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+  VariantPaths variants;
+  variants.setReferenceSize(reference.size());
+  for(node_type node : reference) { variants.appendToReference(node); }
+
+  // Add sites and alternate alleles.
+  std::vector<range_type> sites = { range_type(2, 4), range_type(6, 7) };
+  std::vector<std::vector<std::vector<node_type>>> alleles = { { { 11, 12 } }, { { 13 }, { 14, 15 } } };
+  size_type allele_count = 0;
+  for(size_type site = 0; site < sites.size(); site++)
+  {
+    variants.addSite(sites[site].first, sites[site].second);
+    for(const std::vector<node_type>& allele : alleles[site])
+    {
+      variants.addAllele(allele);
+      allele_count++;
+    }
+  }
+
+  // Test variant statistics.
+  if(variants.size() != reference.size())
+  {
+    std::cerr << "testVariants(): VariantPaths: Reference size " << variants.size() << ", expected " << reference.size() << std::endl;
+    failures++;
+  }
+  if(variants.paths() != allele_count)
+  {
+    std::cerr << "testVariants(): VariantPaths: Allele count " << variants.paths() << ", expected " << allele_count << std::endl;
+    failures++;
+  }
+  if(variants.sites() != sites.size())
+  {
+    std::cerr << "testVariants(): VariantPaths: Site count " << variants.sites() << ", expected " << sites.size() << std::endl;
+    failures++;
+  }
+  for(size_type site = 0; site < sites.size(); site++)
+  {
+    if(variants.alleles(site) != alleles[site].size())
+    {
+      std::cerr << "testVariants(): VariantPaths: Site " << site << ": Allele count " << variants.alleles(site) << ", expected " << alleles[site].size() << std::endl;
+      failures++;
+    }
+    if(variants.refStart(site) != sites[site].first)
+    {
+      std::cerr << "testVariants(): VariantPaths: Site " << site << ": Start " << variants.refStart(site) << ", expected " << sites[site].first << std::endl;
+      failures++;
+    }
+    if(variants.refEnd(site) != sites[site].second)
+    {
+      std::cerr << "testVariants(): VariantPaths: Site " << site << ": End " << variants.refEnd(site) << ", expected " << sites[site].second << std::endl;
+      failures++;
+    }
+  }
+
+  // Create 3 phased samples: haploid, unphased, phased,
+  range_type sample_range(10, 12);
+  std::vector<std::vector<Phasing>> phasing_information =
+  {
+    { Phasing(1), Phasing(0, 1, false), Phasing(1, 0, true) },
+    { Phasing(0), Phasing(1, 2, false), Phasing(2, 0, true) }
+  };
+  PhasingInformation phasings(sample_range);
+  for(const std::vector<Phasing>& site : phasing_information)
+  {
+    phasings.append(site);
+  }
+
+  // Test phasing statistics.
+  if(phasings.size() != Range::length(sample_range))
+  {
+    std::cerr << "testVariants(): PhasingInformation: Sample count " << phasings.size() << ", expected " << Range::length(sample_range) << std::endl;
+    failures++;
+  }
+  if(phasings.range() != sample_range)
+  {
+    std::cerr << "testVariants(): PhasingInformation: Sample range " << phasings.range() << ", expected " << sample_range << std::endl;
+    failures++;
+  }
+  if(phasings.sites() != phasings.size())
+  {
+    std::cerr << "testVariants(): PhasingInformation: Site count " << phasings.sites() << ", expected " << phasings.size() << std::endl;
+    failures++;
+  }
+
+  // Extract full haplotypes.
+  std::vector<std::vector<node_type>> full_haplotypes =
+  {
+    { 1, 2, 11, 12, 5, 6, 7, 8, 9 },
+    {},
+    { 1, 2, 3, 4, 5, 6, 13, 8, 9 },
+    { 1, 2, 11, 12, 5, 6, 14, 15, 8, 9 },
+    { 1, 2, 11, 12, 5, 6, 14, 15, 8, 9 },
+    { 1, 2, 3, 4, 5, 6, 7, 8, 9 }
+  };
+  std::vector<Haplotype> extracted_haplotypes(2 * phasings.size());
+  extractHaplotypes(variants, phasings, extracted_haplotypes, [](const Phasing&) -> bool { return true; } );
+  for(size_type haplotype = 0; haplotype < extracted_haplotypes.size(); haplotype++)
+  {
+    if(extracted_haplotypes[haplotype].path != full_haplotypes[haplotype])
+    {
+      std::cerr << "testVariants(): Full haplotype mismatch: " << haplotype << std::endl;
+      failures++;
+    }
+  }
+
+  // Extract haplotypes starting after the first site for phased samples.
+  std::vector<std::vector<node_type>> partial_haplotypes =
+  {
+    { 5, 6, 7, 8, 9 },
+    {},
+    {},
+    {},
+    { 5, 6, 14, 15, 8, 9 },
+    { 5, 6, 7, 8, 9 }
+  };
+  extracted_haplotypes = std::vector<Haplotype>(2 * phasings.size(), Haplotype(variants.refEnd(0)));
+  extractHaplotypes(variants, phasings, extracted_haplotypes, [](const Phasing& phasing) -> bool { return phasing.phased; } );
+  for(size_type haplotype = 0; haplotype < extracted_haplotypes.size(); haplotype++)
+  {
+    if(extracted_haplotypes[haplotype].path != partial_haplotypes[haplotype])
+    {
+      std::cerr << "testVariants(): Partial haplotype mismatch: " << haplotype << std::endl;
+      failures++;
+    }
+  }
+
+  return failures;
 }
 
 //------------------------------------------------------------------------------
