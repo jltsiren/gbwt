@@ -74,9 +74,13 @@ struct VariantPaths
 
   VariantPaths();
 
+  size_type size() const { return this->reference.size(); }
   size_type paths() const { return this->path_starts.size() - 1; }
   size_type sites() const { return this->site_starts.size() - 1; }
   size_type alleles(size_type site) const { return this->site_starts[site + 1] - this->site_starts[site]; }
+
+  void setReferenceSize(size_type size) { this->reference.reserve(size); }
+  void appendReference(node_type node) { this->reference.push_back(node); }
 
   void addSite(size_type ref_start, size_type ref_end);
   void addAllele(const std::vector<node_type>& path);

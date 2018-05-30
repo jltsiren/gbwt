@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <set>
 #include <vector>
 
 #include <sdsl/bit_vectors.hpp>
@@ -285,6 +286,30 @@ double readTimer();       // Seconds from an arbitrary time point.
 size_type memoryUsage();  // Peak memory usage in bytes.
 
 //------------------------------------------------------------------------------
+
+/*
+  Temporary file names have the pattern "prefix_hostname_pid_counter", where
+  - prefix is given as an argument to getName();
+  - hostname is the name of the host;
+  - pid is the process id; and
+  - counter is a running counter starting from 0.
+
+  The generated names are stored until the file is deleted with remove(). All
+  remaining temporary files are deleted when the program exits (normally or
+  with std::exit()).
+
+  TempFile is not thread-safe!
+*/
+
+namespace TempFile
+{
+  extern const std::string DEFAULT_TEMP_DIR;
+  extern std::string temp_dir;
+
+  void setDirectory(const std::string& directory);
+  std::string getName(const std::string& name_part);
+  void remove(std::string& filename);  // Also clears the filename.
+}
 
 // Returns the total length of the rows, excluding line ends.
 size_type readRows(const std::string& filename, std::vector<std::string>& rows, bool skip_empty_rows);
