@@ -30,7 +30,6 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
-#include <set>
 #include <vector>
 
 #include <sdsl/bit_vectors.hpp>

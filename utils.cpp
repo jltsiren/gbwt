@@ -27,6 +27,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <set>
 
 #include <sys/resource.h>
 #include <unistd.h>

@@ -91,6 +91,76 @@ struct VariantPaths
 
 //------------------------------------------------------------------------------
 
+struct Phasing
+{
+  size_type first, second;
+  bool      diploid, phased;
+
+  const static size_type HAPLOID  = 0;
+  const static size_type UNPHASED = 1;
+  const static size_type PHASED   = 2;
+
+  Phasing() {}
+  explicit Phasing(size_type allele) : first(allele), second(0), diploid(false), phased(false) {}
+
+  Phasing(size_type first_allele, size_type second_allele, bool is_phased = true) :
+    first(first_allele), second(second_allele), diploid(true), phased(is_phased)
+  {
+  }
+
+  size_type encode(size_type max_allele) const;
+  void decode(size_type code, size_type max_allele);
+  static size_type maxCode(size_type max_allele);
+};
+
+//------------------------------------------------------------------------------
+
+/*
+  Phasing information for a number of samples in a temporary file.
+*/
+
+struct PhasingInformation
+{
+  // Header
+  size_type sample_count, sample_offset; 
+  size_type sites;
+
+  // File
+  std::string                filename;
+  sdsl::int_vector_buffer<8> data;
+  const static std::string   TEMP_FILE_PREFIX;  // "phasing"
+
+  // Iterator
+  size_type            site, data_offset;
+  std::vector<Phasing> phasings;
+
+  explicit PhasingInformation(range_type sample_range);
+  ~PhasingInformation();
+
+  // Append the phasings for a new site.
+  void append(const std::vector<Phasing>& new_site);
+
+  // Iterate over the phasings.
+  void begin() { this->site = 0; this->data_offset = 0; this->read(); }
+  void operator++() { this->site++; this->read(); }
+  const Phasing& operator[](size_type i) const { return this->phasings[i]; }
+  size_type offset() const { return this->site; }
+
+  // Statistics.
+  size_type samples() const { return this->sample_count; }
+  range_type range() const { return range_type(this->sample_offset, this->sample_offset + this->sample_count - 1); }
+  size_type size() const { return this->sites; }
+
+  // FIXME implement safe versions of these
+  PhasingInformation(const PhasingInformation&) = delete;
+  PhasingInformation& operator= (const PhasingInformation&) = delete;
+
+private:
+  void read();
+};
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwt
 
 #endif // GBWT_VARIANTS_H

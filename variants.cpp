@@ -23,6 +23,7 @@
 */
 
 #include <gbwt/variants.h>
+#include <gbwt/internal.h>
 
 namespace gbwt
 {
@@ -71,6 +72,112 @@ VariantPaths::appendVariant(Haplotype& haplotype, size_type site, size_type alle
   size_type start = this->path_starts[site_start + allele], stop = this->path_starts[site_start + allele + 1];
   haplotype.path.insert(haplotype.path.end(), this->alt_paths.begin() + start, this->alt_paths.begin() + stop);
   haplotype.offset = this->ref_ends[site];
+}
+
+//------------------------------------------------------------------------------
+
+size_type
+Phasing::encode(size_type max_allele) const
+{
+  size_type code = HAPLOID;
+  if(this->phased) { code = PHASED; }
+  else if(this->diploid) { code = UNPHASED; }
+
+  size_type radix = 3;
+  code += radix * this->first;
+  radix *= max_allele + 1;
+  code += radix * this->second;
+
+  return code;
+}
+
+void
+Phasing::decode(size_type code, size_type max_allele)
+{
+  size_type radix = 3 * (max_allele + 1);
+  this->second = code / radix;
+  code -= radix * this->second;
+
+  radix = 3;
+  this->first = code / radix;
+  code -= radix * this->first;
+
+  this->diploid = (code != HAPLOID);
+  this->phased = (code == PHASED);
+}
+
+size_type
+Phasing::maxCode(size_type max_allele)
+{
+  Phasing phasing(max_allele, max_allele, true);
+  return phasing.encode(max_allele);
+}
+
+//------------------------------------------------------------------------------
+
+const std::string PhasingInformation::TEMP_FILE_PREFIX = "phasing";
+
+PhasingInformation::PhasingInformation(range_type sample_range) :
+  sample_count(Range::length(sample_range)), sample_offset(sample_range.first), sites(0),
+  filename(TempFile::getName(TEMP_FILE_PREFIX)), data(filename, std::ios::out),
+  site(0), data_offset(0), phasings(sample_count)
+{
+}
+
+PhasingInformation::~PhasingInformation()
+{
+  this->data.close();
+  TempFile::remove(this->filename);
+}
+
+void
+PhasingInformation::append(const std::vector<Phasing>& new_site)
+{
+  if(new_site.empty()) { return; }
+  if(new_site.size() != this->samples())
+  {
+    std::cerr << "PhasingInformation::append(): Expected " << this->samples() << " samples, got " << new_site.size() << std::endl;
+    return;
+  }
+
+  // Determine and write the largest allele identifier.
+  size_type max_allele = 0;
+  for(const Phasing& phasing : new_site)
+  {
+    max_allele = std::max(max_allele, phasing.first);
+    max_allele = std::max(max_allele, phasing.second);
+  }
+  ByteCode::write(this->data, max_allele);
+
+  // Run-length encode the phasings.
+  Run encoder(Phasing::maxCode(max_allele));
+  size_type prev = new_site.front().encode(max_allele), run_length = 1;
+  for(size_type i = 1; i < new_site.size(); i++)
+  {
+    size_type curr = new_site[i].encode(max_allele);
+    if(curr == prev) { run_length++; }
+    else
+    {
+      encoder.write(this->data, prev, run_length);
+      prev = curr; run_length = 1;
+    }
+  }
+  encoder.write(this->data, prev, run_length);  
+
+  this->sites++;
+}
+
+void PhasingInformation::read()
+{
+  size_type max_allele = ByteCode::read(this->data, this->data_offset);
+
+  Run decoder(Phasing::maxCode(max_allele));
+  run_type run = decoder.read(this->data, this->data_offset);
+  for(size_type i = 0; i < this->samples(); i++)
+  {
+    if(run.second == 0) { run = decoder.read(this->data, this->data_offset); }
+    this->phasings[i].decode(run.first, max_allele); run.second--;
+  }
 }
 
 //------------------------------------------------------------------------------
