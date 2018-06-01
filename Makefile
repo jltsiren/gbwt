@@ -13,7 +13,7 @@ HEADERS=$(wildcard include/gbwt/*.h)
 OBJS=$(SOURCES:.cpp=.o)
 LIBS=-L$(LIB_DIR) -lsdsl -ldivsufsort -ldivsufsort64
 LIBRARY=libgbwt.a
-PROGRAMS=prepare_text build_gbwt merge_gbwt benchmark
+PROGRAMS=prepare_text build_gbwt merge_gbwt benchmark test_gbwt
 
 all: $(LIBRARY) $(PROGRAMS)
 
@@ -33,6 +33,9 @@ merge_gbwt:merge_gbwt.o $(LIBRARY)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 benchmark:benchmark.o $(LIBRARY)
+	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+
+test_gbwt:test_gbwt.o $(LIBRARY)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 clean:

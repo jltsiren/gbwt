@@ -89,6 +89,7 @@ struct VariantPaths
   void addAllele(const std::vector<node_type>& path);
 
   void appendReferenceUntil(Haplotype& haplotype, size_type site) const;
+  void appendReferenceUntilEnd(Haplotype& haplotype) const;
   void appendVariant(Haplotype& haplotype, size_type site, size_type allele) const;
 };
 

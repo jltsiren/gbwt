@@ -5,5 +5,6 @@ prepare_text
 build_gbwt
 merge_gbwt
 benchmark
+test_gbwt
 
 .DS_Store
