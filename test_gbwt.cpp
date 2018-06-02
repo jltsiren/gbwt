@@ -44,7 +44,7 @@ main(int, char**)
 
   std::cout << std::endl;
 
-  if(failures > 0) { std::cout << failures << " tests failed" << std::endl; }
+  if(failures > 0) { std::cout << failures << " test(s) failed" << std::endl; }
   else { std::cout << "All tests successful" << std::endl; }
   std::cout << std::endl;
 

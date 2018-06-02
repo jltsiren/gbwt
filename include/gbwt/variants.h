@@ -28,6 +28,8 @@
 
 #include <gbwt/utils.h>
 
+#include <functional>
+
 namespace gbwt
 {
 
@@ -41,12 +43,18 @@ struct Haplotype
 {
   std::vector<node_type> path;
   size_type              offset; // In the reference.
+  bool                   active, diploid;
 
-  Haplotype() : offset(0) {}
-  Haplotype(size_type reference_offset) : offset(reference_offset) {}
+  size_type              sample, phase, count;
+
+  Haplotype() : offset(0), active(false), diploid(false), sample(0), phase(0), count(0) {}
+  Haplotype(size_type sample_id, size_type phase_id) : offset(0), active(false), diploid(false), sample(sample_id), phase(phase_id), count(0) {}
 
   size_type size() const { return this->path.size(); }
   bool empty() const { return this->path.empty(); }
+
+  void activate(size_type start_offset, bool is_diploid) { this->offset = start_offset; this->active = true; this->diploid = is_diploid; }
+  void deactivate() { this->path = std::vector<node_type>(); this->active = false; this->count++; }
 };
 
 //------------------------------------------------------------------------------
@@ -79,6 +87,8 @@ struct VariantPaths
   size_type sites() const { return this->site_starts.size() - 1; }
 
   size_type alleles(size_type site) const { return this->site_starts[site + 1] - this->site_starts[site]; }
+
+  size_type refPrev(size_type site) const { return (site > 0 ? this->refEnd(site - 1) : 0); }
   size_type refStart(size_type site) const { return this->ref_starts[site]; }
   size_type refEnd(size_type site) const { return this->ref_ends[site]; }
 
@@ -151,11 +161,11 @@ struct PhasingInformation
   void begin() { this->site = 0; this->data_offset = 0; this->read(); }
   void operator++() { this->site++; this->read(); }
   const Phasing& operator[](size_type i) const { return this->phasings[i]; }
-  size_type offset() const { return this->site; }
+  size_type current() const { return this->site; }
 
   // Statistics.
   size_type size() const { return this->sample_count; }
-  range_type range() const { return range_type(this->sample_offset, this->sample_offset + this->sample_count - 1); }
+  size_type offset() const { return this->sample_offset; }
   size_type sites() const { return this->site_count; }
   size_type bytes() const { return this->data.size(); }
 
@@ -167,6 +177,9 @@ private:
 };
 
 //------------------------------------------------------------------------------
+
+void generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
+                        std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output);
 
 size_type testVariants();  // Unit tests.
 

@@ -25,8 +25,6 @@
 #include <gbwt/variants.h>
 #include <gbwt/internal.h>
 
-#include <functional>
-
 namespace gbwt
 {
 
@@ -242,35 +240,97 @@ void PhasingInformation::read()
 //------------------------------------------------------------------------------
 
 void
-extractHaplotypes(const VariantPaths& variants, PhasingInformation& phasings, std::vector<Haplotype>& haplotypes, std::function<bool(const Phasing&)> condition)
+finishHaplotype(Haplotype& haplotype, const VariantPaths& variants, size_type site,
+                std::function<void(const Haplotype&)> output)
 {
+  if(!(haplotype.active)) { return; }
+  if(site < variants.sites()) { variants.appendReferenceUntil(haplotype, site); }
+  else { variants.appendReferenceUntilEnd(haplotype); }
+  output(haplotype);
+  haplotype.deactivate();
+}
+
+void
+generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
+                   std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output)
+{
+  std::vector<Haplotype> haplotypes;
+  haplotypes.reserve(2 * phasings.size());
+  for(size_type sample = 0; sample < phasings.size(); sample++)
+  {
+    haplotypes.emplace_back(sample, 0);
+    haplotypes.emplace_back(sample, 1);
+  }
+
   phasings.begin();
-  while(phasings.offset() < phasings.sites())
+  while(phasings.current() < phasings.sites())
   {
     for(size_type sample = 0; sample < phasings.size(); sample++)
     {
-      if(!condition(phasings[sample])) { continue; }
-      if(phasings[sample].first > 0 && variants.refStart(phasings.offset()) >= haplotypes[2 * sample].offset)
+      if(!process_sample(sample)) { continue; }
+      const Phasing& phasing = phasings[sample];
+      Haplotype& first = haplotypes[2 * sample];
+      Haplotype& second = haplotypes[2 * sample + 1];
+
+      /*
+        First phase:
+        - If the current site is unphased or the ploidy changes, finish the existing haplotype.
+        - If the current haplotype is inactive, activate it.
+        - If the current haplotype has an alternate allele, append it.
+        - If the current site is unphased, finish the current haplotype.
+      */
+      if(!(phasing.phased) || first.diploid != phasing.diploid)
       {
-        variants.appendVariant(haplotypes[2 * sample], phasings.offset(), phasings[sample].first);
+        finishHaplotype(first, variants, phasings.current(), output);
       }
-      if(phasings[sample].diploid && phasings[sample].second > 0 && variants.refStart(phasings.offset()) >= haplotypes[2 * sample + 1].offset)
+      if(!(first.active)) { first.activate(variants.refPrev(phasings.current()), phasing.diploid); }
+      if(phasing.first > 0)
       {
-        variants.appendVariant(haplotypes[2 * sample + 1], phasings.offset(), phasings[sample].second);
+        variants.appendVariant(first, phasings.current(), phasing.first);
+      }
+      if(!(phasing.phased))
+      {
+        finishHaplotype(first, variants, phasings.current() + 1, output);
+      }
+
+      /*
+        Second phase:
+        - If the current site is unphased or haploid, finish the existing haplotype.
+        - If the current site is haploid, skip the rest.
+        - If the current haplotype is inactive, activate it.
+        - If the current haplotype has an alternate allele, append it.
+        - If the current site is unphased, finish the current haplotype.
+      */
+      if(!(phasing.phased && phasing.diploid))
+      {
+        finishHaplotype(second, variants, phasings.current(), output);
+      }
+      if(phasing.diploid)
+      {
+        if(!(second.active)) { second.activate(variants.refPrev(phasings.current()), phasing.diploid); }
+        if(phasing.second > 0)
+        {
+          variants.appendVariant(second, phasings.current(), phasing.second);
+        }
+        if(!(phasing.phased))
+        {
+          finishHaplotype(second, variants, phasings.current() + 1, output);
+        }
       }
     }
     ++phasings;
   }
+
+  // Finish the active haplotypes.
   for(size_type sample = 0; sample < phasings.size(); sample++)
   {
-    if(!condition(phasings[sample])) { continue; }
-    variants.appendReferenceUntilEnd(haplotypes[2 * sample]);
-    if(phasings[sample].diploid)
-    {
-      variants.appendReferenceUntilEnd(haplotypes[2 * sample + 1]);
-    }
+    if(!process_sample(sample)) { continue; }
+    finishHaplotype(haplotypes[2 * sample], variants, phasings.sites(), output);
+    finishHaplotype(haplotypes[2 * sample + 1], variants, phasings.sites(), output);
   }
 }
+
+//------------------------------------------------------------------------------
 
 std::ostream&
 operator<< (std::ostream& out, std::vector<node_type>& data)
@@ -293,8 +353,8 @@ testVariants()
   for(node_type node : reference) { variants.appendToReference(node); }
 
   // Add sites and alternate alleles.
-  std::vector<range_type> sites = { range_type(2, 4), range_type(6, 7) };
-  std::vector<std::vector<std::vector<node_type>>> alleles = { { { 11, 12 } }, { { 13 }, { 14, 15 } } };
+  std::vector<range_type> sites = { range_type(2, 4), range_type(6, 7), range_type(8, 9) };
+  std::vector<std::vector<std::vector<node_type>>> alleles = { { { 11, 12 } }, { { 13 }, { 14, 15 } }, { { 16 } } };
   size_type allele_count = 0;
   for(size_type site = 0; site < sites.size(); site++)
   {
@@ -341,12 +401,13 @@ testVariants()
     }
   }
 
-  // Create 3 phased samples: haploid, unphased, phased,
+  // Create 3 samples: diploid-haploid-diploid, phased-unphased-phased, haploid-phased-phased.
   range_type sample_range(10, 12);
   std::vector<std::vector<Phasing>> phasing_information =
   {
-    { Phasing(1), Phasing(0, 1, false), Phasing(1, 0, true) },
-    { Phasing(0), Phasing(1, 2, false), Phasing(2, 0, true) }
+    { Phasing(1, 0, true), Phasing(0, 1, true),  Phasing(0) },
+    { Phasing(0),          Phasing(1, 2, false), Phasing(2, 0, true) },
+    { Phasing(0, 1, true), Phasing(1, 0, true),  Phasing(0, 1, true) }
   };
   PhasingInformation phasings(sample_range);
   for(const std::vector<Phasing>& site : phasing_information)
@@ -360,9 +421,9 @@ testVariants()
     std::cerr << "testVariants(): PhasingInformation: Sample count " << phasings.size() << ", expected " << Range::length(sample_range) << std::endl;
     failures++;
   }
-  if(phasings.range() != sample_range)
+  if(phasings.offset() != sample_range.first)
   {
-    std::cerr << "testVariants(): PhasingInformation: Sample range " << phasings.range() << ", expected " << sample_range << std::endl;
+    std::cerr << "testVariants(): PhasingInformation: Sample offset " << phasings.offset() << ", expected " << sample_range.first << std::endl;
     failures++;
   }
   if(phasings.sites() != phasing_information.size())
@@ -371,45 +432,48 @@ testVariants()
     failures++;
   }
 
-  // Extract full haplotypes.
-  std::vector<std::vector<node_type>> full_haplotypes =
-  {
-    { 1, 2, 11, 12, 5, 6, 7, 8, 9, 10 },
-    {},
-    { 1, 2, 3, 4, 5, 6, 13, 8, 9, 10 },
-    { 1, 2, 11, 12, 5, 6, 14, 15, 8, 9, 10 },
-    { 1, 2, 11, 12, 5, 6, 14, 15, 8, 9, 10 },
-    { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }
-  };
-  std::vector<Haplotype> extracted_haplotypes(2 * phasings.size());
-  extractHaplotypes(variants, phasings, extracted_haplotypes, [](const Phasing&) -> bool { return true; } );
-  for(size_type haplotype = 0; haplotype < extracted_haplotypes.size(); haplotype++)
-  {
-    if(extracted_haplotypes[haplotype].path != full_haplotypes[haplotype])
-    {
-      std::cerr << "testVariants(): Full haplotype " << haplotype << ": " << extracted_haplotypes[haplotype].path << ", expected " << full_haplotypes[haplotype] << std::endl;
-      failures++;
-    }
-  }
+  /*
+  1 2  3  4 5 6  7    8  9 10
+      11 12     13      16
+                14 15
+  */
 
-  // Extract haplotypes starting after the first site for phased samples.
-  std::vector<std::vector<node_type>> partial_haplotypes =
+  // Generate haplotypes.
+  std::vector<std::vector<node_type>> true_haplotypes =
   {
-    { 5, 6, 7, 8, 9, 10 },
-    {},
-    {},
-    {},
-    { 5, 6, 14, 15, 8, 9, 10 },
-    { 5, 6, 7, 8, 9, 10 }
+    { 1, 2, 11, 12, 5, 6 },     // (0, 0, 0)
+    { 1, 2, 3, 4, 5, 6 },       // (0, 1, 0)
+    { 1, 2, 3, 4, 5, 6 },       // (1, 0, 0)
+    { 5, 6, 13, 8 },            // (1, 0, 1)
+    { 1, 2, 11, 12, 5, 6 },     // (1, 1, 0)
+    { 5, 6, 14, 15, 8 },        // (1, 1, 1)
+    { 1, 2, 3, 4, 5, 6 },       // (2, 0, 0)
+    { 5, 6, 7, 8 },             // (0, 0, 1)
+    { 8, 9, 10 },               // (0, 0, 2)
+    { 8, 16, 10 },              // (0, 1, 1)
+    { 8, 16, 10 },              // (1, 0, 2)
+    { 8, 9, 10 },               // (1, 1, 2)
+    { 5, 6, 14, 15, 8, 9, 10 }, // (2, 0, 1)
+    { 5, 6, 7, 8, 16, 10}       // (2, 1, 0)
   };
-  extracted_haplotypes = std::vector<Haplotype>(2 * phasings.size(), Haplotype(variants.refEnd(0)));
-  extractHaplotypes(variants, phasings, extracted_haplotypes, [](const Phasing& phasing) -> bool { return phasing.phased; } );
-  for(size_type haplotype = 0; haplotype < extracted_haplotypes.size(); haplotype++)
+  std::vector<std::vector<node_type>> haplotypes;
+  generateHaplotypes(variants, phasings,
+    [](size_type) -> bool { return true; },
+    [&haplotypes](const Haplotype& haplotype) { haplotypes.push_back(haplotype.path); });
+  if(haplotypes.size() != true_haplotypes.size())
   {
-    if(extracted_haplotypes[haplotype].path != partial_haplotypes[haplotype])
+    std::cerr << "testVariants(): generateHaplotypes(): Expected " << true_haplotypes.size() << " haplotypes, got " << haplotypes.size() << std::endl;
+    failures++;
+  }
+  else
+  {
+    for(size_type haplotype = 0; haplotype < haplotypes.size(); haplotype++)
     {
-      std::cerr << "testVariants(): Partial haplotype " << haplotype << ": " << extracted_haplotypes[haplotype].path << ", expected " << partial_haplotypes[haplotype] << std::endl;
-      failures++;
+      if(haplotypes[haplotype] != true_haplotypes[haplotype])
+      {
+        std::cerr << "testVariants(): generateHaplotypes(): Haplotype " << haplotype << ": expected " << true_haplotypes[haplotype] << ", got " << haplotypes[haplotype] << std::endl;
+        failures++;
+      }
     }
   }
 
