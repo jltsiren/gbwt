@@ -272,7 +272,7 @@ generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
   {
     for(size_type sample = 0; sample < phasings.size(); sample++)
     {
-      if(!process_sample(sample)) { continue; }
+      if(!active_samples[sample]) { continue; }
       const Phasing& phasing = phasings[sample];
       Haplotype& first = haplotypes[2 * sample];
       Haplotype& second = haplotypes[2 * sample + 1];
