@@ -254,6 +254,7 @@ void
 generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
                    std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output)
 {
+  // Initialize diploid haplotypes.
   std::vector<Haplotype> haplotypes;
   haplotypes.reserve(2 * phasings.size());
   for(size_type sample = 0; sample < phasings.size(); sample++)
@@ -261,6 +262,10 @@ generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
     haplotypes.emplace_back(sample, 0);
     haplotypes.emplace_back(sample, 1);
   }
+
+  // Determine which samples to process.
+  sdsl::bit_vector active_samples(phasings.size(), 0);
+  for(size_type sample = 0; sample < phasings.size(); sample++) { active_samples[sample] = process_sample(sample); }
 
   phasings.begin();
   while(phasings.current() < phasings.sites())
