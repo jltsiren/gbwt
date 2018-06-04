@@ -29,6 +29,7 @@
 #include <gbwt/utils.h>
 
 #include <functional>
+#include <map>
 
 namespace gbwt
 {
@@ -74,11 +75,15 @@ struct VariantPaths
     alt_paths     concatenated allele paths
     path_starts   pointers to the start of each path in alt_paths with a sentinel at the end
     site_starts   pointers to the start of each site in path_starts with a sentinel at the end
+
+    ref_index     the first occurrence of each node in the reference
   */
   std::vector<node_type> reference;
   std::vector<size_type> ref_starts, ref_ends;
   std::vector<node_type> alt_paths;
   std::vector<size_type> path_starts, site_starts;
+
+  std::unordered_map<node_type, node_type, size_type(*)(size_type)> ref_index;
 
   VariantPaths();
 
@@ -94,6 +99,9 @@ struct VariantPaths
 
   void setReferenceSize(size_type size) { this->reference.reserve(size); }
   void appendToReference(node_type node) { this->reference.push_back(node); }
+
+  void indexReference();
+  size_type firstOccurrence(node_type node);
 
   void addSite(size_type ref_start, size_type ref_end);
   void addAllele(const std::vector<node_type>& path);

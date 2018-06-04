@@ -360,14 +360,14 @@ template<class GBWTType>
 size_type
 directLocate(const GBWTType& index, SearchState query)
 {
-  size_type hash = FNV_OFFSET_BASIS;
+  size_type hash = 0;
   std::vector<size_type> results;
   for(size_type i = query.range.first; i <= query.range.second; i++)
   {
     results.push_back(index.locate(query.node, i));
   }
   removeDuplicates(results, false);
-  for(size_type res : results) { hash = fnv1a_hash(res, hash); }
+  for(size_type res : results) { hash ^= wang_hash_64(res); }
   return hash;
 }
 
@@ -375,9 +375,9 @@ template<class GBWTType>
 size_type
 fastLocate(const GBWTType& index, SearchState query)
 {
-  size_type hash = FNV_OFFSET_BASIS;
+  size_type hash = 0;
   std::vector<size_type> results = index.locate(query);
-  for(size_type res : results) { hash = fnv1a_hash(res, hash); }
+  for(size_type res : results) { hash ^= wang_hash_64(res); }
   return hash;
 }
 

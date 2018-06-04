@@ -30,10 +30,29 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
-VariantPaths::VariantPaths()
+VariantPaths::VariantPaths() :
+  ref_index(16, wang_hash_64)
 {
   this->path_starts.push_back(0);
   this->site_starts.push_back(0);
+}
+
+void
+VariantPaths::indexReference()
+{
+  if(!(this->ref_index.empty())) { this->ref_index.clear(); }
+  for(size_type i = 0; i < this->size(); i++)
+  {
+    if(this->ref_index.find(this->reference[i]) == this->ref_index.end()) { this->ref_index[this->reference[i]] = i; }
+  }
+}
+
+size_type
+VariantPaths::firstOccurrence(node_type node)
+{
+  auto iter = this->ref_index.find(node);
+  if(iter == this->ref_index.end()) { return this->size(); }
+  return iter->second;
 }
 
 void
@@ -359,7 +378,7 @@ testVariants()
 
   // Add sites and alternate alleles.
   std::vector<range_type> sites = { range_type(2, 4), range_type(6, 7), range_type(8, 9) };
-  std::vector<std::vector<std::vector<node_type>>> alleles = { { { 11, 12 } }, { { 13 }, { 14, 15 } }, { { 16 } } };
+  std::vector<std::vector<std::vector<node_type>>> alleles = { { { 11, 12 } }, { { 13 }, { 14, 15 } }, { { 16 }, {} } };
   size_type allele_count = 0;
   for(size_type site = 0; site < sites.size(); site++)
   {
@@ -406,13 +425,29 @@ testVariants()
     }
   }
 
+  // Test the reference index.
+  variants.indexReference();
+  for(size_type i = 0; i < reference.size(); i++)
+  {
+    if(variants.firstOccurrence(reference[i]) != i)
+    {
+      std::cerr << "testVariants(): VariantPaths: First occurrence of " << reference[i] << " at " << variants.firstOccurrence(reference[i]) << ", expected " << i << std::endl;
+      failures++;
+    }
+  }
+  if(variants.firstOccurrence(0) != reference.size())
+  {
+    std::cerr << "testVariants(): VariantPaths: Reference position found for an invalid node" << std::endl;
+    failures++;
+  }
+
   // Create 3 samples: diploid-haploid-diploid, phased-unphased-phased, haploid-phased-phased.
   range_type sample_range(10, 12);
   std::vector<std::vector<Phasing>> phasing_information =
   {
     { Phasing(1, 0, true), Phasing(0, 1, true),  Phasing(0) },
     { Phasing(0),          Phasing(1, 2, false), Phasing(2, 0, true) },
-    { Phasing(0, 1, true), Phasing(1, 0, true),  Phasing(0, 1, true) }
+    { Phasing(2, 1, true), Phasing(1, 0, true),  Phasing(0, 1, true) }
   };
   PhasingInformation phasings(sample_range);
   for(const std::vector<Phasing>& site : phasing_information)
@@ -440,7 +475,7 @@ testVariants()
   /*
   1 2  3  4 5 6  7    8  9 10
       11 12     13      16
-                14 15
+                14 15    -
   */
 
   // Generate haplotypes.
@@ -454,7 +489,7 @@ testVariants()
     { 5, 6, 14, 15, 8 },        // (1, 1, 1)
     { 1, 2, 3, 4, 5, 6 },       // (2, 0, 0)
     { 5, 6, 7, 8 },             // (0, 0, 1)
-    { 8, 9, 10 },               // (0, 0, 2)
+    { 8, 10 },                  // (0, 0, 2)
     { 8, 16, 10 },              // (0, 1, 1)
     { 8, 16, 10 },              // (1, 0, 2)
     { 8, 9, 10 },               // (1, 1, 2)
