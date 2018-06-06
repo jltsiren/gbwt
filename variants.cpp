@@ -247,7 +247,7 @@ PhasingInformation::append(const std::vector<Phasing>& new_site)
   ByteCode::write(this->data, max_allele);
 
   // Run-length encode the phasings.
-  Run encoder(Phasing::maxCode(max_allele));
+  Run encoder(Phasing::maxCode(max_allele) + 1);
   size_type prev = new_site.front().encode(max_allele), run_length = 1;
   for(size_type i = 1; i < new_site.size(); i++)
   {
@@ -269,7 +269,7 @@ void PhasingInformation::read()
   if(this->site >= this->sites()) { return; }
 
   size_type max_allele = ByteCode::read(this->data, this->data_offset);
-  Run decoder(Phasing::maxCode(max_allele));
+  Run decoder(Phasing::maxCode(max_allele) + 1);
   run_type run = decoder.read(this->data, this->data_offset);
   for(size_type i = 0; i < this->size(); i++)
   {
@@ -300,8 +300,8 @@ generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
   haplotypes.reserve(2 * phasings.size());
   for(size_type sample = 0; sample < phasings.size(); sample++)
   {
-    haplotypes.emplace_back(sample, 0);
-    haplotypes.emplace_back(sample, 1);
+    haplotypes.emplace_back(phasings.offset() + sample, 0);
+    haplotypes.emplace_back(phasings.offset() + sample, 1);
   }
 
   // Determine which samples to process.
@@ -466,7 +466,7 @@ testVariants()
   size_type first_sample = 10, num_samples = 3;
   std::vector<std::vector<Phasing>> phasing_information =
   {
-    { Phasing(1, 0, true), Phasing(0, 1, true),  Phasing(0) },
+    { Phasing(1, 0, true), Phasing(1, 1, true),  Phasing(0) },
     { Phasing(0),          Phasing(1, 2, false), Phasing(2, 0, true) },
     { Phasing(2, 1, true), Phasing(1, 0, true),  Phasing(0, 1, true) }
   };
@@ -501,7 +501,7 @@ testVariants()
   // Test genotype string parsing.
   std::vector<std::vector<std::string>> genotypes =
   {
-    { "1|0", "0|1", "0" },
+    { "1|0", "1|1", "0" },
     { "0",   "1/2", "2|0" },
     { "2|1", "1|0", "0|1" }
   };
@@ -528,7 +528,7 @@ testVariants()
   {
     { 1, 2, 11, 12, 5, 6 },     // (0, 0, 0)
     { 1, 2, 3, 4, 5, 6 },       // (0, 1, 0)
-    { 1, 2, 3, 4, 5, 6 },       // (1, 0, 0)
+    { 1, 2, 11, 12, 5, 6 },     // (1, 0, 0)
     { 5, 6, 13, 8 },            // (1, 0, 1)
     { 1, 2, 11, 12, 5, 6 },     // (1, 1, 0)
     { 5, 6, 14, 15, 8 },        // (1, 1, 1)
