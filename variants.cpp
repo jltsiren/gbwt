@@ -201,7 +201,7 @@ PhasingInformation::PhasingInformation(PhasingInformation&& source)
 
 PhasingInformation::~PhasingInformation()
 {
-  this->data.close();
+  this->close();
   TempFile::remove(this->filename);
 }
 
@@ -210,6 +210,10 @@ PhasingInformation::operator=(PhasingInformation&& source)
 {
   if(this != &source)
   {
+    this->close();
+    bool open_file = source.isOpen();
+    source.close();
+
     this->sample_count = source.sample_count;
     this->sample_offset = source.sample_offset;
     this->site_count = source.site_count;
@@ -217,8 +221,7 @@ PhasingInformation::operator=(PhasingInformation&& source)
     // Transfer the ownership of the file.
     this->filename = source.filename;
     source.filename.clear();
-    source.data.close();
-    this->data = sdsl::int_vector_buffer<8>(this->filename, std::ios::in);
+    if(open_file) { this->open(); }
 
     this->site = source.site;
     this->data_offset = source.data_offset;
@@ -228,12 +231,28 @@ PhasingInformation::operator=(PhasingInformation&& source)
 }
 
 void
+PhasingInformation::open()
+{
+  if(!(this->isOpen())) { this->data = sdsl::int_vector_buffer<8>(this->filename, std::ios::in); }
+}
+
+void PhasingInformation::close()
+{
+  if(this->isOpen()) { this->data = sdsl::int_vector_buffer<8>(); }
+}
+
+void
 PhasingInformation::append(const std::vector<Phasing>& new_site)
 {
   if(new_site.empty()) { return; }
   if(new_site.size() != this->size())
   {
     std::cerr << "PhasingInformation::append(): Expected " << this->size() << " samples, got " << new_site.size() << std::endl;
+    return;
+  }
+  if(!(this->isOpen()))
+  {
+    std::cerr << "PhasingInformation::append(): Cannot append to a closed file" << std::endl;
     return;
   }
 
@@ -267,6 +286,11 @@ PhasingInformation::append(const std::vector<Phasing>& new_site)
 void PhasingInformation::read()
 {
   if(this->site >= this->sites()) { return; }
+  if(!(this->isOpen()))
+  {
+    std::cerr << "PhasingInformation::read(): Cannot read from a closed file" << std::endl;
+    return;
+  }
 
   size_type max_allele = ByteCode::read(this->data, this->data_offset);
   Run decoder(Phasing::maxCode(max_allele) + 1);
@@ -295,6 +319,8 @@ void
 generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
                    std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output)
 {
+  phasings.open();
+
   // Initialize diploid haplotypes.
   std::vector<Haplotype> haplotypes;
   haplotypes.reserve(2 * phasings.size());
@@ -374,6 +400,8 @@ generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
     finishHaplotype(haplotypes[2 * sample], variants, phasings.sites(), output);
     finishHaplotype(haplotypes[2 * sample + 1], variants, phasings.sites(), output);
   }
+
+  phasings.close();
 }
 
 //------------------------------------------------------------------------------
@@ -474,6 +502,25 @@ testVariants()
   for(const std::vector<Phasing>& site : phasing_information)
   {
     phasings.append(site);
+  }
+
+  // Close and reopen the phasings.
+  if(!(phasings.isOpen()))
+  {
+    std::cerr << "testVariants(): PhasingInformation: The file is not open after construction" << std::endl;
+    failures++;
+  }
+  phasings.close();
+  if(phasings.isOpen())
+  {
+    std::cerr << "testVariants(): PhasingInformation: The file was not properly closed" << std::endl;
+    failures++;
+  }
+  phasings.open();
+  if(!(phasings.isOpen()))
+  {
+    std::cerr << "testVariants(): PhasingInformation: The file was not properly reopened" << std::endl;
+    failures++;
   }
 
   // Test phasing statistics.

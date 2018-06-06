@@ -171,6 +171,11 @@ struct PhasingInformation
 
   PhasingInformation& operator= (PhasingInformation&& source);
 
+  // Closing inactive files can save memory when there are many batches.
+  void open();
+  void close();
+  bool isOpen() { return this->data.is_open(); }
+
   // Append the phasings for a new site.
   void append(const std::vector<Phasing>& new_site);
 
@@ -196,6 +201,7 @@ private:
 
 //------------------------------------------------------------------------------
 
+// Opens and closes the phasings.
 void generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
                         std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output);
 
