@@ -25,6 +25,8 @@
 #include <gbwt/variants.h>
 #include <gbwt/internal.h>
 
+#include <string>
+
 namespace gbwt
 {
 
@@ -120,6 +122,25 @@ VariantPaths::appendVariant(Haplotype& haplotype, size_type site, size_type alle
 }
 
 //------------------------------------------------------------------------------
+
+Phasing::Phasing(const std::string& genotype, bool was_diploid) :
+  first(0), second(0), diploid(was_diploid), phased(true)
+{
+  if(genotype.empty()) { return; }
+
+  size_type separator_pos = genotype.find('|');
+  this->phased = (separator_pos != std::string::npos);
+  if(this->phased) { this->diploid = true; }
+  else
+  {
+    separator_pos = genotype.find('/');
+    this->diploid = (separator_pos != std::string::npos);
+  }
+  if(!(this->diploid)) { this->phased = true; }
+
+  this->first = std::stoul(genotype.substr(0, separator_pos));
+  if(this->diploid) { this->second = std::stoul(genotype.substr(separator_pos + 1)); }
+}
 
 size_type
 Phasing::encode(size_type max_allele) const
@@ -470,6 +491,25 @@ testVariants()
   {
     std::cerr << "testVariants(): PhasingInformation: Site count " << phasings.sites() << ", expected " << phasing_information.size() << std::endl;
     failures++;
+  }
+
+  // Test genotype string parsing.
+  std::vector<std::vector<std::string>> genotypes =
+  {
+    { "1|0", "0|1", "0" },
+    { "0",   "1/2", "2|0" },
+    { "2|1", "1|0", "0|1" }
+  };
+  for(size_type site = 0; site < genotypes.size(); site++)
+  {
+    for(size_type sample = 0; sample < genotypes[site].size(); sample++)
+    {
+      if(Phasing(genotypes[site][sample]) != phasing_information[site][sample])
+      {
+        std::cerr << "testVariants(): Phasing: Parsing failure: " << genotypes[site][sample] << std::endl;
+        failures++;
+      }
+    }
   }
 
   /*

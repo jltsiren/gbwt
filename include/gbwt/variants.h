@@ -123,6 +123,7 @@ struct Phasing
   const static size_type PHASED   = 2;
 
   Phasing() {}
+
   explicit Phasing(size_type allele) : first(allele), second(0), diploid(false), phased(true) {}
 
   Phasing(size_type first_allele, size_type second_allele, bool is_phased = true) :
@@ -130,9 +131,18 @@ struct Phasing
   {
   }
 
+  Phasing(const std::string& genotype, bool was_diploid = true);
+
   size_type encode(size_type max_allele) const;
   void decode(size_type code, size_type max_allele);
   static size_type maxCode(size_type max_allele);
+
+  bool operator== (const Phasing& another) const
+  {
+    return (this->first == another.first) && (this->second == another.second) && (this->diploid == another.diploid) && (this->phased == another.phased);
+  }
+
+  bool operator!= (const Phasing& another) const { return !(this->operator==(another)); }
 };
 
 //------------------------------------------------------------------------------
