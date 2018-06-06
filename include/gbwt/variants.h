@@ -85,9 +85,11 @@ struct VariantPaths
 
   std::unordered_map<node_type, node_type, size_type(*)(size_type)> ref_index;
 
-  VariantPaths();
+  explicit VariantPaths(size_type reference_size = 0);
+  void appendToReference(node_type node) { this->reference.push_back(node); }
 
   size_type size() const { return this->reference.size(); }
+  size_type invalid_position() const { return this->size() + 1; }
   size_type paths() const { return this->path_starts.size() - 1; }
   size_type sites() const { return this->site_starts.size() - 1; }
 
@@ -96,9 +98,6 @@ struct VariantPaths
   size_type refPrev(size_type site) const { return (site > 0 ? this->refEnd(site - 1) : 0); }
   size_type refStart(size_type site) const { return this->ref_starts[site]; }
   size_type refEnd(size_type site) const { return this->ref_ends[site]; }
-
-  void setReferenceSize(size_type size) { this->reference.reserve(size); }
-  void appendToReference(node_type node) { this->reference.push_back(node); }
 
   void indexReference();
   size_type firstOccurrence(node_type node);
@@ -166,7 +165,7 @@ struct PhasingInformation
   size_type            site, data_offset;
   std::vector<Phasing> phasings;
 
-  explicit PhasingInformation(range_type sample_range);
+  PhasingInformation(size_type first_sample, size_type num_samples);
   PhasingInformation(PhasingInformation&& source);
   ~PhasingInformation();
 
@@ -184,6 +183,7 @@ struct PhasingInformation
   // Statistics.
   size_type size() const { return this->sample_count; }
   size_type offset() const { return this->sample_offset; }
+  size_type limit() const { return this->offset() + this->size(); }
   size_type sites() const { return this->site_count; }
   size_type bytes() const { return this->data.size(); }
 

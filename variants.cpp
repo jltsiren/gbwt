@@ -32,9 +32,10 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
-VariantPaths::VariantPaths() :
+VariantPaths::VariantPaths(size_type reference_size) :
   ref_index(16, wang_hash_64)
 {
+  this->reference.reserve(reference_size);
   this->path_starts.push_back(0);
   this->site_starts.push_back(0);
 }
@@ -53,7 +54,7 @@ size_type
 VariantPaths::firstOccurrence(node_type node)
 {
   auto iter = this->ref_index.find(node);
-  if(iter == this->ref_index.end()) { return this->size(); }
+  if(iter == this->ref_index.end()) { return this->invalid_position(); }
   return iter->second;
 }
 
@@ -186,8 +187,8 @@ Phasing::maxCode(size_type max_allele)
 
 const std::string PhasingInformation::TEMP_FILE_PREFIX = "phasing";
 
-PhasingInformation::PhasingInformation(range_type sample_range) :
-  sample_count(Range::length(sample_range)), sample_offset(sample_range.first), site_count(0),
+PhasingInformation::PhasingInformation(size_type first_sample, size_type num_samples) :
+  sample_count(num_samples), sample_offset(first_sample), site_count(0),
   filename(TempFile::getName(TEMP_FILE_PREFIX)), data(filename, std::ios::out),
   site(0), data_offset(0), phasings(sample_count)
 {
@@ -393,8 +394,7 @@ testVariants()
 
   // Add a reference.
   std::vector<node_type> reference = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
-  VariantPaths variants;
-  variants.setReferenceSize(reference.size());
+  VariantPaths variants(reference.size());
   for(node_type node : reference) { variants.appendToReference(node); }
 
   // Add sites and alternate alleles.
@@ -456,35 +456,40 @@ testVariants()
       failures++;
     }
   }
-  if(variants.firstOccurrence(0) != reference.size())
+  if(variants.firstOccurrence(0) != variants.invalid_position())
   {
     std::cerr << "testVariants(): VariantPaths: Reference position found for an invalid node" << std::endl;
     failures++;
   }
 
   // Create 3 samples: diploid-haploid-diploid, phased-unphased-phased, haploid-phased-phased.
-  range_type sample_range(10, 12);
+  size_type first_sample = 10, num_samples = 3;
   std::vector<std::vector<Phasing>> phasing_information =
   {
     { Phasing(1, 0, true), Phasing(0, 1, true),  Phasing(0) },
     { Phasing(0),          Phasing(1, 2, false), Phasing(2, 0, true) },
     { Phasing(2, 1, true), Phasing(1, 0, true),  Phasing(0, 1, true) }
   };
-  PhasingInformation phasings(sample_range);
+  PhasingInformation phasings(first_sample, num_samples);
   for(const std::vector<Phasing>& site : phasing_information)
   {
     phasings.append(site);
   }
 
   // Test phasing statistics.
-  if(phasings.size() != Range::length(sample_range))
+  if(phasings.size() != num_samples)
   {
-    std::cerr << "testVariants(): PhasingInformation: Sample count " << phasings.size() << ", expected " << Range::length(sample_range) << std::endl;
+    std::cerr << "testVariants(): PhasingInformation: Sample count " << phasings.size() << ", expected " << num_samples << std::endl;
     failures++;
   }
-  if(phasings.offset() != sample_range.first)
+  if(phasings.offset() != first_sample)
   {
-    std::cerr << "testVariants(): PhasingInformation: Sample offset " << phasings.offset() << ", expected " << sample_range.first << std::endl;
+    std::cerr << "testVariants(): PhasingInformation: Sample offset " << phasings.offset() << ", expected " << first_sample << std::endl;
+    failures++;
+  }
+  if(phasings.limit() != first_sample + num_samples)
+  {
+    std::cerr << "testVariants(): PhasingInformation: Sample limit " << phasings.limit() << ", expected " << (first_sample + num_samples) << std::endl;
     failures++;
   }
   if(phasings.sites() != phasing_information.size())
