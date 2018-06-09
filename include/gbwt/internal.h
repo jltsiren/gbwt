@@ -245,7 +245,7 @@ struct Sequence
 
   // Create a sequence starting from text[i].
   Sequence(const text_type& text, size_type i, size_type seq_id);
-  Sequence(const std::vector<node_type>& text, size_type i, size_type seq_id);
+  Sequence(const vector_type& text, size_type i, size_type seq_id);
 
   // Create a sequence where endmarker[source_pos] == node.
   Sequence(node_type node, size_type seq_id, size_type source_pos);

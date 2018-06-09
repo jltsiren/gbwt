@@ -67,7 +67,7 @@ VariantPaths::addSite(size_type ref_start, size_type ref_end)
 }
 
 void
-VariantPaths::addAllele(const std::vector<node_type>& path)
+VariantPaths::addAllele(const vector_type& path)
 {
   this->alt_paths.insert(this->alt_paths.end(), path.begin(), path.end());
   this->path_starts.push_back(this->alt_paths.size());
@@ -407,10 +407,10 @@ generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
 //------------------------------------------------------------------------------
 
 std::ostream&
-operator<< (std::ostream& out, std::vector<node_type>& data)
+operator<< (std::ostream& out, vector_type& data)
 {
   out << "{ ";
-  for(node_type node : data) { out << node << " "; }
+  for(auto node : data) { out << node << " "; }
   out << "}";
   return out;
 }
@@ -421,18 +421,18 @@ testVariants()
   size_type failures = 0;
 
   // Add a reference.
-  std::vector<node_type> reference = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+  vector_type reference = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
   VariantPaths variants(reference.size());
-  for(node_type node : reference) { variants.appendToReference(node); }
+  for(auto node : reference) { variants.appendToReference(node); }
 
   // Add sites and alternate alleles.
   std::vector<range_type> sites = { range_type(2, 4), range_type(6, 7), range_type(8, 9) };
-  std::vector<std::vector<std::vector<node_type>>> alleles = { { { 11, 12 } }, { { 13 }, { 14, 15 } }, { { 16 }, {} } };
+  std::vector<std::vector<vector_type>> alleles = { { { 11, 12 } }, { { 13 }, { 14, 15 } }, { { 16 }, {} } };
   size_type allele_count = 0;
   for(size_type site = 0; site < sites.size(); site++)
   {
     variants.addSite(sites[site].first, sites[site].second);
-    for(const std::vector<node_type>& allele : alleles[site])
+    for(const vector_type& allele : alleles[site])
     {
       variants.addAllele(allele);
       allele_count++;
@@ -571,7 +571,7 @@ testVariants()
   */
 
   // Generate haplotypes.
-  std::vector<std::vector<node_type>> true_haplotypes =
+  std::vector<vector_type> true_haplotypes =
   {
     { 1, 2, 11, 12, 5, 6 },     // (0, 0, 0)
     { 1, 2, 3, 4, 5, 6 },       // (0, 1, 0)
@@ -588,7 +588,7 @@ testVariants()
     { 5, 6, 14, 15, 8, 9, 10 }, // (2, 0, 1)
     { 5, 6, 7, 8, 16, 10}       // (2, 1, 0)
   };
-  std::vector<std::vector<node_type>> haplotypes;
+  std::vector<vector_type> haplotypes;
   generateHaplotypes(variants, phasings,
     [](size_type) -> bool { return true; },
     [&haplotypes](const Haplotype& haplotype) { haplotypes.push_back(haplotype.path); });

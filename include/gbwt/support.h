@@ -71,9 +71,9 @@ struct Path
     - appending it to the to the output vector
     - inserting it to the tail of the output text, updating the tail
 */
-void reversePath(std::vector<node_type>& path);
-void reversePath(const std::vector<node_type>& path, std::vector<node_type>& output);
-void reversePath(const std::vector<node_type>& path, text_type& output, size_type& tail);
+void reversePath(vector_type& path);
+void reversePath(const vector_type& path, vector_type& output);
+void reversePath(const vector_type& path, text_type& output, size_type& tail);
 
 //------------------------------------------------------------------------------
 

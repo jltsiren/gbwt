@@ -363,7 +363,7 @@ nextPosition(std::vector<Sequence>& seqs, const text_type&)
 }
 
 void
-nextPosition(std::vector<Sequence>& seqs, const std::vector<node_type>&)
+nextPosition(std::vector<Sequence>& seqs, const vector_type&)
 {
   for(Sequence& seq : seqs) { seq.pos++; }
 }
@@ -471,7 +471,7 @@ advancePosition(std::vector<Sequence>& seqs, const text_type& text)
 }
 
 void
-advancePosition(std::vector<Sequence>& seqs, const std::vector<node_type>& text)
+advancePosition(std::vector<Sequence>& seqs, const vector_type& text)
 {
   for(Sequence& seq : seqs) { seq.curr = seq.next; seq.next = text[seq.pos]; }
 }
@@ -579,8 +579,8 @@ insertBatch(DynamicGBWT& index, const IntegerVector& text, size_type text_length
       seq_start = false; index.header.sequences++;
     }
     if(text[i] == ENDMARKER) { seq_start = true; }
-    else { min_node = std::min(text[i], min_node); }
-    max_node = std::max(text[i], max_node);
+    else { min_node = std::min(static_cast<node_type>(text[i]), min_node); }
+    max_node = std::max(static_cast<node_type>(text[i]), max_node);
   }
   if(Verbosity::level >= Verbosity::EXTENDED)
   {
@@ -636,7 +636,7 @@ DynamicGBWT::insert(const text_type& text, size_type text_length, bool has_both_
 }
 
 void
-DynamicGBWT::insert(const std::vector<node_type>& text, bool has_both_orientations)
+DynamicGBWT::insert(const vector_type& text, bool has_both_orientations)
 {
   if(text.empty())
   {
@@ -671,7 +671,7 @@ DynamicGBWT::insert(text_buffer_type& text, size_type batch_size, bool both_orie
   builder.swapIndex(*this);
 
   // Insert all sequences.
-  std::vector<node_type> sequence;
+  vector_type sequence;
   for(size_type node : text)
   {
     if(node == ENDMARKER) { builder.insert(sequence, both_orientations); sequence.clear(); }
@@ -871,7 +871,7 @@ GBWTBuilder::swapIndex(DynamicGBWT& another_index)
 }
 
 void
-GBWTBuilder::insert(const std::vector<node_type>& sequence, bool both_orientations)
+GBWTBuilder::insert(const vector_type& sequence, bool both_orientations)
 {
   size_type space_required = sequence.size() + 1;
   if(both_orientations) { space_required *= 2; }
@@ -889,7 +889,7 @@ GBWTBuilder::insert(const std::vector<node_type>& sequence, bool both_orientatio
   }
 
   // Forward orientation.
-  for(node_type node : sequence) { this->input_buffer[this->input_tail] = node; this->input_tail++; }
+  for(auto node : sequence) { this->input_buffer[this->input_tail] = node; this->input_tail++; }
   this->input_buffer[this->input_tail] = ENDMARKER; this->input_tail++;
   this->batch_sequences++;
 

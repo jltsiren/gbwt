@@ -115,7 +115,7 @@ public:
   std::vector<size_type> locate(node_type node, range_type range) const { return this->locate(SearchState(node, range)); }
   std::vector<size_type> locate(SearchState state) const;
 
-  std::vector<node_type> extract(size_type sequence) const { return gbwt::extract(*this, sequence); }
+  vector_type extract(size_type sequence) const { return gbwt::extract(*this, sequence); }
 
 //------------------------------------------------------------------------------
 

@@ -31,20 +31,20 @@ namespace gbwt
 //------------------------------------------------------------------------------
 
 void
-reversePath(std::vector<node_type>& path)
+reversePath(vector_type& path)
 {
   std::reverse(path.begin(), path.end());
-  for(node_type& node : path) { node = Node::reverse(node); }
+  for(auto& node : path) { node = Node::reverse(node); }
 }
 
 void
-reversePath(const std::vector<node_type>& path, std::vector<node_type>& output)
+reversePath(const vector_type& path, vector_type& output)
 {
   for(auto iter = path.rbegin(); iter != path.rend(); ++iter) { output.push_back(Node::reverse(*iter)); }
 }
 
 void
-reversePath(const std::vector<node_type>& path, text_type& output, size_type& tail)
+reversePath(const vector_type& path, text_type& output, size_type& tail)
 {
   for(auto iter = path.rbegin(); iter != path.rend(); ++iter) { output[tail] = Node::reverse(*iter); tail++; }
 }

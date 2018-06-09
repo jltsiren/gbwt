@@ -225,10 +225,10 @@ locate(const GBWTType& index, edge_type position)
 */
 
 template<class GBWTType>
-std::vector<node_type>
+vector_type
 extract(const GBWTType& index, size_type sequence)
 {
-  std::vector<node_type> result;
+  vector_type result;
   if(sequence >= index.sequences()) { return result; }
 
   edge_type position = index.start(sequence);

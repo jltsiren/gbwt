@@ -69,7 +69,7 @@ Sequence::Sequence(const text_type& text, size_type i, size_type seq_id) :
 {
 }
 
-Sequence::Sequence(const std::vector<node_type>& text, size_type i, size_type seq_id) :
+Sequence::Sequence(const vector_type& text, size_type i, size_type seq_id) :
   id(seq_id), curr(ENDMARKER), next(text[i]), offset(seq_id), pos(i)
 {
 }

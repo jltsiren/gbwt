@@ -78,7 +78,7 @@ public:
   */
   void insert(const text_type& text, bool has_both_orientations = false);
   void insert(const text_type& text, size_type text_length, bool has_both_orientations = false);
-  void insert(const std::vector<node_type>& text, bool has_both_orientations = false);
+  void insert(const vector_type& text, bool has_both_orientations = false);
 
   /*
     Use the above to insert the sequences in batches of up to 'batch_size' nodes. Use batch
@@ -146,7 +146,7 @@ public:
   std::vector<size_type> locate(node_type node, range_type range) const { return this->locate(SearchState(node, range)); }
   std::vector<size_type> locate(SearchState state) const;
 
-  std::vector<node_type> extract(size_type sequence) const { return gbwt::extract(*this, sequence); }
+  vector_type extract(size_type sequence) const { return gbwt::extract(*this, sequence); }
 
 //------------------------------------------------------------------------------
 
@@ -309,7 +309,7 @@ public:
 
   void swapIndex(DynamicGBWT& another_index);
 
-  void insert(const std::vector<node_type>& sequence, bool both_orientations = false);
+  void insert(const vector_type& sequence, bool both_orientations = false);
   void finish();
 
   DynamicGBWT index;

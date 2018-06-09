@@ -108,6 +108,12 @@ inline sample_type invalid_sample() { return sample_type(invalid_offset(), inval
 typedef sdsl::int_vector<0>        text_type;
 typedef sdsl::int_vector_buffer<0> text_buffer_type;
 
+#ifdef GBWT_SAVE_MEMORY
+typedef std::vector<short_type>    vector_type;
+#else
+typedef std::vector<node_type>     vector_type;
+#endif
+
 //------------------------------------------------------------------------------
 
 /*

@@ -42,11 +42,11 @@ namespace gbwt
 
 struct Haplotype
 {
-  std::vector<node_type> path;
-  size_type              offset; // In the reference.
-  bool                   active, diploid;
+  vector_type path;
+  size_type   offset; // In the reference.
+  bool        active, diploid;
 
-  size_type              sample, phase, count;
+  size_type   sample, phase, count;
 
   Haplotype() : offset(0), active(false), diploid(false), sample(0), phase(0), count(0) {}
   Haplotype(size_type sample_id, size_type phase_id) : offset(0), active(false), diploid(false), sample(sample_id), phase(phase_id), count(0) {}
@@ -55,7 +55,7 @@ struct Haplotype
   bool empty() const { return this->path.empty(); }
 
   void activate(size_type start_offset, bool is_diploid) { this->offset = start_offset; this->active = true; this->diploid = is_diploid; }
-  void deactivate() { this->path = std::vector<node_type>(); this->active = false; this->count++; }
+  void deactivate() { this->path = vector_type(); this->active = false; this->count++; }
 };
 
 //------------------------------------------------------------------------------
@@ -78,9 +78,9 @@ struct VariantPaths
 
     ref_index     the first occurrence of each node in the reference
   */
-  std::vector<node_type> reference;
+  vector_type            reference;
   std::vector<size_type> ref_starts, ref_ends;
-  std::vector<node_type> alt_paths;
+  vector_type            alt_paths;
   std::vector<size_type> path_starts, site_starts;
 
   std::unordered_map<node_type, node_type, size_type(*)(size_type)> ref_index;
@@ -103,7 +103,7 @@ struct VariantPaths
   size_type firstOccurrence(node_type node);
 
   void addSite(size_type ref_start, size_type ref_end);
-  void addAllele(const std::vector<node_type>& path);
+  void addAllele(const vector_type& path);
 
   void appendReferenceUntil(Haplotype& haplotype, size_type site) const;
   void appendReferenceUntilEnd(Haplotype& haplotype) const;

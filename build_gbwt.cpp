@@ -45,8 +45,8 @@ const size_type QUERY_LENGTH = 60;
 
 void printUsage(int exit_code = EXIT_SUCCESS);
 
-std::vector<SearchState> verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& query_base, std::vector<std::vector<node_type>>& queries);
-void verifyBidirectional(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<std::vector<node_type>>& queries, const std::vector<SearchState>& find_results);
+std::vector<SearchState> verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& query_base, std::vector<vector_type>& queries);
+void verifyBidirectional(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<vector_type>& queries, const std::vector<SearchState>& find_results);
 void verifyLocate(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<SearchState>& queries);
 void verifyExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& base_name, bool both_orientations);
 void verifySamples(const GBWT& compressed_index, const DynamicGBWT& dynamic_index);
@@ -156,7 +156,7 @@ main(int argc, char** argv)
     DynamicGBWT dynamic_index;
     sdsl::load_from_file(dynamic_index, gbwt_name);
 
-    std::vector<std::vector<node_type>> queries;
+    std::vector<vector_type> queries;
     std::vector<SearchState> results = verifyFind(compressed_index, dynamic_index, input_base, queries);
     if(both_orientations)
     {
@@ -211,11 +211,11 @@ startOffsets(const std::string& base_name)
   return offsets;
 }
 
-std::vector<std::vector<node_type>>
+std::vector<vector_type>
 generateQueries(const std::string& base_name)
 {
   std::mt19937_64 rng(RANDOM_SEED);
-  std::vector<std::vector<node_type>> result;
+  std::vector<vector_type> result;
   text_buffer_type text(base_name);
   if(text.size() <= QUERY_LENGTH)
   {
@@ -227,9 +227,9 @@ generateQueries(const std::string& base_name)
   while(result.size() < QUERIES && attempts < 2 * QUERIES)
   {
     size_type start_offset = rng() % (text.size() - QUERY_LENGTH);  // We do not want queries containing the final endmarker.
-    std::vector<node_type> candidate(text.begin() + start_offset, text.begin() + start_offset + QUERY_LENGTH);
+    vector_type candidate(text.begin() + start_offset, text.begin() + start_offset + QUERY_LENGTH);
     bool ok = true;
-    for(node_type node : candidate)
+    for(auto node : candidate)
     {
       if(node == ENDMARKER) { ok = false; break; }
     }
@@ -259,7 +259,7 @@ totalLength(const std::vector<SearchState>& states)
 */
 
 std::vector<SearchState>
-verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& query_base, std::vector<std::vector<node_type>>& queries)
+verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& query_base, std::vector<vector_type>& queries)
 {
   std::cout << "Verifying find()..." << std::endl;
 
@@ -300,7 +300,7 @@ verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const
 
 template<class GBWTType>
 BidirectionalState
-bidirectionalSearch(const GBWTType& index, const std::vector<node_type>& query)
+bidirectionalSearch(const GBWTType& index, const vector_type& query)
 {
   if(query.empty()) { return BidirectionalState(); }
 
@@ -319,7 +319,7 @@ bidirectionalSearch(const GBWTType& index, const std::vector<node_type>& query)
 }
 
 void
-verifyBidirectional(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<std::vector<node_type>>& queries, const std::vector<SearchState>& find_results)
+verifyBidirectional(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<vector_type>& queries, const std::vector<SearchState>& find_results)
 {
   std::cout << "Verifying bidirectional search..." << std::endl;
 
@@ -330,7 +330,7 @@ verifyBidirectional(const GBWT& compressed_index, const DynamicGBWT& dynamic_ind
   {
     BidirectionalState compressed_state = bidirectionalSearch(compressed_index, queries[i]);
     BidirectionalState dynamic_state = bidirectionalSearch(dynamic_index, queries[i]);
-    std::vector<node_type> reverse_query;
+    vector_type reverse_query;
     reversePath(queries[i], reverse_query);
     BidirectionalState find_state(find_results[i], dynamic_index.find(reverse_query.begin(), reverse_query.end()));
     if(compressed_state != dynamic_state || compressed_state != find_state)
@@ -441,9 +441,9 @@ tryExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index,
   size_type seq_id = (both_orientations ? Path::encode(sequence, is_reverse) : sequence);
 
   // Extract the sequences.
-  std::vector<node_type> compressed_result = compressed_index.extract(seq_id);
-  std::vector<node_type> dynamic_result = dynamic_index.extract(seq_id);
-  std::vector<node_type> correct_sequence; correct_sequence.reserve(compressed_result.size());
+  vector_type compressed_result = compressed_index.extract(seq_id);
+  vector_type dynamic_result = dynamic_index.extract(seq_id);
+  vector_type correct_sequence; correct_sequence.reserve(compressed_result.size());
   for(size_type i = offsets[sequence]; text[i] != ENDMARKER; i++) { correct_sequence.push_back(text[i]); }
   if(is_reverse) { reversePath(correct_sequence); }
 

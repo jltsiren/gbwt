@@ -37,9 +37,9 @@ const size_type RANDOM_SEED  = 0xDEADBEEF;
 
 void printUsage(int exit_code = EXIT_SUCCESS);
 
-std::vector<SearchState> findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type find_queries, size_type pattern_length, std::vector<std::vector<node_type>>& queries);
+std::vector<SearchState> findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type find_queries, size_type pattern_length, std::vector<vector_type>& queries);
 
-void bidirectionalBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<std::vector<node_type>>& queries);
+void bidirectionalBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<vector_type>& queries);
 
 template<class GBWTType>
 void locateBenchmark(const GBWTType& index, const std::vector<SearchState>& queries);
@@ -127,7 +127,7 @@ main(int argc, char** argv)
 
   if(find)
   {
-    std::vector<std::vector<node_type>> queries;
+    std::vector<vector_type> queries;
     std::vector<SearchState> results = findBenchmark(compressed_index, dynamic_index, find_queries, pattern_length, queries);
     if(compressed_index.bidirectional())
     {
@@ -165,20 +165,20 @@ printUsage(int exit_code)
   std::exit(exit_code);
 }
 
-std::vector<std::vector<node_type>>
+std::vector<vector_type>
 generateQueries(const DynamicGBWT& index, size_type find_queries, size_type pattern_length)
 {
   std::mt19937_64 rng(RANDOM_SEED);
-  std::vector<std::vector<node_type>> result;
+  std::vector<vector_type> result;
 
   size_type attempts = 0;
   while(result.size() < find_queries && attempts < 2 * find_queries)
   {
-    std::vector<node_type> sequence = index.extract(rng() % index.sequences());
+    vector_type sequence = index.extract(rng() % index.sequences());
     if(sequence.size() >= pattern_length)
     {
       size_type start_offset = rng() % (sequence.size() + 1 - pattern_length);
-      result.push_back(std::vector<node_type>(sequence.begin() + start_offset, sequence.begin() + start_offset + pattern_length));
+      result.push_back(vector_type(sequence.begin() + start_offset, sequence.begin() + start_offset + pattern_length));
     }
     attempts++;
   }
@@ -194,7 +194,7 @@ std::string indexType(const DynamicGBWT&) { return "Dynamic GBWT"; }
 
 template<class GBWTType>
 size_type
-findBenchmark(const GBWTType& index, const std::vector<std::vector<node_type>>& queries, std::vector<SearchState>& results)
+findBenchmark(const GBWTType& index, const std::vector<vector_type>& queries, std::vector<SearchState>& results)
 {
   double start = readTimer();
   size_type total_length = 0, total_size = 0;
@@ -210,7 +210,7 @@ findBenchmark(const GBWTType& index, const std::vector<std::vector<node_type>>& 
 }    
 
 std::vector<SearchState>
-findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type find_queries, size_type pattern_length, std::vector<std::vector<node_type>>& queries)
+findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type find_queries, size_type pattern_length, std::vector<vector_type>& queries)
 {
   std::cout << "find() benchmarks:" << std::endl;
 
@@ -237,7 +237,7 @@ findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, si
 
 template<class GBWTType>
 BidirectionalState
-bidirectionalSearch(const GBWTType& index, const std::vector<node_type>& query)
+bidirectionalSearch(const GBWTType& index, const vector_type& query)
 {
   if(query.empty()) { return BidirectionalState(); }
 
@@ -257,7 +257,7 @@ bidirectionalSearch(const GBWTType& index, const std::vector<node_type>& query)
 
 template<class GBWTType>
 size_type
-bidirectionalBenchmark(const GBWTType& index, const std::vector<std::vector<node_type>>& queries)
+bidirectionalBenchmark(const GBWTType& index, const std::vector<vector_type>& queries)
 {
   double start = readTimer();
   size_type total_length = 0, total_size = 0;
@@ -273,7 +273,7 @@ bidirectionalBenchmark(const GBWTType& index, const std::vector<std::vector<node
 }    
 
 void
-bidirectionalBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<std::vector<node_type>>& queries)
+bidirectionalBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<vector_type>& queries)
 {
   std::cout << "Bidirectional benchmarks:" << std::endl;
 
@@ -343,7 +343,7 @@ extractBenchmark(const GBWTType& index, size_type extract_queries)
   size_type total_length = 0;
   for(size_type i = 0; i < extract_queries; i++)
   {
-    std::vector<node_type> sequence = index.extract(rng() % index.sequences());
+    vector_type sequence = index.extract(rng() % index.sequences());
     total_length += sequence.size();
   }
   double seconds = readTimer() - start;
