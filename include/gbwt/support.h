@@ -42,8 +42,8 @@ namespace gbwt
 */
 struct Node
 {
-  const static node_type REVERSE_MASK = 0x1;
-  const static size_type ID_SHIFT     = 1;
+  constexpr static node_type REVERSE_MASK = 0x1;
+  constexpr static size_type ID_SHIFT     = 1;
 
   static size_type id(node_type node) { return (node >> ID_SHIFT); }
   static bool is_reverse(node_type node) { return (node & REVERSE_MASK); }
@@ -56,8 +56,8 @@ struct Node
 */
 struct Path
 {
-  const static size_type REVERSE_MASK = 0x1;
-  const static size_type ID_SHIFT     = 1;
+  constexpr static size_type REVERSE_MASK = 0x1;
+  constexpr static size_type ID_SHIFT     = 1;
 
   static size_type id(size_type path) { return (path >> ID_SHIFT); }
   static bool is_reverse(size_type path) { return (path & REVERSE_MASK); }

@@ -80,22 +80,22 @@ typedef std::pair<size_type, size_type>   sample_type;  // (i, DA[i]) within a r
 
 //------------------------------------------------------------------------------
 
-const size_type BYTE_BITS    = 8;
-const size_type WORD_BITS    = 64;
+constexpr size_type BYTE_BITS    = 8;
+constexpr size_type WORD_BITS    = 64;
 
-const size_type KILOBYTE     = 1024;
-const size_type MEGABYTE     = KILOBYTE * KILOBYTE;
-const size_type GIGABYTE     = KILOBYTE * MEGABYTE;
+constexpr size_type KILOBYTE     = 1024;
+constexpr size_type MEGABYTE     = KILOBYTE * KILOBYTE;
+constexpr size_type GIGABYTE     = KILOBYTE * MEGABYTE;
 
-const double KILOBYTE_DOUBLE = 1024.0;
-const double MILLION_DOUBLE  = 1000000.0;
-const double MEGABYTE_DOUBLE = KILOBYTE_DOUBLE * KILOBYTE_DOUBLE;
-const double GIGABYTE_DOUBLE = KILOBYTE_DOUBLE * MEGABYTE_DOUBLE;
+constexpr double KILOBYTE_DOUBLE = 1024.0;
+constexpr double MILLION_DOUBLE  = 1000000.0;
+constexpr double MEGABYTE_DOUBLE = KILOBYTE_DOUBLE * KILOBYTE_DOUBLE;
+constexpr double GIGABYTE_DOUBLE = KILOBYTE_DOUBLE * MEGABYTE_DOUBLE;
 
-const size_type MILLION      = 1000000;
-const size_type BILLION      = 1000 * MILLION;
+constexpr size_type MILLION      = 1000000;
+constexpr size_type BILLION      = 1000 * MILLION;
 
-const node_type ENDMARKER    = 0;
+constexpr node_type ENDMARKER    = 0;
 
 inline size_type invalid_node() { return ~(node_type)0; }
 inline size_type invalid_sequence() { return ~(size_type)0; }
@@ -198,11 +198,11 @@ struct Verbosity
   static void set(size_type new_level);
   static std::string levelName();
 
-  const static size_type SILENT   = 0;
-  const static size_type BASIC    = 1;
-  const static size_type EXTENDED = 2;
-  const static size_type DEFAULT  = 3;
-  const static size_type FULL     = 3;
+  constexpr static size_type SILENT   = 0;
+  constexpr static size_type BASIC    = 1;
+  constexpr static size_type EXTENDED = 2;
+  constexpr static size_type DEFAULT  = 3;
+  constexpr static size_type FULL     = 3;
 };
 
 //------------------------------------------------------------------------------
@@ -212,11 +212,11 @@ struct Version
   static std::string str(bool verbose = false);
   static void print(std::ostream& out, const std::string& tool_name, bool verbose = false, size_type new_lines = 2);
 
-  const static size_type MAJOR_VERSION = 0;
-  const static size_type MINOR_VERSION = 4;
-  const static size_type PATCH_VERSION = 0;
+  constexpr static size_type MAJOR_VERSION = 0;
+  constexpr static size_type MINOR_VERSION = 4;
+  constexpr static size_type PATCH_VERSION = 0;
 
-  const static size_type GBWT_VERSION  = 2;
+  constexpr static size_type GBWT_VERSION  = 2;
 };
 
 //------------------------------------------------------------------------------
@@ -274,7 +274,7 @@ inMicroseconds(double seconds)
   return seconds * MILLION_DOUBLE;
 }
 
-const size_type DEFAULT_INDENT = 18;
+constexpr size_type DEFAULT_INDENT = 18;
 
 void printHeader(const std::string& header, size_type indent = DEFAULT_INDENT);
 void printTime(const std::string& header, size_type queries, double seconds, size_type indent = DEFAULT_INDENT);

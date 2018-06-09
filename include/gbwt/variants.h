@@ -117,9 +117,9 @@ struct Phasing
   size_type first, second;
   bool      diploid, phased;
 
-  const static size_type HAPLOID  = 0;
-  const static size_type UNPHASED = 1;
-  const static size_type PHASED   = 2;
+  constexpr static size_type HAPLOID  = 0;
+  constexpr static size_type UNPHASED = 1;
+  constexpr static size_type PHASED   = 2;
 
   Phasing() {}
 

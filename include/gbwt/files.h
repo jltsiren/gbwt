@@ -64,12 +64,12 @@ struct GBWTHeader
   std::uint64_t alphabet_size;  // Largest node id + 1.
   std::uint64_t flags;
 
-  const static std::uint32_t TAG = 0x6B376B37;
-  const static std::uint32_t VERSION = Version::GBWT_VERSION;
-  const static std::uint32_t MIN_VERSION = 1;
+  constexpr static std::uint32_t TAG = 0x6B376B37;
+  constexpr static std::uint32_t VERSION = Version::GBWT_VERSION;
+  constexpr static std::uint32_t MIN_VERSION = 1;
 
-  const static std::uint64_t FLAG_MASK          = 0x0001;
-  const static std::uint64_t FLAG_BIDIRECTIONAL = 0x0001;
+  constexpr static std::uint64_t FLAG_MASK          = 0x0001;
+  constexpr static std::uint64_t FLAG_BIDIRECTIONAL = 0x0001;
 
   GBWTHeader();
 

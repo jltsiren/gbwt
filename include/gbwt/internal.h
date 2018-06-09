@@ -90,9 +90,9 @@ struct ByteCode
   typedef gbwt::size_type value_type;
   typedef gbwt::byte_type code_type;
 
-  const static size_type DATA_BITS  = 7;
-  const static code_type DATA_MASK  = 0x7F;
-  const static code_type NEXT_BYTE  = 0x80;
+  constexpr static size_type DATA_BITS  = 7;
+  constexpr static code_type DATA_MASK  = 0x7F;
+  constexpr static code_type NEXT_BYTE  = 0x80;
 
   /*
     Reads the next value and updates i to point to the byte after the value.
