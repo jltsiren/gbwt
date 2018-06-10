@@ -202,6 +202,12 @@ printStatistics(const std::string& header, const std::map<size_type, size_type>&
     }
     printHeader(std::to_string(multiplier)); std::cout << "at most " << value << std::endl;
   }
+  while(iter != distribution.end())
+  {
+    value = iter->first;
+    ++iter;
+  }
+  printHeader("Maximum"); std::cout << value << std::endl;
 
   std::cout << std::endl;
 }
