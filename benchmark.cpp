@@ -23,6 +23,8 @@
 */
 
 #include <random>
+#include <map>
+#include <string>
 #include <unistd.h>
 
 #include <gbwt/dynamic_gbwt.h>
@@ -36,6 +38,8 @@ const std::string tool_name = "GBWT benchmark";
 const size_type RANDOM_SEED  = 0xDEADBEEF;
 
 void printUsage(int exit_code = EXIT_SUCCESS);
+
+void extendedStatistics(const DynamicGBWT& index);
 
 std::vector<SearchState> findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type find_queries, size_type pattern_length, std::vector<vector_type>& queries);
 
@@ -54,9 +58,9 @@ main(int argc, char** argv)
   if(argc < 2) { printUsage(); }
 
   int c = 0;
-  bool find = false, locate = false, extract = false;
+  bool find = false, locate = false, extract = false, statistics = false;
   size_type find_queries = 0, pattern_length = 0, extract_queries = 0;
-  while((c = getopt(argc, argv, "f:p:le:")) != -1)
+  while((c = getopt(argc, argv, "f:p:le:s")) != -1)
   {
     switch(c)
     {
@@ -70,6 +74,9 @@ main(int argc, char** argv)
     case 'e':
       extract = true;
       extract_queries = std::stoul(optarg); break;
+    case 's':
+      statistics = true;
+      break;
     case '?':
       std::exit(EXIT_FAILURE);
     default:
@@ -119,11 +126,14 @@ main(int argc, char** argv)
   GBWT compressed_index;
   sdsl::load_from_file(compressed_index, index_base + GBWT::EXTENSION);
   printStatistics(compressed_index, index_base);
-  if(!(find || locate || extract)) { return 0; }
+  if(!(find || locate || extract || statistics)) { return 0; }
 
   DynamicGBWT dynamic_index;
   sdsl::load_from_file(dynamic_index, index_base + DynamicGBWT::EXTENSION);
   printStatistics(dynamic_index, index_base);
+
+  if(statistics) { extendedStatistics(dynamic_index); }
+  if(!(find || locate || extract)) { return 0; }
 
   if(find)
   {
@@ -160,10 +170,70 @@ printUsage(int exit_code)
   std::cerr << "  -p N  Use patterns of length N" << std::endl;
   std::cerr << "  -l    Benchmark locate() queries (requires -f)" << std::endl;
   std::cerr << "  -e N  Benchmark N extract() queries" << std::endl;
+  std::cerr << "  -s    Print extended statistics" << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);
 }
+
+//------------------------------------------------------------------------------
+
+void
+printStatistics(const std::string& header, const std::map<size_type, size_type>& distribution,
+                size_type endmarker, size_type total, size_type n)
+{
+  std::cout << header << std::endl;
+  printHeader("Total"); std::cout << total << std::endl;
+  printHeader("Average"); std::cout << (total / static_cast<double>(n)) << std::endl;
+  printHeader("Endmarker"); std::cout << endmarker << std::endl;
+
+  double multiplier = 0.0;
+  auto iter = distribution.begin();
+  size_type records_seen = 0, value = 0;
+  for(size_type nines = 1; nines <= 6; nines++)
+  {
+    multiplier = multiplier / 10.0 + 0.9;
+    double limit = multiplier * n;
+    while(iter != distribution.end() && static_cast<double>(records_seen) < limit)
+    {
+      value = iter->first;
+      records_seen += iter->second;
+      ++iter;
+    }
+    printHeader(std::to_string(multiplier)); std::cout << "at most " << value << std::endl;
+  }
+
+  std::cout << std::endl;
+}
+
+void
+extendedStatistics(const DynamicGBWT& index)
+{
+  if(index.effective() < 2) { return; }
+
+  std::map<size_type, size_type> run_distribution, outdegree_distribution;
+  size_type endmarker_runs = 0, endmarker_outdegree = 0;
+  size_type total_runs = 0, total_outdegree = 0;
+
+  {
+    const DynamicRecord& endmarker = index.record(ENDMARKER);
+    endmarker_runs = endmarker.runs();
+    endmarker_outdegree = endmarker.outdegree();
+  }
+  for(comp_type comp = 1; comp < index.effective(); comp++)
+  {
+    const DynamicRecord& record = index.record(index.toNode(comp));
+    run_distribution[record.runs()]++;
+    outdegree_distribution[record.outdegree()]++;
+    total_runs += record.runs();
+    total_outdegree += record.outdegree();
+  }
+
+  printStatistics("Runs", run_distribution, endmarker_runs, total_runs, index.effective() - 1);
+  printStatistics("Outdegrees", outdegree_distribution, endmarker_outdegree, total_outdegree, index.effective() - 1);
+}
+
+//------------------------------------------------------------------------------
 
 std::vector<vector_type>
 generateQueries(const DynamicGBWT& index, size_type find_queries, size_type pattern_length)
