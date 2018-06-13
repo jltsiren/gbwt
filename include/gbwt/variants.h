@@ -63,6 +63,23 @@ struct Haplotype
 /*
   Paths corrensponding to the reference and the variants. Allele identifiers are 1-based;
   0 corresponds to the reference, which is not stored as an allele.
+
+  Each site corresponds to a semiopen interval [start, end) on the reference path. When
+  we append a variant to a haplotype, we first append reference until start, then append
+  the variant path, and finally update the reference position to end.
+
+  The intervals may overlap for nearby/adjacent sites. The variant paths may have
+  flanking reference nodes that cause this.
+
+  - haplotype.offset = start + 1: Remove the last node of haplotype.path if it is a
+    reference node. Otherwise ignore the first node of the variant path if it is a
+    reference node. Otherwise start a new haplotype.
+
+  - haplotype.offset = start + 2: Remove the last node of haplotype.path and ignore the
+    first node of the variant path if both are reference nodes. Otherwise start a new
+    haplotype.
+
+  - haplotype.offset > start + 2: Something is wrong. Start a new haplotype.
 */
 
 struct VariantPaths
@@ -107,7 +124,7 @@ struct VariantPaths
 
   void appendReferenceUntil(Haplotype& haplotype, size_type site) const;
   void appendReferenceUntilEnd(Haplotype& haplotype) const;
-  void appendVariant(Haplotype& haplotype, size_type site, size_type allele) const;
+  void appendVariant(Haplotype& haplotype, size_type site, size_type allele, std::function<void(const Haplotype&)> output) const;
 };
 
 //------------------------------------------------------------------------------
