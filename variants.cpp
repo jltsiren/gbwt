@@ -104,12 +104,13 @@ VariantPaths::appendReferenceUntilEnd(Haplotype& haplotype) const
 void
 VariantPaths::appendVariant(Haplotype& haplotype, size_type site, size_type allele, std::function<void(const Haplotype&)> output) const
 {
+  if(allele == 0) { return; }
   if(site >= this->sites())
   {
     std::cerr << "VariantPaths::appendVariant(): Invalid site: " << site << std::endl;
     return;
   }
-  if(allele == 0 || allele > this->alleles(site))
+  if(allele > this->alleles(site))
   {
     std::cerr << "VariantPaths::appendVariant(): Invalid allele at site " << site << ": " << allele << std::endl;
     return;
