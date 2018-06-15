@@ -149,6 +149,8 @@ struct Phasing
 
   Phasing(const std::string& genotype, bool was_diploid = true);
 
+  void forcePhased(std::function<bool()> rng);
+
   size_type encode(size_type max_allele) const;
   void decode(size_type code, size_type max_allele);
   static size_type maxCode(size_type max_allele);
@@ -160,6 +162,8 @@ struct Phasing
 
   bool operator!= (const Phasing& another) const { return !(this->operator==(another)); }
 };
+
+std::ostream& operator<<(std::ostream& out, Phasing phasing);
 
 //------------------------------------------------------------------------------
 

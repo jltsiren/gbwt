@@ -165,8 +165,33 @@ Phasing::Phasing(const std::string& genotype, bool was_diploid) :
   }
   if(!(this->diploid)) { this->phased = true; }
 
-  this->first = std::stoul(genotype.substr(0, separator_pos));
-  if(this->diploid) { this->second = std::stoul(genotype.substr(separator_pos + 1)); }
+  try
+  {
+    this->first = std::stoul(genotype.substr(0, separator_pos));
+  }
+  catch(...)
+  {
+    this->first = 0; // Fall back to reference.
+  }
+  if(this->diploid)
+  {
+    try
+    {
+      this->second = std::stoul(genotype.substr(separator_pos + 1));
+    }
+    catch(...)
+    {
+      this->second = 0; // Fall back to reference.
+    }
+  }
+}
+
+void
+Phasing::forcePhased(std::function<bool()> rng)
+{
+  if(this->phased) { return; }
+  this->phased = true;
+  if(rng()) { std::swap(this->first, this->second); }
 }
 
 size_type
@@ -207,6 +232,17 @@ Phasing::maxCode(size_type max_allele)
 {
   Phasing phasing(max_allele, max_allele, true);
   return phasing.encode(max_allele);
+}
+
+std::ostream&
+operator<<(std::ostream& out, Phasing phasing)
+{
+  out << phasing.first;
+  if(phasing.diploid)
+  {
+    out << (phasing.phased ? "|" : "/") << phasing.second;
+  }
+  return out;
 }
 
 //------------------------------------------------------------------------------
@@ -643,6 +679,22 @@ testVariants()
         failures++;
       }
     }
+  }
+
+  // Test forced phasing.
+  Phasing unphased(0, 1, false);
+  unphased.forcePhased([]() { return false; });
+  if(!(unphased.phased) || unphased.first != 0 || unphased.second != 1)
+  {
+    std::cerr << "testVariants(): Phasing: forcePhased() failed: " << unphased << std::endl;
+    failures++;
+  }
+  unphased = Phasing(0, 1, false);
+  unphased.forcePhased([]() { return true; });
+  if(!(unphased.phased) || unphased.first != 1 || unphased.second != 0)
+  {
+    std::cerr << "testVariants(): Phasing: forcePhased() failed: " << unphased << std::endl;
+    failures++;
   }
 
   // Test overlapping variants.
