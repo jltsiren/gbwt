@@ -71,15 +71,13 @@ struct Haplotype
   The intervals may overlap for nearby/adjacent sites. The variant paths may have
   flanking reference nodes that cause this.
 
-  - haplotype.offset = start + 1: Remove the last node of haplotype.path if it is a
-    reference node. Otherwise ignore the first node of the variant path if it is a
-    reference node. Otherwise start a new haplotype.
+  - If there are enough reference nodes at the end of the haplotype path and/or at the
+    start of the variant path, we resolve the overlap by skipping these nodes.
 
-  - haplotype.offset = start + 2: Remove the last node of haplotype.path and ignore the
-    first node of the variant path if both are reference nodes. Otherwise start a new
-    haplotype.
+  - Otherwise if skip_overlaps is set, we revert to the reference allele for the
+    overlapping variant.
 
-  - haplotype.offset > start + 2: Something is wrong. Start a new haplotype.
+  - Otherwise we have a phase break.
 */
 
 struct VariantPaths
@@ -124,7 +122,7 @@ struct VariantPaths
 
   void appendReferenceUntil(Haplotype& haplotype, size_type site) const;
   void appendReferenceUntilEnd(Haplotype& haplotype) const;
-  void appendVariant(Haplotype& haplotype, size_type site, size_type allele, std::function<void(const Haplotype&)> output) const;
+  void appendVariant(Haplotype& haplotype, size_type site, size_type allele, bool skip_overlaps, std::function<void(const Haplotype&)> output) const;
 };
 
 //------------------------------------------------------------------------------
@@ -223,7 +221,7 @@ private:
 //------------------------------------------------------------------------------
 
 // Opens and closes the phasings.
-void generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
+void generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings, bool skip_overlaps,
                         std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output);
 
 size_type testVariants();  // Unit tests.

@@ -102,7 +102,7 @@ VariantPaths::appendReferenceUntilEnd(Haplotype& haplotype) const
 }
 
 void
-VariantPaths::appendVariant(Haplotype& haplotype, size_type site, size_type allele, std::function<void(const Haplotype&)> output) const
+VariantPaths::appendVariant(Haplotype& haplotype, size_type site, size_type allele, bool skip_overlaps, std::function<void(const Haplotype&)> output) const
 {
   if(allele == 0) { return; }
   if(site >= this->sites())
@@ -116,35 +116,55 @@ VariantPaths::appendVariant(Haplotype& haplotype, size_type site, size_type alle
     return;
   }
 
-  this->appendReferenceUntil(haplotype, site);
+  /*
+    The alternate allele may overlap with the previous alternate allele. Try to resolve
+    the overlap by removing reference nodes from the end of the current path and by
+    ignoring reference nodes at the start of the alt path. If this fails, create a phase
+    break or ignore the alternate allele.
+  */
   size_type start = this->path_starts[this->site_starts[site] + allele - 1];
   size_type stop = this->path_starts[this->site_starts[site] + allele];
-
-  // There is overlap between the previous and the current variant.
   if(haplotype.offset > this->ref_starts[site])
   {
-    bool ends_with_reference = (!(haplotype.path.empty()) && haplotype.path.back() == this->reference[haplotype.offset - 1]);
-    bool starts_with_reference = (start < stop && this->alt_paths[start] == this->reference[this->ref_starts[site]]);
-    bool phase_break = true;
-    if(haplotype.offset == this->ref_starts[site] + 1)
+    size_type overlap = haplotype.offset - this->ref_starts[site];
+    size_type ends_with_reference = 0, starts_with_reference = 0;
+    size_type potential_ref_nodes = std::min(haplotype.offset, static_cast<size_type>(haplotype.path.size()));
+    while(overlap > 0 && ends_with_reference < potential_ref_nodes)
     {
-      if(ends_with_reference) { haplotype.path.pop_back(); haplotype.offset--; phase_break = false; }
-      else if(starts_with_reference) { start++; phase_break = false; }
+      node_type haplotype_node = haplotype.path[haplotype.path.size() - ends_with_reference - 1];
+      node_type reference_node = this->reference[haplotype.offset - ends_with_reference - 1];
+      if(haplotype_node == reference_node) { ends_with_reference++; overlap--; }
+      else { break; }
     }
-    else if(haplotype.offset == this->ref_starts[site] + 2 && ends_with_reference && starts_with_reference)
+    while(overlap > 0 && start + starts_with_reference < stop)
     {
-      haplotype.path.pop_back(); haplotype.offset--;
-      start++;
-      phase_break = false;
+      node_type haplotype_node = this->alt_paths[start + starts_with_reference];
+      node_type reference_node = this->reference[this->ref_starts[site] + starts_with_reference];
+      if(haplotype_node == reference_node) { starts_with_reference++; overlap--; }
+      else { break; }
     }
-    if(phase_break)
+    if(overlap == 0) // We can resolve the overlap.
     {
-      output(haplotype);
-      haplotype.deactivate();
-      haplotype.activate(this->ref_starts[site], haplotype.diploid);
+      while(ends_with_reference > 0) { haplotype.path.pop_back(); haplotype.offset--; ends_with_reference--; }
+      start += starts_with_reference;
+    }
+    else
+    {
+      if(skip_overlaps) { return; }
+      else // Phase break.
+      {
+        output(haplotype);
+        haplotype.deactivate();
+        haplotype.activate(this->ref_starts[site], haplotype.diploid);
+      }
     }
   }
+  else // No overlap, just append reference nodes.
+  {
+    this->appendReferenceUntil(haplotype, site);
+  }
 
+  // Append the alternate allele.
   haplotype.path.insert(haplotype.path.end(), this->alt_paths.begin() + start, this->alt_paths.begin() + stop);
   haplotype.offset = this->ref_ends[site];
 }
@@ -379,7 +399,7 @@ finishHaplotype(Haplotype& haplotype, const VariantPaths& variants, size_type si
 }
 
 void
-generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
+generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings, bool skip_overlaps,
                    std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output)
 {
   phasings.open();
@@ -421,7 +441,7 @@ generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
       if(!(first.active)) { first.activate(variants.refPrev(phasings.current()), phasing.diploid); }
       if(phasing.first > 0)
       {
-        variants.appendVariant(first, phasings.current(), phasing.first, output);
+        variants.appendVariant(first, phasings.current(), phasing.first, skip_overlaps, output);
       }
       if(!(phasing.phased))
       {
@@ -445,7 +465,7 @@ generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
         if(!(second.active)) { second.activate(variants.refPrev(phasings.current()), phasing.diploid); }
         if(phasing.second > 0)
         {
-          variants.appendVariant(second, phasings.current(), phasing.second, output);
+          variants.appendVariant(second, phasings.current(), phasing.second, skip_overlaps, output);
         }
         if(!(phasing.phased))
         {
@@ -482,8 +502,9 @@ size_type
 testVariants(const std::string& test_name,
              const vector_type& reference, const std::vector<range_type>& sites,
              const std::vector<std::vector<vector_type>>& alleles,
-             size_type first_sample, size_type num_samples,
+             size_type first_sample,
              const std::vector<std::vector<Phasing>>& phasing_information,
+             bool skip_overlaps,
              const std::vector<vector_type>& true_haplotypes)
 {
   size_type failures = 0;
@@ -556,6 +577,7 @@ testVariants(const std::string& test_name,
   }
 
   // Create the samples.
+  size_type num_samples = phasing_information.front().size();
   PhasingInformation phasings(first_sample, num_samples);
   for(const std::vector<Phasing>& site : phasing_information)
   {
@@ -604,7 +626,7 @@ testVariants(const std::string& test_name,
   }
 
   std::vector<vector_type> haplotypes;
-  generateHaplotypes(variants, phasings,
+  generateHaplotypes(variants, phasings, skip_overlaps,
     [](size_type) -> bool { return true; },
     [&haplotypes](const Haplotype& haplotype) { haplotypes.push_back(haplotype.path); });
   if(haplotypes.size() != true_haplotypes.size())
@@ -636,7 +658,7 @@ testVariants()
   vector_type reference = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
   std::vector<range_type> sites = { range_type(2, 4), range_type(6, 7), range_type(8, 9) };
   std::vector<std::vector<vector_type>> alleles = { { { 11, 12 } }, { { 13 }, { 14, 15 } }, { { 16 }, {} } };
-  size_type first_sample = 10, num_samples = 3;
+  size_type first_sample = 10;
   // diploid-haploid-diploid, phased-unphased-phased, haploid-phased-phased
   std::vector<std::vector<Phasing>> phasing_information =
   {
@@ -661,7 +683,7 @@ testVariants()
     { 5, 6, 14, 15, 8, 9, 10 }, // (2, 0, 1)
     { 5, 6, 7, 8, 16, 10}       // (2, 1, 0)
   };
-  failures += testVariants("basic", reference, sites, alleles, first_sample, num_samples, phasing_information, true_haplotypes);
+  failures += testVariants("basic", reference, sites, alleles, first_sample, phasing_information, false, true_haplotypes);
 
   // Test genotype string parsing.
   std::vector<std::vector<std::string>> genotypes =
@@ -700,14 +722,19 @@ testVariants()
 
   // Test overlapping variants.
   sites = { range_type(2, 4), range_type(3, 6), range_type(4, 7) };
-  alleles = { { { 3, 11 }, { 12, 4 } }, { { 4, 13, 6 }, { 14, 5, 15 } }, { { 5, 6, 16 }, { 17, 6, 7 } } };
-  first_sample = 0; num_samples = 5;
-  // [ref nodes on overlaps] 0-1: remove left, 0-1: remove right, 1-2: only left, 1-2: only right, 1-2: both
+  alleles =
+  {
+    { { 3, 11 }, { 12, 4 } },
+    { { 4, 13, 6 }, { 14, 5, 15 },{ 14, 5, 6 } },
+    { { 5, 16, 7 }, { 17, 6, 7 }, { 5, 6, 18 } }
+  };
+  first_sample = 0;
+  // [remove ref nodes] 0-1: 1 left, 0-1: 1 right, 1-2: only left, 1-2: only right, 1-2: 1 both, 1-2: 2 left, 1-2: 2 right
   phasing_information =
   {
-    { Phasing(2), Phasing(1), Phasing(0), Phasing(0), Phasing(0) },
-    { Phasing(2), Phasing(1), Phasing(1), Phasing(2), Phasing(1) },
-    { Phasing(0), Phasing(0), Phasing(2), Phasing(1), Phasing(1) }
+    { Phasing(2), Phasing(1), Phasing(0), Phasing(0), Phasing(0), Phasing(0), Phasing(0) },
+    { Phasing(2), Phasing(1), Phasing(1), Phasing(2), Phasing(1), Phasing(3), Phasing(2) },
+    { Phasing(0), Phasing(0), Phasing(2), Phasing(1), Phasing(1), Phasing(2), Phasing(3) }
   };
   true_haplotypes =
   {
@@ -716,10 +743,25 @@ testVariants()
     { 1, 2, 12, 14, 5, 15, 7, 8, 9, 10 }, // (0, 0, 0)
     { 1, 2, 3, 11, 13, 6, 7, 8, 9, 10 },  // (1, 0, 0)
     { 17, 6, 7, 8, 9, 10 },               // (2, 0, 1)
-    { 5, 6, 16, 8, 9, 10 },               // (3, 0, 1)
-    { 1, 2, 3, 4, 13, 6, 16, 8, 9, 10 }   // (4, 0, 0)
+    { 5, 16, 7, 8, 9, 10 },               // (3, 0, 1)
+    { 1, 2, 3, 4, 13, 16, 7, 8, 9, 10 },  // (4, 0, 0)
+    { 1, 2, 3, 14, 17, 6, 7, 8, 9, 10 },  // (5, 0, 0)
+    { 1, 2, 3, 14, 5, 15, 18, 8, 9, 10 }  // (6, 0, 0)
   };
-  failures += testVariants("overlapping", reference, sites, alleles, first_sample, num_samples, phasing_information, true_haplotypes);
+  failures += testVariants("overlapping", reference, sites, alleles, first_sample, phasing_information, false, true_haplotypes);
+
+  // Skip overlapping variants.
+  true_haplotypes =
+  {
+    { 1, 2, 12, 14, 5, 15, 7, 8, 9, 10 }, // (0, 0, 0)
+    { 1, 2, 3, 11, 13, 6, 7, 8, 9, 10 },  // (1, 0, 0)
+    { 1, 2, 3, 4, 13, 6, 7, 8, 9, 10 },   // (2, 0, 0)
+    { 1, 2, 3, 14, 5, 15, 7, 8, 9, 10},   // (3, 0, 0)
+    { 1, 2, 3, 4, 13, 16, 7, 8, 9, 10 },  // (4, 0, 0)
+    { 1, 2, 3, 14, 17, 6, 7, 8, 9, 10 },  // (5, 0, 0)
+    { 1, 2, 3, 14, 5, 15, 18, 8, 9, 10 }  // (6, 0, 0)
+  };
+  failures += testVariants("skip overlaps", reference, sites, alleles, first_sample, phasing_information, true, true_haplotypes);
 
   return failures;
 }
