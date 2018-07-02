@@ -169,6 +169,83 @@ VariantPaths::appendVariant(Haplotype& haplotype, size_type site, size_type alle
   haplotype.offset = this->ref_ends[site];
 }
 
+vector_type
+VariantPaths::getAllele(size_type site, size_type allele) const
+{
+  if(site >= this->sites()) { return vector_type(); }
+
+  if(allele == 0)
+  {
+    size_type start = this->refStart(site);
+    size_type stop = this->refEnd(site);
+    return vector_type(this->reference.begin() + start, this->reference.begin() + stop);
+  }
+  else
+  {
+    size_type start = this->path_starts[this->site_starts[site] + allele - 1];
+    size_type stop = this->path_starts[this->site_starts[site] + allele];
+    return vector_type(this->alt_paths.begin() + start, this->alt_paths.begin() + stop);
+  }
+}
+
+//------------------------------------------------------------------------------
+
+void
+checkOverlaps(const VariantPaths& variants, std::ostream& out)
+{
+  size_type prev_start = variants.refStart(0), prev_end = variants.refEnd(0);
+  size_type unresolved_sites = 0;
+  for(size_type site = 1; site < variants.sites(); site++)
+  {
+    size_type start = variants.refStart(site), end = variants.refEnd(site);
+    bool site_resolved = true;
+    if(start < prev_end) // We have an overlap.
+    {
+      size_type overlap = prev_end - start;
+      out << "Site " << site << ": " << overlap << " nodes of overlap" << std::endl;
+      for(size_type prev_allele = 1; prev_allele < variants.alleles(site - 1); prev_allele++)
+      {
+        vector_type prev_path = variants.getAllele(site - 1, prev_allele);
+        size_type ends_with_reference = 0;
+        while(ends_with_reference < prev_path.size() && ends_with_reference < prev_end)
+        {
+          node_type alt_node = prev_path[prev_path.size() - ends_with_reference - 1];
+          node_type ref_node = variants.refAt(prev_end - ends_with_reference - 1);
+          if(alt_node != ref_node) { break; }
+          ends_with_reference++;
+        }
+        for(size_type allele = 1; allele < variants.alleles(site); allele++)
+        {
+          vector_type path = variants.getAllele(site, allele);
+          size_type starts_with_reference = 0;
+          while(starts_with_reference < path.size() && start + starts_with_reference < end)
+          {
+            node_type alt_node = path[starts_with_reference];
+            node_type ref_node = variants.refAt(start + starts_with_reference);
+            if(alt_node != ref_node) { break; }
+            starts_with_reference++;
+          }
+          bool resolved = (ends_with_reference + starts_with_reference >= overlap);
+          out << "  alleles " << range_type(prev_allele, allele) << ": " << (resolved ? "resolved" : "not resolved") << std::endl;
+          if(!resolved)
+          {
+            out << "    prev: " << prev_path << std::endl;
+            out << "    curr: " << path << std::endl;
+            site_resolved = false;
+          }
+        }
+      }
+    }
+    prev_start = start; prev_end = end;
+    if(!site_resolved) { unresolved_sites++; }
+  }
+
+  if(unresolved_sites > 0)
+  {
+    out << "Unresolved sites: " << unresolved_sites << " / " << variants.sites() << std::endl;
+  }
+}
+
 //------------------------------------------------------------------------------
 
 Phasing::Phasing(const std::string& genotype, bool was_diploid) :

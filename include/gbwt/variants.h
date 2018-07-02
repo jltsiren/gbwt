@@ -123,7 +123,12 @@ struct VariantPaths
   void appendReferenceUntil(Haplotype& haplotype, size_type site) const;
   void appendReferenceUntilEnd(Haplotype& haplotype) const;
   void appendVariant(Haplotype& haplotype, size_type site, size_type allele, bool skip_overlaps, std::function<void(const Haplotype&)> output) const;
+
+  node_type refAt(size_type offset) const { return this->reference[offset]; }
+  vector_type getAllele(size_type site, size_type allele) const;
 };
+
+void checkOverlaps(const VariantPaths& variants, std::ostream& out);
 
 //------------------------------------------------------------------------------
 
