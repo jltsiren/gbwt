@@ -194,16 +194,18 @@ void
 checkOverlaps(const VariantPaths& variants, std::ostream& out)
 {
   size_type prev_start = variants.refStart(0), prev_end = variants.refEnd(0);
-  size_type unresolved_sites = 0;
+  size_type overlapping_sites = 0, unresolved_sites = 0;
   for(size_type site = 1; site < variants.sites(); site++)
   {
     size_type start = variants.refStart(site), end = variants.refEnd(site);
     bool site_resolved = true;
     if(start < prev_end) // We have an overlap.
     {
+      overlapping_sites++;
       size_type overlap = prev_end - start;
-      out << "Site " << site << ": " << overlap << " nodes of overlap" << std::endl;
-      for(size_type prev_allele = 1; prev_allele < variants.alleles(site - 1); prev_allele++)
+      out << "Site " << site << ": Overlap " << overlap << ": "
+          << range_type(prev_start, prev_end) << " followed by " << range_type(start, end) << std::endl;
+      for(size_type prev_allele = 1; prev_allele <= variants.alleles(site - 1); prev_allele++)
       {
         vector_type prev_path = variants.getAllele(site - 1, prev_allele);
         size_type ends_with_reference = 0;
@@ -214,7 +216,7 @@ checkOverlaps(const VariantPaths& variants, std::ostream& out)
           if(alt_node != ref_node) { break; }
           ends_with_reference++;
         }
-        for(size_type allele = 1; allele < variants.alleles(site); allele++)
+        for(size_type allele = 1; allele <= variants.alleles(site); allele++)
         {
           vector_type path = variants.getAllele(site, allele);
           size_type starts_with_reference = 0;
@@ -240,10 +242,9 @@ checkOverlaps(const VariantPaths& variants, std::ostream& out)
     if(!site_resolved) { unresolved_sites++; }
   }
 
-  if(unresolved_sites > 0)
-  {
-    out << "Unresolved sites: " << unresolved_sites << " / " << variants.sites() << std::endl;
-  }
+  out << "Sites: " << variants.sites() << " total, "
+      << overlapping_sites << " overlapping, "
+      << unresolved_sites << " unresolved" << std::endl;
 }
 
 //------------------------------------------------------------------------------
