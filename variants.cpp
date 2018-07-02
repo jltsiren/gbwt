@@ -195,6 +195,7 @@ checkOverlaps(const VariantPaths& variants, std::ostream& out)
 {
   size_type prev_start = variants.refStart(0), prev_end = variants.refEnd(0);
   size_type overlapping_sites = 0, unresolved_sites = 0;
+  std::map<size_type, size_type> overlaps_by_length;
   for(size_type site = 1; site < variants.sites(); site++)
   {
     size_type start = variants.refStart(site), end = variants.refEnd(site);
@@ -203,8 +204,7 @@ checkOverlaps(const VariantPaths& variants, std::ostream& out)
     {
       overlapping_sites++;
       size_type overlap = prev_end - start;
-      out << "Site " << site << ": Overlap " << overlap << ": "
-          << range_type(prev_start, prev_end) << " followed by " << range_type(start, end) << std::endl;
+      overlaps_by_length[overlap]++;
       for(size_type prev_allele = 1; prev_allele <= variants.alleles(site - 1); prev_allele++)
       {
         vector_type prev_path = variants.getAllele(site - 1, prev_allele);
@@ -227,12 +227,13 @@ checkOverlaps(const VariantPaths& variants, std::ostream& out)
             if(alt_node != ref_node) { break; }
             starts_with_reference++;
           }
-          bool resolved = (ends_with_reference + starts_with_reference >= overlap);
-          out << "  alleles " << range_type(prev_allele, allele) << ": " << (resolved ? "resolved" : "not resolved") << std::endl;
-          if(!resolved)
+          if(ends_with_reference + starts_with_reference < overlap)
           {
-            out << "    prev: " << prev_path << std::endl;
-            out << "    curr: " << path << std::endl;
+            out << "Site " << site << ", alleles " << range_type(prev_allele, allele) << ":" << std::endl;
+            out << "  overlap: " << overlap << " nodes: "
+                << range_type(prev_start, prev_end) << " followed by " << range_type(start, end) << std::endl;
+            out << "  prev: " << prev_path << std::endl;
+            out << "  curr: " << path << std::endl;
             site_resolved = false;
           }
         }
@@ -245,6 +246,11 @@ checkOverlaps(const VariantPaths& variants, std::ostream& out)
   out << "Sites: " << variants.sites() << " total, "
       << overlapping_sites << " overlapping, "
       << unresolved_sites << " unresolved" << std::endl;
+  out << "Overlap lengths:" << std::endl;
+  for(auto iter = overlaps_by_length.begin(); iter != overlaps_by_length.end(); ++iter)
+  {
+    out << "  " << iter->first << " nodes: " << iter->second << " overlaps" << std::endl;
+  }
 }
 
 //------------------------------------------------------------------------------
