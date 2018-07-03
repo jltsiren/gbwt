@@ -230,10 +230,12 @@ checkOverlaps(const VariantPaths& variants, std::ostream& out)
           if(ends_with_reference + starts_with_reference < overlap)
           {
             out << "Site " << site << ", alleles " << range_type(prev_allele, allele) << ":" << std::endl;
-            out << "  overlap: " << overlap << " nodes: "
+            out << "  overlap " << overlap << " nodes: "
                 << range_type(prev_start, prev_end) << " followed by " << range_type(start, end) << std::endl;
-            out << "  prev: " << prev_path << std::endl;
-            out << "  curr: " << path << std::endl;
+            out << "  prev ref: " << variants.getAllele(site - 1, 0) << std::endl;
+            out << "  prev alt: " << prev_path << std::endl;
+            out << "  curr ref: " << variants.getAllele(site, 0) << std::endl;
+            out << "  curr alt: " << path << std::endl;
             site_resolved = false;
           }
         }
