@@ -190,8 +190,17 @@ VariantPaths::getAllele(size_type site, size_type allele) const
 
 //------------------------------------------------------------------------------
 
+vector_type
+getVector(const vector_type& source, bool get_ids)
+{
+  if(!get_ids) { return source; }
+  vector_type result = source;
+  for(auto& node : result) { node = Node::id(node); }
+  return result;
+}
+
 void
-checkOverlaps(const VariantPaths& variants, std::ostream& out)
+checkOverlaps(const VariantPaths& variants, std::ostream& out, bool print_ids)
 {
   size_type prev_start = variants.refStart(0), prev_end = variants.refEnd(0);
   size_type overlapping_sites = 0, unresolved_sites = 0;
@@ -229,13 +238,15 @@ checkOverlaps(const VariantPaths& variants, std::ostream& out)
           }
           if(ends_with_reference + starts_with_reference < overlap)
           {
+            vector_type prev_ref = variants.getAllele(site - 1, 0);
+            vector_type curr_ref = variants.getAllele(site, 0);
             out << "Site " << site << ", alleles " << range_type(prev_allele, allele) << ":" << std::endl;
             out << "  overlap " << overlap << " nodes: "
                 << range_type(prev_start, prev_end) << " followed by " << range_type(start, end) << std::endl;
-            out << "  prev ref: " << variants.getAllele(site - 1, 0) << std::endl;
-            out << "  prev alt: " << prev_path << std::endl;
-            out << "  curr ref: " << variants.getAllele(site, 0) << std::endl;
-            out << "  curr alt: " << path << std::endl;
+            out << "  prev ref: " << getVector(prev_ref, print_ids) << std::endl;
+            out << "  prev alt: " << getVector(prev_path, print_ids) << std::endl;
+            out << "  curr ref: " << getVector(curr_ref, print_ids) << std::endl;
+            out << "  curr alt: " << getVector(path, print_ids) << std::endl;
             site_resolved = false;
           }
         }

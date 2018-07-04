@@ -128,7 +128,7 @@ struct VariantPaths
   vector_type getAllele(size_type site, size_type allele) const;
 };
 
-void checkOverlaps(const VariantPaths& variants, std::ostream& out);
+void checkOverlaps(const VariantPaths& variants, std::ostream& out, bool print_ids = false);
 
 //------------------------------------------------------------------------------
 
