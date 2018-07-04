@@ -74,8 +74,8 @@ struct Haplotype
   - If there are enough reference nodes at the end of the haplotype path and/or at the
     start of the variant path, we resolve the overlap by skipping these nodes.
 
-  - Otherwise if skip_overlaps is set, we revert to the reference allele for the
-    overlapping variant.
+  - Otherwise if report_overlap() returns true, we revert to the reference allele for
+    the overlapping variant.
 
   - Otherwise we have a phase break.
 */
@@ -122,7 +122,8 @@ struct VariantPaths
 
   void appendReferenceUntil(Haplotype& haplotype, size_type site) const;
   void appendReferenceUntilEnd(Haplotype& haplotype) const;
-  void appendVariant(Haplotype& haplotype, size_type site, size_type allele, bool skip_overlaps, std::function<void(const Haplotype&)> output) const;
+  void appendVariant(Haplotype& haplotype, size_type site, size_type allele,
+    std::function<void(const Haplotype&)> output, std::function<bool(size_type, size_type)> report_overlap) const;
 
   node_type refAt(size_type offset) const { return this->reference[offset]; }
   vector_type getAllele(size_type site, size_type allele) const;
@@ -226,8 +227,9 @@ private:
 //------------------------------------------------------------------------------
 
 // Opens and closes the phasings.
-void generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings, bool skip_overlaps,
-                        std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output);
+void generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
+                        std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output,
+                        std::function<bool(size_type, size_type)> report_overlap);
 
 size_type testVariants();  // Unit tests.
 

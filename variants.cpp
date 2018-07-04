@@ -102,7 +102,8 @@ VariantPaths::appendReferenceUntilEnd(Haplotype& haplotype) const
 }
 
 void
-VariantPaths::appendVariant(Haplotype& haplotype, size_type site, size_type allele, bool skip_overlaps, std::function<void(const Haplotype&)> output) const
+VariantPaths::appendVariant(Haplotype& haplotype, size_type site, size_type allele,
+  std::function<void(const Haplotype&)> output, std::function<bool(size_type, size_type)> report_overlap) const
 {
   if(allele == 0) { return; }
   if(site >= this->sites())
@@ -150,7 +151,7 @@ VariantPaths::appendVariant(Haplotype& haplotype, size_type site, size_type alle
     }
     else
     {
-      if(skip_overlaps) { return; }
+      if(report_overlap(site, allele)) { return; }
       else // Phase break.
       {
         output(haplotype);
@@ -496,8 +497,9 @@ finishHaplotype(Haplotype& haplotype, const VariantPaths& variants, size_type si
 }
 
 void
-generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings, bool skip_overlaps,
-                   std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output)
+generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
+                   std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output,
+                   std::function<bool(size_type, size_type)> report_overlap)
 {
   phasings.open();
 
@@ -538,7 +540,7 @@ generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings, b
       if(!(first.active)) { first.activate(variants.refPrev(phasings.current()), phasing.diploid); }
       if(phasing.first > 0)
       {
-        variants.appendVariant(first, phasings.current(), phasing.first, skip_overlaps, output);
+        variants.appendVariant(first, phasings.current(), phasing.first, output, report_overlap);
       }
       if(!(phasing.phased))
       {
@@ -562,7 +564,7 @@ generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings, b
         if(!(second.active)) { second.activate(variants.refPrev(phasings.current()), phasing.diploid); }
         if(phasing.second > 0)
         {
-          variants.appendVariant(second, phasings.current(), phasing.second, skip_overlaps, output);
+          variants.appendVariant(second, phasings.current(), phasing.second, output, report_overlap);
         }
         if(!(phasing.phased))
         {
@@ -723,9 +725,10 @@ testVariants(const std::string& test_name,
   }
 
   std::vector<vector_type> haplotypes;
-  generateHaplotypes(variants, phasings, skip_overlaps,
+  generateHaplotypes(variants, phasings,
     [](size_type) -> bool { return true; },
-    [&haplotypes](const Haplotype& haplotype) { haplotypes.push_back(haplotype.path); });
+    [&haplotypes](const Haplotype& haplotype) { haplotypes.push_back(haplotype.path); },
+    [&skip_overlaps](size_type, size_type) -> bool { return skip_overlaps; });
   if(haplotypes.size() != true_haplotypes.size())
   {
     std::cerr << "testVariants() [" << test_name << "]: generateHaplotypes(): Expected " << true_haplotypes.size() << " haplotypes, got " << haplotypes.size() << std::endl;
