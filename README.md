@@ -9,7 +9,8 @@ See [the wiki](https://github.com/jltsiren/gbwt/wiki) for further documentation.
 ## Citing GBWT
 
 Jouni Sirén, Erik Garrison, Adam M. Novak, Benedict Paten, and Richard Durbin: **Haplotype-aware graph indexes**.
-[arXiv:1805.03834](https://arxiv.org/abs/1805.03834), 2018.
+Proc. WABI 2018, LIPIcs 113, pp. 4:1-4:14, Helsinki, Finland, August 20-22, 2018.
+DOI: [10.4230/LIPIcs.WABI.2018.4](https://doi.org/10.4230/LIPIcs.WABI.2018.4)
 
 ## Other references
 
