@@ -58,11 +58,11 @@ main(int argc, char** argv)
 {
   if(argc < 2) { printUsage(); }
 
-  size_type batch_size = DynamicGBWT::INSERT_BATCH_SIZE / MILLION;
+  size_type batch_size = DynamicGBWT::INSERT_BATCH_SIZE / MILLION, sample_interval = DynamicGBWT::SAMPLE_INTERVAL;
   bool verify_index = false, both_orientations = false, build_index = true;
   std::string index_base, input_base, output_base;
   int c = 0;
-  while((c = getopt(argc, argv, "b:fi:lo:rv")) != -1)
+  while((c = getopt(argc, argv, "b:fi:lo:rs:v")) != -1)
   {
     switch(c)
     {
@@ -78,6 +78,8 @@ main(int argc, char** argv)
       output_base = optarg; break;
     case 'r':
       both_orientations = true; break;
+    case 's':
+      sample_interval = std::stoul(optarg); break;
     case 'v':
       verify_index = true; break;
     case '?':
@@ -110,6 +112,7 @@ main(int argc, char** argv)
   printHeader("Output name"); std::cout << output_base << std::endl;
   if(batch_size != 0) { printHeader("Batch size"); std::cout << batch_size << " million" << std::endl; }
   printHeader("Orientation"); std::cout << (both_orientations ? "both" : "forward only") << std::endl;
+  printHeader("Sample interval"); std::cout << sample_interval << std::endl;
   std::cout << std::endl;
 
   if(build_index)
@@ -129,7 +132,7 @@ main(int argc, char** argv)
       printHeader("Input name"); std::cout << input_base << std::endl;
       text_buffer_type input(input_base);
       input_size += input.size() * (both_orientations ? 2 : 1);
-      dynamic_index.insert(input, batch_size * MILLION, both_orientations);
+      dynamic_index.insert(input, batch_size * MILLION, both_orientations, sample_interval);
       optind++;
     }
     std::cout << std::endl;
@@ -189,6 +192,7 @@ printUsage(int exit_code)
   std::cerr << "  -l    Load an existing index instead of building it" << std::endl;
   std::cerr << "  -o X  Use base name X for output (default: the only input)" << std::endl;
   std::cerr << "  -r    Index the sequences also in reverse orientation" << std::endl;
+  std::cerr << "  -s N  Sample sequence ids at one out of N positions (default: " << DynamicGBWT::SAMPLE_INTERVAL << "; use 0 for no samples)" << std::endl;
   std::cerr << "  -v    Verify the index after construction" << std::endl;
   std::cerr << std::endl;
 

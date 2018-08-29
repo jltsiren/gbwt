@@ -279,7 +279,7 @@ swapBody(DynamicRecord& record, RunMerger& merger)
 /*
   Process ranges of sequences sharing the same 'curr' node.
   - Add the outgoing edge (curr, next) if necessary.
-  - Add sample (offset, id) if iteration % SAMPLE_INTERVAL == 0 or next == ENDMARKER.
+  - Add sample (offset, id) if iteration % sample_interval == 0 or next == ENDMARKER.
   - Insert the 'next' node into position 'offset' in the body.
   - Set 'offset' to rank(next) within the record.
   - Update the predecessor count of 'curr' in the incoming edges of 'next'.
@@ -289,7 +289,7 @@ swapBody(DynamicRecord& record, RunMerger& merger)
 */
 
 void
-updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, size_type iteration)
+updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, size_type iteration, size_type sample_interval)
 {
   for(size_type i = 0; i < seqs.size(); )
   {
@@ -324,7 +324,7 @@ updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, size_type iteratio
         new_samples.push_back(sample_type(sample_iter->first + insert_count, sample_iter->second));
         ++sample_iter;
       }
-      if(iteration % DynamicGBWT::SAMPLE_INTERVAL == 0 || seqs[i].next == ENDMARKER)  // Sample sequence id.
+      if(iteration % sample_interval == 0 || seqs[i].next == ENDMARKER)  // Sample sequence id.
       {
         new_samples.push_back(sample_type(seqs[i].offset, seqs[i].id));
       }
@@ -524,11 +524,14 @@ advancePosition(std::vector<Sequence>& seqs, const DynamicGBWT& source)
 
 template<class Source>
 size_type
-insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source)
+insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source, size_type sample_interval)
 {
+  // Sanity check sample interval only here.
+  if(sample_interval == 0) { sample_interval = ~(size_type)0; }
+
   for(size_type iterations = 1; ; iterations++)
   {
-    updateRecords(gbwt, seqs, iterations);  // Insert the next nodes into the GBWT.
+    updateRecords(gbwt, seqs, iterations, sample_interval);  // Insert the next nodes into the GBWT.
     nextPosition(seqs, source); // Determine the next position for each sequence.
     sortSequences(seqs);  // Sort for the next iteration and remove the ones that have finished.
     if(seqs.empty()) { return iterations; }
@@ -551,7 +554,8 @@ insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source)
 
 template<class IntegerVector>
 void
-insertBatch(DynamicGBWT& index, const IntegerVector& text, size_type text_length, size_type start_id, bool has_both_orientations)
+insertBatch(DynamicGBWT& index, const IntegerVector& text, size_type text_length,
+            size_type start_id, bool has_both_orientations, size_type sample_interval)
 {
   double start = readTimer();
 
@@ -590,7 +594,7 @@ insertBatch(DynamicGBWT& index, const IntegerVector& text, size_type text_length
   index.resize(min_node - 1, max_node + 1);
 
   // Insert the sequences and sort the outgoing edges.
-  size_type iterations = gbwt::insert(index, seqs, text);
+  size_type iterations = gbwt::insert(index, seqs, text, sample_interval);
   if(Verbosity::level >= Verbosity::EXTENDED)
   {
     double seconds = readTimer() - start;
@@ -601,7 +605,7 @@ insertBatch(DynamicGBWT& index, const IntegerVector& text, size_type text_length
 //------------------------------------------------------------------------------
 
 void
-DynamicGBWT::insert(const text_type& text, bool has_both_orientations)
+DynamicGBWT::insert(const text_type& text, bool has_both_orientations, size_type sample_interval)
 {
   if(text.empty())
   {
@@ -611,12 +615,12 @@ DynamicGBWT::insert(const text_type& text, bool has_both_orientations)
     }
     return;
   }
-  gbwt::insertBatch(*this, text, text.size(), 0, has_both_orientations);
+  gbwt::insertBatch(*this, text, text.size(), 0, has_both_orientations, sample_interval);
   this->recode();
 }
 
 void
-DynamicGBWT::insert(const text_type& text, size_type text_length, bool has_both_orientations)
+DynamicGBWT::insert(const text_type& text, size_type text_length, bool has_both_orientations, size_type sample_interval)
 {
   if(text_length == 0)
   {
@@ -631,12 +635,12 @@ DynamicGBWT::insert(const text_type& text, size_type text_length, bool has_both_
     std::cerr << "DynamicGBWT::insert(): Specified text length is larger than container size" << std::endl;
     std::exit(EXIT_FAILURE);
   }
-  gbwt::insertBatch(*this, text, text_length, 0, has_both_orientations);
+  gbwt::insertBatch(*this, text, text_length, 0, has_both_orientations, sample_interval);
   this->recode();
 }
 
 void
-DynamicGBWT::insert(const vector_type& text, bool has_both_orientations)
+DynamicGBWT::insert(const vector_type& text, bool has_both_orientations, size_type sample_interval)
 {
   if(text.empty())
   {
@@ -646,12 +650,12 @@ DynamicGBWT::insert(const vector_type& text, bool has_both_orientations)
     }
     return;
   }
-  gbwt::insertBatch(*this, text, text.size(), 0, has_both_orientations);
+  gbwt::insertBatch(*this, text, text.size(), 0, has_both_orientations, sample_interval);
   this->recode();
 }
 
 void
-DynamicGBWT::insert(text_buffer_type& text, size_type batch_size, bool both_orientations)
+DynamicGBWT::insert(text_buffer_type& text, size_type batch_size, bool both_orientations, size_type sample_interval)
 {
   double start = readTimer();
 
@@ -667,7 +671,7 @@ DynamicGBWT::insert(text_buffer_type& text, size_type batch_size, bool both_orie
   size_type old_sequences = this->sequences();
 
   // Create a builder using this index.
-  GBWTBuilder builder(text.width(), batch_size);
+  GBWTBuilder builder(text.width(), batch_size, sample_interval);
   builder.swapIndex(*this);
 
   // Insert all sequences.
@@ -695,7 +699,7 @@ DynamicGBWT::insert(text_buffer_type& text, size_type batch_size, bool both_orie
 //------------------------------------------------------------------------------
 
 void
-DynamicGBWT::merge(const GBWT& source, size_type batch_size)
+DynamicGBWT::merge(const GBWT& source, size_type batch_size, size_type sample_interval)
 {
   double start = readTimer();
 
@@ -738,7 +742,7 @@ DynamicGBWT::merge(const GBWT& source, size_type batch_size)
       std::cerr << "DynamicGBWT::merge(): Inserting sequences " << (source_id - seqs.size())
                 << " to " << (source_id - 1) << std::endl;
     }
-    size_type iterations = gbwt::insert(*this, seqs, source);
+    size_type iterations = gbwt::insert(*this, seqs, source, sample_interval);
     if(Verbosity::level >= Verbosity::EXTENDED)
     {
       double seconds = readTimer() - batch_start;
@@ -850,8 +854,9 @@ printStatistics(const DynamicGBWT& gbwt, const std::string& name)
 
 //------------------------------------------------------------------------------
 
-GBWTBuilder::GBWTBuilder(size_type node_width, size_type buffer_size) :
+GBWTBuilder::GBWTBuilder(size_type node_width, size_type buffer_size, size_type sample_interval) :
   input_buffer(buffer_size, 0, node_width), construction_buffer(buffer_size, 0, node_width),
+  id_sample_interval(sample_interval),
   input_tail(0), construction_tail(0),
   inserted_sequences(0), batch_sequences(0),
   has_both_orientations(true)
@@ -929,7 +934,9 @@ GBWTBuilder::flush()
   // Launch a new construction thread if necessary.
   if(this->construction_tail > 0)
   {
-    this->builder = std::thread(gbwt::insertBatch<text_type>, std::ref(this->index), std::cref(this->construction_buffer), this->construction_tail, this->inserted_sequences, this->has_both_orientations);
+    this->builder =
+      std::thread(gbwt::insertBatch<text_type>, std::ref(this->index), std::cref(this->construction_buffer),
+                  this->construction_tail, this->inserted_sequences, this->has_both_orientations, this->id_sample_interval);
     this->inserted_sequences += this->batch_sequences;
     this->batch_sequences = 0;
   }

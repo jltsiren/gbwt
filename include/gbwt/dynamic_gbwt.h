@@ -76,9 +76,9 @@ public:
     Set has_both_orientations to true if the text has both orientations of each sequence.
     Both orientations are required for bidirectional search.
   */
-  void insert(const text_type& text, bool has_both_orientations = false);
-  void insert(const text_type& text, size_type text_length, bool has_both_orientations = false);
-  void insert(const vector_type& text, bool has_both_orientations = false);
+  void insert(const text_type& text, bool has_both_orientations = false, size_type sample_interval = SAMPLE_INTERVAL);
+  void insert(const text_type& text, size_type text_length, bool has_both_orientations = false, size_type sample_interval = SAMPLE_INTERVAL);
+  void insert(const vector_type& text, bool has_both_orientations = false, size_type sample_interval = SAMPLE_INTERVAL);
 
   /*
     Use the above to insert the sequences in batches of up to 'batch_size' nodes. Use batch
@@ -86,13 +86,13 @@ public:
     forward orientation. Set both_orientations = true to insert the reverse complement as well.
     Both orientations are required for bidirectional search.
   */
-  void insert(text_buffer_type& text, size_type batch_size = INSERT_BATCH_SIZE, bool both_orientations = false);
+  void insert(text_buffer_type& text, size_type batch_size = INSERT_BATCH_SIZE, bool both_orientations = false, size_type sample_interval = DynamicGBWT::SAMPLE_INTERVAL);
 
   /*
     Insert the sequences from the other GBWT into this. Use batch size 0 to insert all
     sequences at once.
   */
-  void merge(const GBWT& source, size_type batch_size = MERGE_BATCH_SIZE);
+  void merge(const GBWT& source, size_type batch_size = MERGE_BATCH_SIZE, size_type sample_interval = SAMPLE_INTERVAL);
 
 //------------------------------------------------------------------------------
 
@@ -304,7 +304,9 @@ void printStatistics(const DynamicGBWT& gbwt, const std::string& name);
 class GBWTBuilder
 {
 public:
-  GBWTBuilder(size_type node_width, size_type batch_size = DynamicGBWT::INSERT_BATCH_SIZE);
+  GBWTBuilder(size_type node_width,
+              size_type batch_size = DynamicGBWT::INSERT_BATCH_SIZE,
+              size_type sample_interval = DynamicGBWT::SAMPLE_INTERVAL);
   ~GBWTBuilder();
 
   void swapIndex(DynamicGBWT& another_index);
@@ -314,6 +316,7 @@ public:
 
   DynamicGBWT index;
   text_type   input_buffer, construction_buffer;
+  size_type   id_sample_interval;
   size_type   input_tail, construction_tail;
   size_type   inserted_sequences, batch_sequences;
   std::thread builder;

@@ -42,11 +42,11 @@ main(int argc, char** argv)
 {
   if(argc < 5) { printUsage(); }
 
-  size_type batch_size = DynamicGBWT::MERGE_BATCH_SIZE;
+  size_type batch_size = DynamicGBWT::MERGE_BATCH_SIZE, sample_interval = DynamicGBWT::SAMPLE_INTERVAL;
   bool fast_merging = false;
   std::string output;
   int c = 0;
-  while((c = getopt(argc, argv, "b:fo:")) != -1)
+  while((c = getopt(argc, argv, "b:fo:s:")) != -1)
   {
     switch(c)
     {
@@ -56,6 +56,8 @@ main(int argc, char** argv)
       fast_merging = true; break;
     case 'o':
       output = optarg; break;
+    case 's':
+      sample_interval = std::stoul(optarg); break;
     case '?':
       std::exit(EXIT_FAILURE);
     default:
@@ -72,7 +74,11 @@ main(int argc, char** argv)
   printHeader("Algorithm"); std::cout << (fast_merging ? "fast" : "insert") << std::endl;
   printHeader("Input files"); std::cout << input_files << std::endl;
   printHeader("Output name"); std::cout << output << std::endl;
-  if(!fast_merging) { printHeader("Batch size"); std::cout << batch_size << std::endl; }
+  if(!fast_merging)
+  {
+    printHeader("Batch size"); std::cout << batch_size << std::endl;
+    printHeader("Sample interval"); std::cout << sample_interval << std::endl;
+  }
   std::cout << std::endl;
 
   double start = readTimer();
@@ -106,7 +112,7 @@ main(int argc, char** argv)
       GBWT next;
       sdsl::load_from_file(next, input_name + GBWT::EXTENSION);
       printStatistics(next, input_name);
-      index.merge(next, batch_size);
+      index.merge(next, batch_size, sample_interval);
       total_inserted += next.size();
       optind++;
     }
@@ -135,6 +141,7 @@ printUsage(int exit_code)
   std::cerr << "  -b N  Use batches of N sequences for merging (default: " << DynamicGBWT::MERGE_BATCH_SIZE << ")" << std::endl;
   std::cerr << "  -f    Fast merging algorithm (node ids must not overlap)" << std::endl;
   std::cerr << "  -o X  Use X as the base name for output (required)" << std::endl;
+  std::cerr << "  -s N  Sample sequence ids at one out of N positions (default: " << DynamicGBWT::SAMPLE_INTERVAL << "; use 0 for no samples)" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Use base names for the inputs and the output." << std::endl;
   std::cerr << std::endl;
