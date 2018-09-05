@@ -80,29 +80,56 @@ struct Haplotype
   - Otherwise we have a phase break.
 */
 
-struct VariantPaths
+class VariantPaths
 {
+public:
+  typedef gbwt::size_type size_type;
+
+//------------------------------------------------------------------------------
+
+  VariantPaths();
+  explicit VariantPaths(size_type reference_size);
+  VariantPaths(const VariantPaths& source);
+  VariantPaths(VariantPaths&& source);
+  ~VariantPaths();
+
+  void swap(VariantPaths& another);
+  VariantPaths& operator=(const VariantPaths& source);
+  VariantPaths& operator=(VariantPaths&& source);
+
+  size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
+  void load(std::istream& in);
+
+//------------------------------------------------------------------------------
+
   /*
-    reference     reference path
-    ref_starts    starting positions of each site in the reference
-    ref_ends      the positions following each site in the reference
+    reference      reference path
+    ref_starts     starting positions of each site in the reference
+    ref_ends       the positions following each site in the reference
 
-    alt_paths     concatenated allele paths
-    path_starts   pointers to the start of each path in alt_paths with a sentinel at the end
-    site_starts   pointers to the start of each site in path_starts with a sentinel at the end
+    alt_paths      concatenated allele paths
+    path_starts    pointers to the start of each path in alt_paths with a sentinel at the end
+    site_starts    pointers to the start of each site in path_starts with a sentinel at the end
 
-    ref_index     the first occurrence of each node in the reference
+    phasing_files  file names for permanent PhasingInformation files
+    file_offsets   the identifier of the first sample in each file
+    file_counts    the number of samples in each file
+
+    ref_index      the first occurrence of each node in the reference (not serialized)
   */
-  vector_type            reference;
-  std::vector<size_type> ref_starts, ref_ends;
-  vector_type            alt_paths;
-  std::vector<size_type> path_starts, site_starts;
+  vector_type              reference;
+  std::vector<size_type>   ref_starts, ref_ends;
+  vector_type              alt_paths;
+  std::vector<size_type>   path_starts, site_starts;
+
+  std::vector<std::string> phasing_files;
+  std::vector<size_type>   file_offsets, file_counts;
 
   std::unordered_map<node_type, node_type, size_type(*)(size_type)> ref_index;
 
-  explicit VariantPaths(size_type reference_size = 0);
-  void appendToReference(node_type node) { this->reference.push_back(node); }
+//------------------------------------------------------------------------------
 
+  // Queries.
   size_type size() const { return this->reference.size(); }
   size_type invalid_position() const { return this->size() + 1; }
   size_type paths() const { return this->path_starts.size() - 1; }
@@ -114,19 +141,37 @@ struct VariantPaths
   size_type refStart(size_type site) const { return this->ref_starts[site]; }
   size_type refEnd(size_type site) const { return this->ref_ends[site]; }
 
+  node_type refAt(size_type offset) const { return this->reference[offset]; }
+  vector_type getAllele(size_type site, size_type allele) const;
+
+  size_type files() const { return this->phasing_files.size(); }
+  const std::string& name(size_type file) const { return this->phasing_files[file]; }
+  size_type offset(size_type file) const { return this->file_offsets[file]; }
+  size_type count(size_type file) const { return this->file_counts[file]; }
+
+//------------------------------------------------------------------------------
+
+  // Construction.
+  void appendToReference(node_type node) { this->reference.push_back(node); }
+
   void indexReference();
   size_type firstOccurrence(node_type node);
 
   void addSite(size_type ref_start, size_type ref_end);
   void addAllele(const vector_type& path);
 
+  void addFile(const std::string& filename, size_type sample_offset, size_type sample_count);
+
+//------------------------------------------------------------------------------
+
+  // Path generation.
   void appendReferenceUntil(Haplotype& haplotype, size_type site) const;
   void appendReferenceUntilEnd(Haplotype& haplotype) const;
   void appendVariant(Haplotype& haplotype, size_type site, size_type allele,
     std::function<void(const Haplotype&)> output, std::function<bool(size_type, size_type)> report_overlap) const;
 
-  node_type refAt(size_type offset) const { return this->reference[offset]; }
-  vector_type getAllele(size_type site, size_type allele) const;
+private:
+  void copy(const VariantPaths& source);
 };
 
 void checkOverlaps(const VariantPaths& variants, std::ostream& out, bool print_ids = false);
@@ -184,13 +229,22 @@ struct PhasingInformation
   // File
   std::string                filename;
   sdsl::int_vector_buffer<8> data;
+  bool                       temp_file;
   const static std::string   TEMP_FILE_PREFIX;  // "phasing"
 
   // Iterator
   size_type            site, data_offset;
   std::vector<Phasing> phasings;
 
+  // Supported by a temporary file.
   PhasingInformation(size_type first_sample, size_type num_samples);
+
+  // Supported by a permanent file [base_name]_[first_sample]_[num_samples].
+  PhasingInformation(const std::string& base_name, size_type first_sample, size_type num_samples);
+
+  // Use an existing permanent file.
+  PhasingInformation(const VariantPaths& variants, size_type file);
+
   PhasingInformation(PhasingInformation&& source);
   ~PhasingInformation();
 
@@ -200,6 +254,10 @@ struct PhasingInformation
   void open();
   void close();
   bool isOpen() { return this->data.is_open(); }
+
+  // The user may want to get the filename.
+  const std::string& name() const { return this->filename; }
+  bool isTemporary() const { return this->temp_file; }
 
   // Append the phasings for a new site.
   void append(const std::vector<Phasing>& new_site);
@@ -231,7 +289,24 @@ void generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasin
                         std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output,
                         std::function<bool(size_type, size_type)> report_overlap);
 
-size_type testVariants();  // Unit tests.
+// As above, but use the PhasingInformation files stored in VariantPaths.
+void generateHaplotypes(const VariantPaths& variants,
+                        std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output,
+                        std::function<bool(size_type, size_type)> report_overlap);
+
+struct TestResults
+{
+  size_type tests, failures;
+
+  TestResults() : tests(0), failures(0) {}
+  void test() { this->tests++; }
+  void failure() { this->failures++; }
+
+  void operator+= (TestResults another) { this->tests += another.tests; this->failures += another.failures; }
+};
+
+// Unit tests.
+TestResults testVariants();
 
 //------------------------------------------------------------------------------
 

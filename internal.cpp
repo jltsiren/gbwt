@@ -32,6 +32,39 @@ namespace gbwt
 
 const size_type DiskIO::block_size = MEGABYTE;
 
+template<>
+size_type
+serializeVector<std::string>(const std::vector<std::string>& data, std::ostream& out, sdsl::structure_tree_node* v, std::string name)
+{
+  sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(data));
+  size_type written_bytes = 0;
+
+  size_type data_size = data.size();
+  written_bytes += sdsl::write_member(data_size, out, child, "size");
+
+  for(const std::string& value : data)
+  {
+    written_bytes += sdsl::write_member(value, out, child, "data");
+  }
+
+  sdsl::structure_tree::add_size(child, written_bytes);
+  return written_bytes;
+}
+
+template<>
+void
+loadVector<std::string>(std::vector<std::string>& data, std::istream& in)
+{
+  size_type data_size = 0;
+  sdsl::read_member(data_size, in);
+
+  data.resize(data_size);
+  for(std::string& value : data)
+  {
+    sdsl::read_member(value, in);
+  }
+}
+
 //------------------------------------------------------------------------------
 
 Run::Run(size_type alphabet_size) :

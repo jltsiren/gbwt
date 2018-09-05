@@ -37,15 +37,16 @@ main(int, char**)
 {
   Version::print(std::cout, tool_name);
 
-  size_type failures = 0;
+  TestResults result;
   
   std::cout << "variants.cpp" << std::endl;
-  failures += testVariants();
+  result += testVariants();
 
   std::cout << std::endl;
 
-  if(failures > 0) { std::cout << failures << " test(s) failed" << std::endl; }
-  else { std::cout << "All tests successful" << std::endl; }
+  std::cout << "Executed " << result.tests << " tests";
+  if(result.failures > 0) { std::cout << " (" << result.failures << " failures)"; }
+  std::cout << std::endl;
   std::cout << std::endl;
 
   return 0;

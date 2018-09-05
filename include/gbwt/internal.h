@@ -77,6 +77,53 @@ struct DiskIO
   }
 };
 
+// Serialize an std::vector of integers.
+template<class Element>
+size_type
+serializeVector(const std::vector<Element>& data, std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "")
+{
+  sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(data));
+  size_type written_bytes = 0;
+
+  size_type data_size = data.size();
+  written_bytes += sdsl::write_member(data_size, out, child, "size");
+
+  if(data_size > 0)
+  {
+    sdsl::structure_tree_node* data_node =
+      sdsl::structure_tree::add_child(child, "data", sdsl::util::class_name(data[0]));
+    DiskIO::write(out, data.data(), data_size);
+    sdsl::structure_tree::add_size(data_node, data_size * sizeof(Element));
+    written_bytes += data_size * sizeof(Element);
+  }
+
+  sdsl::structure_tree::add_size(child, written_bytes);
+  return written_bytes;
+}
+
+// Specialization for a vector of strings.
+template<>
+size_type serializeVector<std::string>(const std::vector<std::string>& data, std::ostream& out, sdsl::structure_tree_node* v, std::string name);
+
+// Load an std::vector of integers.
+template<class Element>
+void
+loadVector(std::vector<Element>& data, std::istream& in)
+{
+  size_type data_size = 0;
+  sdsl::read_member(data_size, in);
+
+  data.resize(data_size);
+  if(data_size > 0)
+  {
+    DiskIO::read(in, data.data(), data_size);
+  }
+}
+
+// Specialization for a vector of strings.
+template<>
+void loadVector<std::string>(std::vector<std::string>& data, std::istream& in);
+
 //------------------------------------------------------------------------------
 
 /*

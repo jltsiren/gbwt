@@ -32,6 +32,13 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
+VariantPaths::VariantPaths() :
+  ref_index(16, wang_hash_64)
+{
+  this->path_starts.push_back(0);
+  this->site_starts.push_back(0);
+}
+
 VariantPaths::VariantPaths(size_type reference_size) :
   ref_index(16, wang_hash_64)
 {
@@ -39,6 +46,123 @@ VariantPaths::VariantPaths(size_type reference_size) :
   this->path_starts.push_back(0);
   this->site_starts.push_back(0);
 }
+
+VariantPaths::VariantPaths(const VariantPaths& source)
+{
+  this->copy(source);
+}
+
+VariantPaths::VariantPaths(VariantPaths&& source)
+{
+  *this = std::move(source);
+}
+
+VariantPaths::~VariantPaths()
+{
+}
+
+void
+VariantPaths::swap(VariantPaths& another)
+{
+  if(this != &another)
+  {
+    this->reference.swap(another.reference);
+    this->ref_starts.swap(another.ref_starts);
+    this->ref_ends.swap(another.ref_ends);
+    this->alt_paths.swap(another.alt_paths);
+    this->path_starts.swap(another.path_starts);
+    this->site_starts.swap(another.site_starts);
+
+    this->phasing_files.swap(another.phasing_files);
+    this->file_offsets.swap(another.file_offsets);
+    this->file_counts.swap(another.file_counts);
+
+    this->ref_index.swap(another.ref_index);
+  }
+}
+
+VariantPaths&
+VariantPaths::operator=(const VariantPaths& source)
+{
+  if(this != &source) { this->copy(source); }
+  return *this;
+}
+
+VariantPaths&
+VariantPaths::operator=(VariantPaths&& source)
+{
+  if(this != &source)
+  {
+    this->reference = std::move(source.reference);
+    this->ref_starts = std::move(source.ref_starts);
+    this->ref_ends = std::move(source.ref_ends);
+    this->alt_paths = std::move(source.alt_paths);
+    this->path_starts = std::move(source.path_starts);
+    this->site_starts = std::move(source.site_starts);
+
+    this->phasing_files = std::move(source.phasing_files);
+    this->file_offsets = std::move(source.file_offsets);
+    this->file_counts = std::move(source.file_counts);
+
+    this->ref_index = std::move(source.ref_index);
+  }
+  return *this;
+}
+
+size_type
+VariantPaths::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
+{
+  sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
+  size_type written_bytes = 0;
+
+  written_bytes += serializeVector(this->reference, out, child, "reference");
+  written_bytes += serializeVector(this->ref_starts, out, child, "ref_starts");
+  written_bytes += serializeVector(this->ref_ends, out, child, "ref_ends");
+  written_bytes += serializeVector(this->alt_paths, out, child, "alt_paths");
+  written_bytes += serializeVector(this->path_starts, out, child, "path_starts");
+  written_bytes += serializeVector(this->site_starts, out, child, "site_starts");
+
+  written_bytes += serializeVector(this->phasing_files, out, child, "phasing_files");
+  written_bytes += serializeVector(this->file_offsets, out, child, "file_offsets");
+  written_bytes += serializeVector(this->file_counts, out, child, "file_counts");
+
+  sdsl::structure_tree::add_size(child, written_bytes);
+  return written_bytes;
+}
+
+void
+VariantPaths::load(std::istream& in)
+{
+  loadVector(this->reference, in);
+  loadVector(this->ref_starts, in);
+  loadVector(this->ref_ends, in);
+  loadVector(this->alt_paths, in);
+  loadVector(this->path_starts, in);
+  loadVector(this->site_starts, in);
+
+  loadVector(this->phasing_files, in);
+  loadVector(this->file_offsets, in);
+  loadVector(this->file_counts, in);
+}
+
+void
+VariantPaths::copy(const VariantPaths& source)
+{
+  this->reference = source.reference;
+  this->ref_starts = source.ref_starts;
+  this->ref_ends = source.ref_ends;
+  this->alt_paths = source.alt_paths;
+  this->path_starts = source.path_starts;
+  this->site_starts = source.site_starts;
+
+  this->phasing_files = source.phasing_files;
+  this->file_offsets = source.file_offsets;
+  this->file_counts = source.file_counts;
+
+  this->ref_index = source.ref_index;
+}
+
+//------------------------------------------------------------------------------
 
 void
 VariantPaths::indexReference()
@@ -72,6 +196,14 @@ VariantPaths::addAllele(const vector_type& path)
   this->alt_paths.insert(this->alt_paths.end(), path.begin(), path.end());
   this->path_starts.push_back(this->alt_paths.size());
   this->site_starts.back() = this->path_starts.size() - 1;
+}
+
+void
+VariantPaths::addFile(const std::string& filename, size_type sample_offset, size_type sample_count)
+{
+  this->phasing_files.push_back(filename);
+  this->file_offsets.push_back(sample_offset);
+  this->file_counts.push_back(sample_count);
 }
 
 void
@@ -370,9 +502,38 @@ const std::string PhasingInformation::TEMP_FILE_PREFIX = "phasing";
 
 PhasingInformation::PhasingInformation(size_type first_sample, size_type num_samples) :
   sample_count(num_samples), sample_offset(first_sample), site_count(0),
-  filename(TempFile::getName(TEMP_FILE_PREFIX)), data(filename, std::ios::out),
+  filename(TempFile::getName(TEMP_FILE_PREFIX)), data(filename, std::ios::out), temp_file(true),
   site(0), data_offset(0), phasings(sample_count)
 {
+}
+
+PhasingInformation::PhasingInformation(const std::string& base_name, size_type first_sample, size_type num_samples) :
+  sample_count(num_samples), sample_offset(first_sample), site_count(0),
+  filename(base_name + '_' + std::to_string(first_sample) + '_' + std::to_string(num_samples)),
+  data(filename, std::ios::out), temp_file(false),
+  site(0), data_offset(0), phasings(sample_count)
+{
+}
+
+PhasingInformation::PhasingInformation(const VariantPaths& variants, size_type file)
+{
+  if(file >= variants.files())
+  {
+    std::cerr << "PhasingInformation::PhasingInformation(): Invalid file number: " << file << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+
+  this->sample_count = variants.count(file);
+  this->sample_offset = variants.offset(file);
+  this->site_count = variants.sites();
+
+  this->filename = variants.name(file);
+  this->data = sdsl::int_vector_buffer<8>(this->filename, std::ios::in);
+  this->temp_file = false;
+
+  this->site = 0;
+  this->data_offset = 0;
+  this->phasings = std::vector<Phasing>(this->sample_count);
 }
 
 PhasingInformation::PhasingInformation(PhasingInformation&& source)
@@ -383,7 +544,7 @@ PhasingInformation::PhasingInformation(PhasingInformation&& source)
 PhasingInformation::~PhasingInformation()
 {
   this->close();
-  TempFile::remove(this->filename);
+  if(this->temp_file) { TempFile::remove(this->filename); }
 }
 
 PhasingInformation&
@@ -586,6 +747,18 @@ generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
   phasings.close();
 }
 
+void
+generateHaplotypes(const VariantPaths& variants,
+                   std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output,
+                   std::function<bool(size_type, size_type)> report_overlap)
+{
+  for(size_type file = 0; file < variants.files(); file++)
+  {
+    PhasingInformation phasings(variants, file);
+    generateHaplotypes(variants, phasings, process_sample, output, report_overlap);
+  }
+}
+
 //------------------------------------------------------------------------------
 
 std::ostream&
@@ -597,7 +770,7 @@ operator<< (std::ostream& out, vector_type& data)
   return out;
 }
 
-size_type
+TestResults
 testVariants(const std::string& test_name,
              const vector_type& reference, const std::vector<range_type>& sites,
              const std::vector<std::vector<vector_type>>& alleles,
@@ -606,7 +779,7 @@ testVariants(const std::string& test_name,
              bool skip_overlaps,
              const std::vector<vector_type>& true_haplotypes)
 {
-  size_type failures = 0;
+  TestResults result;
 
   // Add the reference.
   VariantPaths variants(reference.size());
@@ -628,35 +801,41 @@ testVariants(const std::string& test_name,
   if(variants.size() != reference.size())
   {
     std::cerr << "testVariants() [" << test_name << "]: VariantPaths: Reference size " << variants.size() << ", expected " << reference.size() << std::endl;
-    failures++;
+    result.failure();
   }
+  result.test();
   if(variants.paths() != allele_count)
   {
     std::cerr << "testVariants() [" << test_name << "]: VariantPaths: Allele count " << variants.paths() << ", expected " << allele_count << std::endl;
-    failures++;
+    result.failure();
   }
+  result.test();
   if(variants.sites() != sites.size())
   {
     std::cerr << "testVariants() [" << test_name << "]: VariantPaths: Site count " << variants.sites() << ", expected " << sites.size() << std::endl;
-    failures++;
+    result.failure();
   }
+  result.test();
   for(size_type site = 0; site < sites.size(); site++)
   {
     if(variants.alleles(site) != alleles[site].size())
     {
       std::cerr << "testVariants() [" << test_name << "]: VariantPaths: Site " << site << ": Allele count " << variants.alleles(site) << ", expected " << alleles[site].size() << std::endl;
-      failures++;
+      result.failure();
     }
+    result.test();
     if(variants.refStart(site) != sites[site].first)
     {
       std::cerr << "testVariants() [" << test_name << "]: VariantPaths: Site " << site << ": Start " << variants.refStart(site) << ", expected " << sites[site].first << std::endl;
-      failures++;
+      result.failure();
     }
+    result.test();
     if(variants.refEnd(site) != sites[site].second)
     {
       std::cerr << "testVariants() [" << test_name << "]: VariantPaths: Site " << site << ": End " << variants.refEnd(site) << ", expected " << sites[site].second << std::endl;
-      failures++;
+      result.failure();
     }
+    result.test();
   }
 
   // Test the reference index.
@@ -666,14 +845,16 @@ testVariants(const std::string& test_name,
     if(variants.firstOccurrence(reference[i]) != i)
     {
       std::cerr << "testVariants() [" << test_name << "]: VariantPaths: First occurrence of " << reference[i] << " at " << variants.firstOccurrence(reference[i]) << ", expected " << i << std::endl;
-      failures++;
+      result.failure();
     }
+    result.test();
   }
   if(variants.firstOccurrence(0) != variants.invalid_position())
   {
     std::cerr << "testVariants() [" << test_name << "]: VariantPaths: Reference position found for an invalid node" << std::endl;
-    failures++;
+    result.failure();
   }
+  result.test();
 
   // Create the samples.
   size_type num_samples = phasing_information.front().size();
@@ -687,43 +868,51 @@ testVariants(const std::string& test_name,
   if(!(phasings.isOpen()))
   {
     std::cerr << "testVariants() [" << test_name << "]: PhasingInformation: The file is not open after construction" << std::endl;
-    failures++;
+    result.failure();
   }
+  result.test();
   phasings.close();
   if(phasings.isOpen())
   {
     std::cerr << "testVariants() [" << test_name << "]: PhasingInformation: The file was not properly closed" << std::endl;
-    failures++;
+    result.failure();
   }
+  result.test();
   phasings.open();
   if(!(phasings.isOpen()))
   {
     std::cerr << "testVariants() [" << test_name << "]: PhasingInformation: The file was not properly reopened" << std::endl;
-    failures++;
+    result.failure();
   }
+  result.test();
 
   // Test phasing statistics.
   if(phasings.size() != num_samples)
   {
     std::cerr << "testVariants() [" << test_name << "]: PhasingInformation: Sample count " << phasings.size() << ", expected " << num_samples << std::endl;
-    failures++;
+    result.failure();
   }
+  result.test();
   if(phasings.offset() != first_sample)
   {
     std::cerr << "testVariants() [" << test_name << "]: PhasingInformation: Sample offset " << phasings.offset() << ", expected " << first_sample << std::endl;
-    failures++;
+    result.failure();
   }
+  result.test();
   if(phasings.limit() != first_sample + num_samples)
   {
     std::cerr << "testVariants() [" << test_name << "]: PhasingInformation: Sample limit " << phasings.limit() << ", expected " << (first_sample + num_samples) << std::endl;
-    failures++;
+    result.failure();
   }
+  result.test();
   if(phasings.sites() != phasing_information.size())
   {
     std::cerr << "testVariants() [" << test_name << "]: PhasingInformation: Site count " << phasings.sites() << ", expected " << phasing_information.size() << std::endl;
-    failures++;
+    result.failure();
   }
+  result.test();
 
+  // Generate haplotypes.
   std::vector<vector_type> haplotypes;
   generateHaplotypes(variants, phasings,
     [](size_type) -> bool { return true; },
@@ -731,8 +920,8 @@ testVariants(const std::string& test_name,
     [&skip_overlaps](size_type, size_type) -> bool { return skip_overlaps; });
   if(haplotypes.size() != true_haplotypes.size())
   {
-    std::cerr << "testVariants() [" << test_name << "]: generateHaplotypes(): Expected " << true_haplotypes.size() << " haplotypes, got " << haplotypes.size() << std::endl;
-    failures++;
+    std::cerr << "testVariants() [" << test_name << "]: generateHaplotypes(v, p): Expected " << true_haplotypes.size() << " haplotypes, got " << haplotypes.size() << std::endl;
+    result.failure();
   }
   else
   {
@@ -740,19 +929,73 @@ testVariants(const std::string& test_name,
     {
       if(haplotypes[haplotype] != true_haplotypes[haplotype])
       {
-        std::cerr << "testVariants() [" << test_name << "]: generateHaplotypes(): Haplotype " << haplotype << ": expected " << true_haplotypes[haplotype] << ", got " << haplotypes[haplotype] << std::endl;
-        failures++;
+        std::cerr << "testVariants() [" << test_name << "]: generateHaplotypes(v, p): Haplotype " << haplotype << ": expected " << true_haplotypes[haplotype] << ", got " << haplotypes[haplotype] << std::endl;
+        result.failure();
       }
+      result.test();
     }
   }
+  result.test();
 
-  return failures;
+  // Add a PhasingInformation file to VariantPaths.
+  variants.addFile(phasings.name(), phasings.offset(), phasings.size());
+  if(variants.files() != 1)
+  {
+    std::cerr << "testVariants() [" << test_name << "]: VariantPaths: File count " << variants.files() << ", expected " << 1 << std::endl;
+    result.failure();
+  }
+  result.test();
+  if(variants.name(0) != phasings.name())
+  {
+    std::cerr << "testVariants() [" << test_name << "]: VariantPaths: Phasings file name " << variants.name(0) << ", expected " << phasings.name() << std::endl;
+    result.failure();
+  }
+  result.test();
+  if(variants.offset(0) != phasings.offset())
+  {
+    std::cerr << "testVariants() [" << test_name << "]: VariantPaths: Phasings sample offset " << variants.offset(0) << ", expected " << phasings.offset() << std::endl;
+    result.failure();
+  }
+  result.test();
+  if(variants.count(0) != phasings.size())
+  {
+    std::cerr << "testVariants() [" << test_name << "]: VariantPaths: Phasings sample count " << variants.count(0) << ", expected " << phasings.size() << std::endl;
+    result.failure();
+  }
+  result.test();
+
+  // Generate haplotypes from the added file.
+  haplotypes.clear();
+  generateHaplotypes(variants,
+    [](size_type) -> bool { return true; },
+    [&haplotypes](const Haplotype& haplotype) { haplotypes.push_back(haplotype.path); },
+    [&skip_overlaps](size_type, size_type) -> bool { return skip_overlaps; });
+  if(haplotypes.size() != true_haplotypes.size())
+  {
+    std::cerr << "testVariants() [" << test_name << "]: generateHaplotypes(v): Expected " << true_haplotypes.size() << " haplotypes, got " << haplotypes.size() << std::endl;
+    result.failure();
+  }
+  else
+  {
+    for(size_type haplotype = 0; haplotype < haplotypes.size(); haplotype++)
+    {
+      if(haplotypes[haplotype] != true_haplotypes[haplotype])
+      {
+        std::cerr << "testVariants() [" << test_name << "]: generateHaplotypes(v): Haplotype " << haplotype << ": expected " << true_haplotypes[haplotype] << ", got " << haplotypes[haplotype] << std::endl;
+        result.failure();
+      }
+      result.test();
+    }
+  }
+  result.test();
+
+  return result;
 }
 
-size_type
+TestResults
 testVariants()
 {
-  size_type failures = 0;
+  TestResults result;
 
   // Test the basic functionality.
   vector_type reference = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
@@ -783,7 +1026,7 @@ testVariants()
     { 5, 6, 14, 15, 8, 9, 10 }, // (2, 0, 1)
     { 5, 6, 7, 8, 16, 10}       // (2, 1, 0)
   };
-  failures += testVariants("basic", reference, sites, alleles, first_sample, phasing_information, false, true_haplotypes);
+  result += testVariants("basic", reference, sites, alleles, first_sample, phasing_information, false, true_haplotypes);
 
   // Test genotype string parsing.
   std::vector<std::vector<std::string>> genotypes =
@@ -799,8 +1042,9 @@ testVariants()
       if(Phasing(genotypes[site][sample]) != phasing_information[site][sample])
       {
         std::cerr << "testVariants(): Phasing: Parsing failure: " << genotypes[site][sample] << std::endl;
-        failures++;
+        result.failure();
       }
+      result.test();
     }
   }
 
@@ -810,15 +1054,17 @@ testVariants()
   if(!(unphased.phased) || unphased.first != 0 || unphased.second != 1)
   {
     std::cerr << "testVariants(): Phasing: forcePhased() failed: " << unphased << std::endl;
-    failures++;
+    result.failure();
   }
+  result.test();
   unphased = Phasing(0, 1, false);
   unphased.forcePhased([]() { return true; });
   if(!(unphased.phased) || unphased.first != 1 || unphased.second != 0)
   {
     std::cerr << "testVariants(): Phasing: forcePhased() failed: " << unphased << std::endl;
-    failures++;
+    result.failure();
   }
+  result.test();
 
   // Test overlapping variants.
   sites = { range_type(2, 4), range_type(3, 6), range_type(4, 7) };
@@ -848,7 +1094,7 @@ testVariants()
     { 1, 2, 3, 14, 17, 6, 7, 8, 9, 10 },  // (5, 0, 0)
     { 1, 2, 3, 14, 5, 15, 18, 8, 9, 10 }  // (6, 0, 0)
   };
-  failures += testVariants("overlapping", reference, sites, alleles, first_sample, phasing_information, false, true_haplotypes);
+  result += testVariants("overlapping", reference, sites, alleles, first_sample, phasing_information, false, true_haplotypes);
 
   // Skip overlapping variants.
   true_haplotypes =
@@ -861,9 +1107,9 @@ testVariants()
     { 1, 2, 3, 14, 17, 6, 7, 8, 9, 10 },  // (5, 0, 0)
     { 1, 2, 3, 14, 5, 15, 18, 8, 9, 10 }  // (6, 0, 0)
   };
-  failures += testVariants("skip overlaps", reference, sites, alleles, first_sample, phasing_information, true, true_haplotypes);
+  result += testVariants("skip overlaps", reference, sites, alleles, first_sample, phasing_information, true, true_haplotypes);
 
-  return failures;
+  return result;
 }
 
 //------------------------------------------------------------------------------
