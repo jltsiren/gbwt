@@ -581,6 +581,7 @@ PhasingInformation::operator=(PhasingInformation&& source)
 
     // Transfer the ownership of the file.
     this->filename = source.filename;
+    this->temp_file = source.temp_file;
     source.filename.clear();
     if(open_file) { this->open(); }
 
