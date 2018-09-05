@@ -984,6 +984,11 @@ testVariants(const std::string& test_name,
   }
   result.test();
 
+  // Serialize and load VariantPaths.
+  std::string temp_file_name = TempFile::getName("variants");
+  sdsl::store_to_file(variants, temp_file_name);
+  sdsl::load_from_file(variants, temp_file_name);
+
   // Generate haplotypes from the added file.
   haplotypes.clear();
   generateHaplotypes(variants,
