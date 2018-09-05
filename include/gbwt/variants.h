@@ -149,6 +149,9 @@ public:
   size_type offset(size_type file) const { return this->file_offsets[file]; }
   size_type count(size_type file) const { return this->file_counts[file]; }
 
+  // Node width in bits. If both_orientations is set, check also the reverse of each node.
+  size_type nodeWidth(bool both_orientations) const;
+
 //------------------------------------------------------------------------------
 
   // Construction.

@@ -164,6 +164,25 @@ VariantPaths::copy(const VariantPaths& source)
 
 //------------------------------------------------------------------------------
 
+size_type
+VariantPaths::nodeWidth(bool both_orientations) const
+{
+  node_type max_node = 0;
+  for(auto node : this->reference)
+  {
+    node_type temp = node;
+    max_node = std::max(temp, max_node);
+    if(both_orientations) { max_node = std::max(Node::reverse(temp), max_node); }
+  }
+  for(auto node : this->alt_paths)
+  {
+    node_type temp = node;
+    max_node = std::max(temp, max_node);
+    if(both_orientations) { max_node = std::max(Node::reverse(temp), max_node); }
+  }
+  return bit_length(max_node);
+}
+
 void
 VariantPaths::indexReference()
 {

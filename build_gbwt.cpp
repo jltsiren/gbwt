@@ -29,6 +29,7 @@
 #include <atomic>
 
 #include <gbwt/dynamic_gbwt.h>
+#include <gbwt/variants.h>
 
 using namespace gbwt;
 
@@ -60,9 +61,10 @@ main(int argc, char** argv)
 
   size_type batch_size = DynamicGBWT::INSERT_BATCH_SIZE / MILLION, sample_interval = DynamicGBWT::SAMPLE_INTERVAL;
   bool verify_index = false, both_orientations = false, build_index = true;
+  bool build_from_parse = false, skip_overlaps = false;
   std::string index_base, input_base, output_base;
   int c = 0;
-  while((c = getopt(argc, argv, "b:fi:lo:rs:v")) != -1)
+  while((c = getopt(argc, argv, "b:fi:lo:prs:Sv")) != -1)
   {
     switch(c)
     {
@@ -76,10 +78,14 @@ main(int argc, char** argv)
       build_index = false; break;
     case 'o':
       output_base = optarg; break;
+    case 'p':
+      build_from_parse = true; break;
     case 'r':
       both_orientations = true; break;
     case 's':
       sample_interval = std::stoul(optarg); break;
+    case 'S':
+      skip_overlaps = true; break;
     case 'v':
       verify_index = true; break;
     case '?':
@@ -93,9 +99,9 @@ main(int argc, char** argv)
   size_type input_size = 0;
   if(index_base.empty() && output_base.empty() && input_files == 1) { output_base = argv[optind]; }
   if(input_files == 0 || output_base.empty()) { printUsage(EXIT_FAILURE); }
-  if(verify_index && !(input_files == 1 && index_base.empty()))
+  if(verify_index && !(input_files == 1 && index_base.empty() && !build_from_parse))
   {
-    std::cerr << "build_gbwt: Verification only works with indexes for a single file" << std::endl;
+    std::cerr << "build_gbwt: Verification only works with indexes for a single non-parse file" << std::endl;
     verify_index = false;
   }
   if(!build_index && !verify_index)
@@ -108,7 +114,14 @@ main(int argc, char** argv)
   Version::print(std::cout, tool_name);
 
   if(!(index_base.empty())) { printHeader("Index name"); std::cout << index_base << std::endl; }
-  printHeader("Input files"); std::cout << input_files << std::endl;
+  printHeader("Input files"); std::cout << input_files;
+  if(build_from_parse)
+  {
+    std::cout << " (VCF parses";
+    if(skip_overlaps) { std::cout << "; skipping overlaps"; }
+    std::cout << ")";
+  }
+  std::cout << std::endl;
   printHeader("Output name"); std::cout << output_base << std::endl;
   if(batch_size != 0) { printHeader("Batch size"); std::cout << batch_size << " million" << std::endl; }
   printHeader("Orientation"); std::cout << (both_orientations ? "both" : "forward only") << std::endl;
@@ -130,9 +143,27 @@ main(int argc, char** argv)
     {
       input_base = argv[optind];
       printHeader("Input name"); std::cout << input_base << std::endl;
-      text_buffer_type input(input_base);
-      input_size += input.size() * (both_orientations ? 2 : 1);
-      dynamic_index.insert(input, batch_size * MILLION, both_orientations, sample_interval);
+      if(build_from_parse)
+      {
+        VariantPaths variants;
+        sdsl::load_from_file(variants, input_base);
+        size_type node_width = variants.nodeWidth(both_orientations);
+        size_type old_size = dynamic_index.size();
+        GBWTBuilder builder(node_width, batch_size * MILLION, sample_interval);
+        builder.swapIndex(dynamic_index);
+        generateHaplotypes(variants,
+          [](size_type) -> bool { return true; },
+          [&builder, &both_orientations](const Haplotype& haplotype) { builder.insert(haplotype.path, both_orientations); },
+          [&skip_overlaps](size_type, size_type) -> bool { return skip_overlaps; });
+        builder.swapIndex(dynamic_index);
+        input_size += dynamic_index.size() - old_size;
+      }
+      else
+      {
+        text_buffer_type input(input_base);
+        input_size += input.size() * (both_orientations ? 2 : 1);
+        dynamic_index.insert(input, batch_size * MILLION, both_orientations, sample_interval);
+      }
       optind++;
     }
     std::cout << std::endl;
@@ -191,8 +222,10 @@ printUsage(int exit_code)
   std::cerr << "  -i X  Insert the sequences into an existing index with base name X" << std::endl;
   std::cerr << "  -l    Load an existing index instead of building it" << std::endl;
   std::cerr << "  -o X  Use base name X for output (default: the only input)" << std::endl;
+  std::cerr << "  -p    The input is a parsed VCF file" << std::endl;
   std::cerr << "  -r    Index the sequences also in reverse orientation" << std::endl;
   std::cerr << "  -s N  Sample sequence ids at one out of N positions (default: " << DynamicGBWT::SAMPLE_INTERVAL << "; use 0 for no samples)" << std::endl;
+  std::cerr << "  -S    Skip overlapping variants (use with -p)" << std::endl;
   std::cerr << "  -v    Verify the index after construction" << std::endl;
   std::cerr << std::endl;
 
