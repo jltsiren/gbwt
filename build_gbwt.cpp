@@ -155,6 +155,7 @@ main(int argc, char** argv)
           [](size_type) -> bool { return true; },
           [&builder, &both_orientations](const Haplotype& haplotype) { builder.insert(haplotype.path, both_orientations); },
           [&skip_overlaps](size_type, size_type) -> bool { return skip_overlaps; });
+        builder.finish();
         builder.swapIndex(dynamic_index);
         input_size += dynamic_index.size() - old_size;
       }
