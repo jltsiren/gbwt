@@ -599,7 +599,7 @@ PhasingInformation::open()
 
 void PhasingInformation::close()
 {
-  if(this->isOpen()) { this->data = sdsl::int_vector_buffer<8>(); }
+  if(this->isOpen()) { this->data.close(false); this->data = sdsl::int_vector_buffer<8>(); }
 }
 
 void
