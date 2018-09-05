@@ -30,6 +30,7 @@
 
 #include <functional>
 #include <map>
+#include <set>
 
 namespace gbwt
 {
@@ -293,7 +294,8 @@ void generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasin
                         std::function<bool(size_type, size_type)> report_overlap);
 
 // As above, but use the PhasingInformation files stored in VariantPaths.
-void generateHaplotypes(const VariantPaths& variants,
+// Select a subset of files or use an empty set to indicate all files.
+void generateHaplotypes(const VariantPaths& variants, const std::set<std::string>& phasing_files,
                         std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output,
                         std::function<bool(size_type, size_type)> report_overlap);
 

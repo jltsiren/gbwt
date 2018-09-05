@@ -63,8 +63,9 @@ main(int argc, char** argv)
   bool verify_index = false, both_orientations = false, build_index = true;
   bool build_from_parse = false, skip_overlaps = false;
   std::string index_base, input_base, output_base;
+  std::set<std::string> phasing_files;
   int c = 0;
-  while((c = getopt(argc, argv, "b:fi:lo:prs:Sv")) != -1)
+  while((c = getopt(argc, argv, "b:fi:lo:pP:rs:Sv")) != -1)
   {
     switch(c)
     {
@@ -80,6 +81,8 @@ main(int argc, char** argv)
       output_base = optarg; break;
     case 'p':
       build_from_parse = true; break;
+    case 'P':
+      phasing_files.insert(optarg); break;
     case 'r':
       both_orientations = true; break;
     case 's':
@@ -119,6 +122,7 @@ main(int argc, char** argv)
   {
     std::cout << " (VCF parses";
     if(skip_overlaps) { std::cout << "; skipping overlaps"; }
+    if(!(phasing_files.empty())) { std::cout << "; " << phasing_files.size() << " phasing files selected"; }
     std::cout << ")";
   }
   std::cout << std::endl;
@@ -151,7 +155,7 @@ main(int argc, char** argv)
         size_type old_size = dynamic_index.size();
         GBWTBuilder builder(node_width, batch_size * MILLION, sample_interval);
         builder.swapIndex(dynamic_index);
-        generateHaplotypes(variants,
+        generateHaplotypes(variants, phasing_files,
           [](size_type) -> bool { return true; },
           [&builder, &both_orientations](const Haplotype& haplotype) { builder.insert(haplotype.path, both_orientations); },
           [&skip_overlaps](size_type, size_type) -> bool { return skip_overlaps; });
@@ -224,6 +228,7 @@ printUsage(int exit_code)
   std::cerr << "  -l    Load an existing index instead of building it" << std::endl;
   std::cerr << "  -o X  Use base name X for output (default: the only input)" << std::endl;
   std::cerr << "  -p    The input is a parsed VCF file" << std::endl;
+  std::cerr << "  -P X  Only use the phasing information in file X (use with -p; may repeat)" << std::endl;
   std::cerr << "  -r    Index the sequences also in reverse orientation" << std::endl;
   std::cerr << "  -s N  Sample sequence ids at one out of N positions (default: " << DynamicGBWT::SAMPLE_INTERVAL << "; use 0 for no samples)" << std::endl;
   std::cerr << "  -S    Skip overlapping variants (use with -p)" << std::endl;

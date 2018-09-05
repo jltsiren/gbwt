@@ -542,6 +542,11 @@ PhasingInformation::PhasingInformation(const VariantPaths& variants, size_type f
     std::exit(EXIT_FAILURE);
   }
 
+  if(Verbosity::level >= Verbosity::BASIC)
+  {
+    std::cerr << "PhasingInformation::PhasingInformation(): Opening file " << variants.name(file) << std::endl;
+  }
+
   this->sample_count = variants.count(file);
   this->sample_offset = variants.offset(file);
   this->site_count = variants.sites();
@@ -768,14 +773,17 @@ generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasings,
 }
 
 void
-generateHaplotypes(const VariantPaths& variants,
+generateHaplotypes(const VariantPaths& variants, const std::set<std::string>& phasing_files,
                    std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output,
                    std::function<bool(size_type, size_type)> report_overlap)
 {
   for(size_type file = 0; file < variants.files(); file++)
   {
-    PhasingInformation phasings(variants, file);
-    generateHaplotypes(variants, phasings, process_sample, output, report_overlap);
+    if(phasing_files.empty() || phasing_files.find(variants.name(file)) != phasing_files.end())
+    {
+      PhasingInformation phasings(variants, file);
+      generateHaplotypes(variants, phasings, process_sample, output, report_overlap);
+    }
   }
 }
 
@@ -991,7 +999,8 @@ testVariants(const std::string& test_name,
 
   // Generate haplotypes from the added file.
   haplotypes.clear();
-  generateHaplotypes(variants,
+  std::set<std::string> empty_set;
+  generateHaplotypes(variants, empty_set,
     [](size_type) -> bool { return true; },
     [&haplotypes](const Haplotype& haplotype) { haplotypes.push_back(haplotype.path); },
     [&skip_overlaps](size_type, size_type) -> bool { return skip_overlaps; });
