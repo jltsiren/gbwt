@@ -61,16 +61,18 @@ main(int argc, char** argv)
 
   size_type batch_size = DynamicGBWT::INSERT_BATCH_SIZE / MILLION, sample_interval = DynamicGBWT::SAMPLE_INTERVAL;
   bool verify_index = false, both_orientations = false, build_index = true;
-  bool build_from_parse = false, skip_overlaps = false;
+  bool build_from_parse = false, skip_overlaps = false, check_overlaps = false;
   std::string index_base, input_base, output_base;
   std::set<std::string> phasing_files;
   int c = 0;
-  while((c = getopt(argc, argv, "b:fi:lo:pP:rs:Sv")) != -1)
+  while((c = getopt(argc, argv, "b:cfi:lo:pP:rs:Sv")) != -1)
   {
     switch(c)
     {
     case 'b':
       batch_size = std::stoul(optarg); break;
+    case 'c':
+      check_overlaps = true; break;
     case 'f':
       both_orientations = false; break;
     case 'i':
@@ -121,8 +123,9 @@ main(int argc, char** argv)
   if(build_from_parse)
   {
     std::cout << " (VCF parses";
+    if(check_overlaps) { std::cout << "; checking overlaps"; }
     if(skip_overlaps) { std::cout << "; skipping overlaps"; }
-    if(!(phasing_files.empty())) { std::cout << "; " << phasing_files.size() << " phasing files selected"; }
+    if(!(phasing_files.empty())) { std::cout << "; using " << phasing_files.size() << " phasing files"; }
     std::cout << ")";
   }
   std::cout << std::endl;
@@ -151,6 +154,8 @@ main(int argc, char** argv)
       {
         VariantPaths variants;
         sdsl::load_from_file(variants, input_base);
+        if(check_overlaps) { checkOverlaps(variants, std::cerr, true); }
+        std::set<range_type> overlaps;
         size_type node_width = variants.nodeWidth(both_orientations);
         size_type old_size = dynamic_index.size();
         GBWTBuilder builder(node_width, batch_size * MILLION, sample_interval);
@@ -158,10 +163,22 @@ main(int argc, char** argv)
         generateHaplotypes(variants, phasing_files,
           [](size_type) -> bool { return true; },
           [&builder, &both_orientations](const Haplotype& haplotype) { builder.insert(haplotype.path, both_orientations); },
-          [&skip_overlaps](size_type, size_type) -> bool { return skip_overlaps; });
+          [&skip_overlaps, &check_overlaps, &overlaps](size_type site, size_type allele) -> bool
+          {
+            if(check_overlaps) { overlaps.insert(range_type(site, allele)); }
+            return skip_overlaps;
+          });
         builder.finish();
         builder.swapIndex(dynamic_index);
         input_size += dynamic_index.size() - old_size;
+        if(check_overlaps && !overlaps.empty())
+        {
+          std::cerr << overlaps.size() << " unresolved overlaps:" << std::endl;
+          for(range_type overlap : overlaps)
+          {
+            std::cerr << "- site " << overlap.first << ", allele " << overlap.second << std::endl;
+          }
+        }
       }
       else
       {
@@ -223,6 +240,7 @@ printUsage(int exit_code)
 
   std::cerr << "Usage: build_gbwt [options] input1 [input2 ...]" << std::endl;
   std::cerr << "  -b N  Insert in batches of N million nodes (default: " << (DynamicGBWT::INSERT_BATCH_SIZE / MILLION) << ")" << std::endl;
+  std::cerr << "  -c    Check for overlapping variants in haplotypes (use with -p)" << std::endl;
   std::cerr << "  -f    Index the sequences only in forward orientation (default)" << std::endl;
   std::cerr << "  -i X  Insert the sequences into an existing index with base name X" << std::endl;
   std::cerr << "  -l    Load an existing index instead of building it" << std::endl;
