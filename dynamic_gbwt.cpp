@@ -175,7 +175,7 @@ DynamicGBWT::load(std::istream& in)
       if(current.successor(outrank) != ENDMARKER)
       {
         DynamicRecord& successor = this->record(current.successor(outrank));
-        successor.addIncoming(edge_type(comp, counts[outrank]));
+        successor.addIncoming(edge_type(this->toNode(comp), counts[outrank]));
       }
     }
   }
