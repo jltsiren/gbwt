@@ -235,6 +235,46 @@ struct CompressedRecord
 
 //------------------------------------------------------------------------------
 
+/*
+  CompressedRecord decompressed into an edge array. Good for extracting entire paths,
+  but no support for searching with LF(i, to), LF(range, to), or bdLF().
+*/
+struct DecompressedRecord
+{
+  typedef gbwt::size_type size_type;
+
+  std::vector<edge_type> outgoing;
+  std::vector<edge_type> body;
+
+  DecompressedRecord();
+  explicit DecompressedRecord(const CompressedRecord& source);
+
+  size_type size() const { return this->body.size(); }
+  bool empty() const { return (this->size() == 0); }
+  size_type runs() const; // Expensive.
+  size_type outdegree() const { return this->outgoing.size(); }
+
+  // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
+  edge_type LF(size_type i) const;
+
+  // As above, but also sets 'run_end' to the last offset of the current run.
+  edge_type runLF(size_type i, size_type& run_end) const;
+
+  // Returns BWT[i] within the record.
+  node_type operator[](size_type i) const;
+
+  bool hasEdge(node_type to) const;
+
+  // Maps successor nodes to outranks.
+  rank_type edgeTo(node_type to) const;
+
+  // These assume that 'outrank' is a valid outgoing edge.
+  node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
+  size_type offset(rank_type outrank) const { return this->outgoing[outrank].second; }
+};
+
+//------------------------------------------------------------------------------
+
 struct RecordArray
 {
   typedef gbwt::size_type size_type;

@@ -720,9 +720,8 @@ DynamicGBWT::merge(const GBWT& source, size_type batch_size, size_type sample_in
   this->resize(source.header.offset, source.sigma());
 
   // Insert the sequences in batches.
-  const CompressedRecord& endmarker = source.endmarker();
-  CompressedRecordIterator iter(endmarker);
-  size_type source_id = 0, run_offset = 0;
+  const DecompressedRecord& endmarker = source.endmarker();
+  size_type source_id = 0;
   while(source_id < source.sequences())
   {
     double batch_start = readTimer();
@@ -730,12 +729,8 @@ DynamicGBWT::merge(const GBWT& source, size_type batch_size, size_type sample_in
     std::vector<Sequence> seqs; seqs.reserve(limit - source_id);
     while(source_id < limit)  // Create the new sequence iterators.
     {
-      if(run_offset >= iter->second) { ++iter; run_offset = 0; }
-      else
-      {
-        seqs.push_back(Sequence(endmarker.successor(iter->first), this->sequences(), source_id));
-        this->header.sequences++; source_id++; run_offset++;
-      }
+      seqs.emplace_back(endmarker[source_id], this->sequences(), source_id);
+      this->header.sequences++; source_id++;
     }
     if(Verbosity::level >= Verbosity::EXTENDED)
     {

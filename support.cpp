@@ -540,6 +540,95 @@ CompressedRecord::edgeTo(node_type to) const
 
 //------------------------------------------------------------------------------
 
+DecompressedRecord::DecompressedRecord() :
+  outgoing(), body()
+{
+}
+
+DecompressedRecord::DecompressedRecord(const CompressedRecord& source) :
+  outgoing(source.outgoing), body()
+{
+  // Decompress the body, using outgoing edges as rank buffer.
+  this->body.reserve(source.size());
+  for(CompressedRecordIterator iter(source); !(iter.end()); ++iter)
+  {
+    for(size_type i = 0; i < iter->second; i++)
+    {
+      this->body.emplace_back(this->successor(iter->first), this->offset(iter->first) + i);
+    }
+    this->outgoing[iter->first].second += iter->second;
+  }
+
+  // Reset the ranks of the outgoing edges.
+  this->outgoing = source.outgoing;
+}
+
+size_type
+DecompressedRecord::runs() const
+{
+  if(this->empty()) { return 0; }
+
+  size_type result = 0;
+  node_type prev = invalid_node();
+  for(edge_type edge : body)
+  {
+    if(edge.first != prev) { result++; prev = edge.first; }
+  }
+
+  return result;
+}
+
+edge_type
+DecompressedRecord::LF(size_type i) const
+{
+  if(i >= this->size()) { return invalid_edge(); }
+  return this->body[i];
+}
+
+edge_type
+DecompressedRecord::runLF(size_type i, size_type& run_end) const
+{
+  if(i >= this->size()) { return invalid_edge(); }
+
+  run_end = i;
+  while(run_end + 1 < this->size() && this->body[run_end + 1].first == this->body[i].first) { run_end++; }
+
+  return this->body[i];
+}
+
+node_type
+DecompressedRecord::operator[](size_type i) const
+{
+  if(i >= this->size()) { return ENDMARKER; }
+  return this->body[i].first;
+}
+
+bool
+DecompressedRecord::hasEdge(node_type to) const
+{
+  for(rank_type outrank = 0; outrank < this->outdegree(); outrank++)
+  {
+    if(this->successor(outrank) == to) { return true; }
+  }
+  return false;
+}
+
+rank_type
+DecompressedRecord::edgeTo(node_type to) const
+{
+  rank_type low = 0, high = this->outdegree();
+  while(low < high)
+  {
+    rank_type mid = low + (high - low) / 2;
+    if(this->successor(mid) == to) { return mid; }
+    if(this->successor(mid) > to) { high = mid; }
+    else { low = mid + 1; }
+  }
+  return this->outdegree();
+}
+
+//------------------------------------------------------------------------------
+
 RecordArray::RecordArray() :
   records(0)
 {

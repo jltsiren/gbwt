@@ -168,7 +168,7 @@ public:
   size_type nodeSize(node_type node) const { return this->record(node).size(); }
 
   CompressedRecord record(node_type node) const;
-  const CompressedRecord& endmarker() const { return this->endmarker_record; } // Faster than decompressing it.
+  const DecompressedRecord& endmarker() const { return this->endmarker_record; } // Faster than decompressing it.
 
 //------------------------------------------------------------------------------
 
@@ -194,28 +194,24 @@ public:
   // On error: invalid_offset().
   size_type LF(node_type from, size_type i, node_type to) const
   {
-    if(from == ENDMARKER) { return this->endmarker().LF(i, to); }
     return this->record(from).LF(i, to);
   }
 
   // On error: invalid_offset().
   size_type LF(edge_type position, node_type to) const
   {
-    if(position.first == ENDMARKER) { return this->endmarker().LF(position.second, to); }
     return this->record(position.first).LF(position.second, to);
   }
 
   // On error: Range::empty_range().
   range_type LF(node_type from, range_type range, node_type to) const
   {
-    if(from == ENDMARKER) { return this->endmarker().LF(range, to); }
     return this->record(from).LF(range, to);
   }
 
   // On error: Range::empty_range().
   range_type LF(SearchState state, node_type to) const
   {
-    if(state.node == ENDMARKER) { return this->endmarker().LF(state.range, to); }
     return this->record(state.node).LF(state.range, to);
   }
 
@@ -253,8 +249,8 @@ public:
   RecordArray bwt;
   DASamples   da_samples;
 
-  // Cache the endmarker, because decompressing the record is expensive.
-  CompressedRecord endmarker_record;
+  // Decompress and cache the endmarker, because decompressing it is expensive.
+  DecompressedRecord endmarker_record;
 
 private:
   void copy(const GBWT& source);

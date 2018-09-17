@@ -293,7 +293,7 @@ void
 GBWT::cacheEndmarker()
 {
   if(this->empty()) { return; }
-  this->endmarker_record = this->record(ENDMARKER);
+  this->endmarker_record = DecompressedRecord(this->record(ENDMARKER));
 }
 
 //------------------------------------------------------------------------------
