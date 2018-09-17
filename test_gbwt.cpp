@@ -38,6 +38,7 @@ main(int, char**)
   Version::print(std::cout, tool_name);
 
   TestResults result;
+  Verbosity::set(Verbosity::SILENT);
   
   std::cout << "variants.cpp" << std::endl;
   result += testVariants();
