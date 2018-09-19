@@ -1,9 +1,12 @@
-SDSL_DIR=../sdsl-lite
+SDSL_DIR=../../sdsl-lite
 include $(SDSL_DIR)/Make.helper
+
+GBWT_DIR=..
+LIBRARY=$(GBWT_DIR)/libgbwt.a
 
 # Multithreading with OpenMP.
 PARALLEL_FLAGS=-fopenmp -pthread
-LIBS=-L$(LIB_DIR) -lsdsl -ldivsufsort -ldivsufsort64
+LIBS=-L$(LIB_DIR) -lsdsl -ldivsufsort -ldivsufsort64 -lgtest -lgtest_main
 
 ifeq ($(shell uname -s),Darwin)
     # Our compiler might be clang that lacks -fopenmp support.
@@ -31,38 +34,21 @@ ifeq ($(shell uname -s),Darwin)
 endif
 
 OTHER_FLAGS=$(PARALLEL_FLAGS)
-
-CXX_FLAGS=$(MY_CXX_FLAGS) $(OTHER_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(INC_DIR) -Iinclude
-LIBOBJS=algorithms.o dynamic_gbwt.o files.o gbwt.o internal.o support.o utils.o variants.o
+CXX_FLAGS=$(MY_CXX_FLAGS) $(OTHER_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(INC_DIR) -I$(GBWT_DIR)/include
 SOURCES=$(wildcard *.cpp)
-HEADERS=$(wildcard include/gbwt/*.h)
 OBJS=$(SOURCES:.cpp=.o)
+PROGRAMS=test_variants
 
-LIBRARY=libgbwt.a
-PROGRAMS=prepare_text build_gbwt merge_gbwt benchmark
+all:$(PROGRAMS)
 
-all:$(LIBRARY) $(PROGRAMS)
-
-%.o:%.cpp $(HEADERS)
+%.o:%.cpp $(LIBRARY)
 	$(MY_CXX) $(CXX_FLAGS) -c $<
 
-$(LIBRARY):$(LIBOBJS)
-	ar rcs $@ $(LIBOBJS)
-
-prepare_text:prepare_text.o $(LIBRARY)
+test_variants:test_variants.o $(LIBRARY)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
-build_gbwt:build_gbwt.o $(LIBRARY)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-merge_gbwt:merge_gbwt.o $(LIBRARY)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-benchmark:benchmark.o $(LIBRARY)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-test:$(LIBRARY)
-	cd tests && make test
+test:$(PROGRAMS)
+	$(foreach PROG,$(PROGRAMS),./$(PROG);)
 
 clean:
-	rm -f $(PROGRAMS) $(OBJS) $(LIBRARY)
+	rm -f $(PROGRAMS) $(OBJS)

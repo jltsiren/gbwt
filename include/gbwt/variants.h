@@ -240,6 +240,8 @@ struct PhasingInformation
   size_type            site, data_offset;
   std::vector<Phasing> phasings;
 
+  PhasingInformation();
+
   // Supported by a temporary file.
   PhasingInformation(size_type first_sample, size_type num_samples);
 
@@ -298,20 +300,6 @@ void generateHaplotypes(const VariantPaths& variants, PhasingInformation& phasin
 void generateHaplotypes(const VariantPaths& variants, const std::set<std::string>& phasing_files,
                         std::function<bool(size_type)> process_sample, std::function<void(const Haplotype&)> output,
                         std::function<bool(size_type, size_type)> report_overlap);
-
-struct TestResults
-{
-  size_type tests, failures;
-
-  TestResults() : tests(0), failures(0) {}
-  void test() { this->tests++; }
-  void failure() { this->failures++; }
-
-  void operator+= (TestResults another) { this->tests += another.tests; this->failures += another.failures; }
-};
-
-// Unit tests.
-TestResults testVariants();
 
 //------------------------------------------------------------------------------
 
