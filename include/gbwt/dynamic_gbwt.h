@@ -238,6 +238,10 @@ public:
     return this->record(from).LF(i, to);
   }
 
+  // This version works even when the edge (from, to) does not exist.
+  // On error: invalid_offset().
+  size_type fullLF(node_type from, size_type i, node_type to) const;
+
   // On error: invalid_offset().
   size_type LF(edge_type position, node_type to) const
   {

@@ -206,6 +206,14 @@ DynamicGBWT::samples() const
   return total;
 }
 
+size_type
+DynamicGBWT::fullLF(node_type from, size_type i, node_type to) const
+{
+  const DynamicRecord& from_record = this->record(from);
+  if(from_record.hasEdge(to)) { return from_record.LF(i, to); }
+  else { return this->record(to).countBefore(from); }
+}
+
 //------------------------------------------------------------------------------
 
 void

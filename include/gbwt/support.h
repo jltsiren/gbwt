@@ -159,9 +159,6 @@ struct DynamicRecord
 
 //------------------------------------------------------------------------------
 
-  // Return the first node >= 'from' with an incoming edge to this node.
-  rank_type findFirst(node_type from) const;
-
   // These assume that 'inrank' is a valid incoming edge.
   node_type predecessor(rank_type inrank) const { return this->incoming[inrank].first; }
 #ifdef GBWT_SAVE_MEMORY
@@ -170,6 +167,9 @@ struct DynamicRecord
   size_type& count(rank_type inrank) { return this->incoming[inrank].second; }
 #endif
   size_type count(rank_type inrank) const { return this->incoming[inrank].second; }
+
+  // The sum of count(inrank) for all 'inrank' with predecessor(inrank) < 'from'.
+  size_type countBefore(node_type from) const;
 
   // Increment the count of the incoming edge from 'from'.
   void increment(node_type from);

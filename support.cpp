@@ -310,14 +310,15 @@ DynamicRecord::edgeToLinear(node_type to) const
 
 //------------------------------------------------------------------------------
 
-rank_type
-DynamicRecord::findFirst(node_type from) const
+size_type
+DynamicRecord::countBefore(node_type from) const
 {
-  for(size_type i = 0; i < this->indegree(); i++)
+  size_type result = 0;
+  for(rank_type inrank = 0; inrank < this->indegree() && this->predecessor(inrank) < from; inrank++)
   {
-    if(this->incoming[i].first >= from) { return i; }
+    result += this->count(inrank);
   }
-  return this->indegree();
+  return result;
 }
 
 void
