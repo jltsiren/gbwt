@@ -116,6 +116,7 @@ public:
   std::vector<size_type> locate(SearchState state) const;
 
   vector_type extract(size_type sequence) const { return gbwt::extract(*this, sequence); }
+  vector_type extract(edge_type position) const { return gbwt::extract(*this, position); }
 
 //------------------------------------------------------------------------------
 

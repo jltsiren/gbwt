@@ -244,6 +244,7 @@ struct DecompressedRecord
   typedef gbwt::size_type size_type;
 
   std::vector<edge_type> outgoing;
+  std::vector<edge_type> after; // Outgoing edges after this record.
   std::vector<edge_type> body;
 
   DecompressedRecord();
@@ -272,6 +273,7 @@ struct DecompressedRecord
   // These assume that 'outrank' is a valid outgoing edge.
   node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
   size_type offset(rank_type outrank) const { return this->outgoing[outrank].second; }
+  size_type offsetAfter(rank_type outrank) const { return this->after[outrank].second; }
 };
 
 //------------------------------------------------------------------------------

@@ -541,44 +541,36 @@ CompressedRecord::edgeTo(node_type to) const
 //------------------------------------------------------------------------------
 
 DecompressedRecord::DecompressedRecord() :
-  outgoing(), body()
+  outgoing(), after(), body()
 {
 }
 
 DecompressedRecord::DecompressedRecord(const DynamicRecord& source) :
-  outgoing(source.outgoing), body()
+  outgoing(source.outgoing), after(source.outgoing), body()
 {
-  // Decompress the body, using outgoing edges as rank buffer.
   this->body.reserve(source.size());
   for(run_type run : source.body)
   {
     for(size_type i = 0; i < run.second; i++)
     {
-      this->body.emplace_back(this->successor(run.first), this->offset(run.first) + i);
+      this->body.push_back(this->after[run.first]);
+      this->after[run.first].second++;
     }
-    this->outgoing[run.first].second += run.second;
   }
-
-  // Reset the ranks of the outgoing edges.
-  this->outgoing = source.outgoing;
 }
 
 DecompressedRecord::DecompressedRecord(const CompressedRecord& source) :
-  outgoing(source.outgoing), body()
+  outgoing(source.outgoing), after(source.outgoing), body()
 {
-  // Decompress the body, using outgoing edges as rank buffer.
   this->body.reserve(source.size());
   for(CompressedRecordIterator iter(source); !(iter.end()); ++iter)
   {
     for(size_type i = 0; i < iter->second; i++)
     {
-      this->body.emplace_back(this->successor(iter->first), this->offset(iter->first) + i);
+      this->body.push_back(this->after[iter->first]);
+      this->after[iter->first].second++;
     }
-    this->outgoing[iter->first].second += iter->second;
   }
-
-  // Reset the ranks of the outgoing edges.
-  this->outgoing = source.outgoing;
 }
 
 size_type

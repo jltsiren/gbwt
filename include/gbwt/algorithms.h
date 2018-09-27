@@ -226,13 +226,10 @@ locate(const GBWTType& index, edge_type position)
 
 template<class GBWTType>
 vector_type
-extract(const GBWTType& index, size_type sequence)
+extract(const GBWTType& index, edge_type position)
 {
   vector_type result;
-  if(sequence >= index.sequences()) { return result; }
-
-  edge_type position = index.start(sequence);
-  if(position == invalid_edge()) { return result; }
+  if(position == invalid_edge() || !(index.contains(position))) { return result; }
 
   // No need to check for invalid_edge(), if the initial position is valid.
   while(position.first != ENDMARKER)
@@ -241,6 +238,14 @@ extract(const GBWTType& index, size_type sequence)
     position = index.LF(position);
   }
   return result;
+}
+
+template<class GBWTType>
+vector_type
+extract(const GBWTType& index, size_type sequence)
+{
+  if(sequence >= index.sequences()) { return vector_type(); }
+  return extract(index, index.start(sequence));
 }
 
 //------------------------------------------------------------------------------
