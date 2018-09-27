@@ -208,6 +208,10 @@ public:
     return this->bwt[this->toComp(node)];
   }
 
+  // Expensive, as the endmarker has to be decompressed.
+  // We do not cache the endmarker, as we expect to update it.
+  DecompressedRecord endmarker() const { return DecompressedRecord(this->record(ENDMARKER)); }
+
 //------------------------------------------------------------------------------
 
   /*

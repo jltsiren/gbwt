@@ -545,6 +545,24 @@ DecompressedRecord::DecompressedRecord() :
 {
 }
 
+DecompressedRecord::DecompressedRecord(const DynamicRecord& source) :
+  outgoing(source.outgoing), body()
+{
+  // Decompress the body, using outgoing edges as rank buffer.
+  this->body.reserve(source.size());
+  for(run_type run : source.body)
+  {
+    for(size_type i = 0; i < run.second; i++)
+    {
+      this->body.emplace_back(this->successor(run.first), this->offset(run.first) + i);
+    }
+    this->outgoing[run.first].second += run.second;
+  }
+
+  // Reset the ranks of the outgoing edges.
+  this->outgoing = source.outgoing;
+}
+
 DecompressedRecord::DecompressedRecord(const CompressedRecord& source) :
   outgoing(source.outgoing), body()
 {

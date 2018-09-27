@@ -236,7 +236,7 @@ struct CompressedRecord
 //------------------------------------------------------------------------------
 
 /*
-  CompressedRecord decompressed into an edge array. Good for extracting entire paths,
+  A record decompressed into an edge array. Good for extracting entire paths,
   but no support for searching with LF(i, to), LF(range, to), or bdLF().
 */
 struct DecompressedRecord
@@ -247,6 +247,7 @@ struct DecompressedRecord
   std::vector<edge_type> body;
 
   DecompressedRecord();
+  explicit DecompressedRecord(const DynamicRecord& source);
   explicit DecompressedRecord(const CompressedRecord& source);
 
   size_type size() const { return this->body.size(); }
