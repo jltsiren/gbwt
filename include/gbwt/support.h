@@ -38,7 +38,7 @@ namespace gbwt
 //------------------------------------------------------------------------------
 
 /*
-  A simple encoding between (node id, orientation) <-> node_type. Not used by GBWT itself.
+  A simple encoding between (node id, orientation) <-> node_type.
 */
 struct Node
 {
@@ -52,7 +52,7 @@ struct Node
 };
 
 /*
-  A simple encoding between (path id, orientation) <-> size_type. Not used by GBWT itself.
+  A simple encoding between (path id, orientation) <-> size_type.
 */
 struct Path
 {
