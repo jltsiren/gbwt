@@ -6,6 +6,7 @@ build_gbwt
 merge_gbwt
 benchmark
 
+test_bwtmerge
 test_variants
 
 .DS_Store

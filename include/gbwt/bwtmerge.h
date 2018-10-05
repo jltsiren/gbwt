@@ -68,8 +68,6 @@ public:
   static size_type offset(size_type i) { return i & BLOCK_MASK; }
 
   void clear();
-  void allocateBlock();
-  void clear(size_type block_index);
 
   // Removes the block before block(i).
   void clearUntil(size_type i)
@@ -77,11 +75,13 @@ public:
     if(block(i) > 0) { this->clear(block(i) - 1); }
   }
 
+  // Do not use beyond size().
   value_type operator[](size_type i) const
   {
     return this->data[block(i)][offset(i)];
   }
 
+  // Do not use beyond size().
   value_type& operator[](size_type i)
   {
     return this->data[block(i)][offset(i)];
@@ -103,6 +103,8 @@ public:
 
 private:
   void copy(const BlockArray& source);
+  void allocateBlock();
+  void clear(size_type block_index);
 };  // class BlockArray
 
 //------------------------------------------------------------------------------

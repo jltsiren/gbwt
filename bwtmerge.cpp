@@ -148,7 +148,7 @@ BlockArray::load(std::istream& in)
   {
     this->allocateBlock();
     size_type block_bytes = BLOCK_SIZE;
-    if(i + 1 == this->blocks())
+    if(i + 1 == total_blocks)
     {
       block_bytes = this->size() - data_bytes;
       block_bytes += sizeof(std::uint64_t) - this->size() % sizeof(std::uint64_t);
