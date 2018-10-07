@@ -286,11 +286,6 @@ INSTANTIATE_TEST_CASE_P(SkipOverlaps, VariantTest, ::testing::Values(overlap_ski
 
 //------------------------------------------------------------------------------
 
-// FIXME
-// - create makefile, run tests
-// - remove old tests
-// - update .gitignore, commit
-
 TEST(PhasingTest, ParseGenotypes)
 {
   std::vector<std::vector<std::string>> genotypes =

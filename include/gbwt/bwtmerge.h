@@ -132,35 +132,18 @@ public:
   GapArray(GapArray&& source) { *this = std::move(source); }
   ~GapArray() { }
 
-  // Builds an GapArray from the source vector. The vector is sorted during construction.
+  // Builds a GapArray from the source vector. The vector is sorted during construction.
+  // This constructor requires a specialization for initializing the ByteArray.
   explicit GapArray(std::vector<edge_type>& source)
   {
-    this->value_count = source.size();
-    if(source.empty()) { return; }
-
-    sequentialSort(source.begin(), source.end());
-    edge_type prev(ENDMARKER, 0);
-    for(edge_type value : source) { this->writeValue(value, prev); }
+    std::cerr << "GapArray::GapArray(): Unsupported constructor" << std::endl;
   }
 
   // Merges the input arrays and clears them.
+  // This constructor requires a specialization for initializing the ByteArray.
   GapArray(GapArray& a, GapArray& b)
   {
-    this->value_count = 0;
-    if(a.empty()) { this->swap(b); return; }
-    if(b.empty()) { this->swap(a); return; }
-
-    iterator a_iter(a), b_iter(b);
-    edge_type prev(ENDMARKER, 0);
-    while(!(a_iter.end()) || !(b_iter.end()))
-    {
-      edge_type curr;
-      if(*a_iter <= *b_iter) { curr = *a_iter; ++a_iter; }
-      else { curr = *b_iter; ++b_iter; }
-      this->writeValue(curr, prev);
-    }
-
-    a.clear(); b.clear();
+    std::cerr << "GapArray::GapArray(): Unsupported constructor" << std::endl;
   }
 
   void swap(GapArray& source)
@@ -225,11 +208,12 @@ private:
   }
 };  // class GapArray
 
-void open(GapArray<sdsl::int_vector_buffer<8>>& array, const std::string filename, size_type values);
-
+template<> GapArray<BlockArray>::GapArray(std::vector<edge_type>& source);
+template<> GapArray<BlockArray>::GapArray(GapArray& a, GapArray& b);
 template<> void GapArray<BlockArray>::clear();
 template<> void GapArray<BlockArray>::write(const std::string& filename);
 
+void open(GapArray<sdsl::int_vector_buffer<8>>& array, const std::string filename, size_type values);
 template<> void GapArray<sdsl::int_vector_buffer<8>>::clear();
 
 //------------------------------------------------------------------------------
@@ -281,8 +265,7 @@ private:
   }
 };  // class GapIterator
 
-template<>
-void GapIterator<BlockArray>::read();
+template<> void GapIterator<BlockArray>::read();
 
 //------------------------------------------------------------------------------
 
@@ -312,9 +295,10 @@ public:
   // Iterator operations.
   edge_type operator*() const { return *(this->iterators[0]); }
   void operator++() { ++(this->iterators[0]); this->down(0); }
-  bool end() const { return this->iterators[0].end(); }
+  bool end() const { return (this->empty() || this->iterators[0].end()); }
 
   size_type size() const { return this->filenames.size(); }
+  size_type empty() const { return (this->size() == 0); }
 
   std::vector<std::string> filenames;
   std::vector<size_type>   value_counts;
