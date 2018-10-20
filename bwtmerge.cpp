@@ -330,4 +330,85 @@ RankArray::heapify()
 
 //------------------------------------------------------------------------------
 
+void
+produce(RankArrayBuffer* buffer)
+{
+  while(!(buffer->fill()));
+}
+
+RankArrayBuffer::RankArrayBuffer(RankArray& data) :
+  array(data), finished(data.empty()),
+  offset(0)
+{
+  this->producer_buffer.reserve(BUFFER_SIZE);
+  this->consumer_buffer.reserve(BUFFER_SIZE);
+
+  this->array.open();
+  this->producer_thread = std::thread(produce, this);
+  this->read();
+}
+
+RankArrayBuffer::~RankArrayBuffer()
+{
+  // Stop the producer thread.
+  this->mtx.lock();
+  this->finished = true;
+  this->mtx.unlock();
+  if(this->producer_thread.joinable()) { this->producer_thread.join(); }
+
+  this->array.close();
+}
+
+bool
+RankArrayBuffer::producerEnd()
+{
+  std::unique_lock<std::mutex> lock(this->mtx);
+  return (this->finished && this->producer_buffer.empty());
+}
+
+bool
+RankArrayBuffer::fill()
+{
+  // We need the mutex and producer_buffer must be empty.
+  std::unique_lock<std::mutex> lock(this->mtx);
+  this->empty.wait(lock, [this]() { return producer_buffer.empty(); });
+
+  return this->forceFill();
+}
+
+bool
+RankArrayBuffer::forceFill()
+{
+  if(this->finished) { return true; }
+
+  while(this->producer_buffer.size() < BUFFER_SIZE && !(this->array.end()))
+  {
+    this->producer_buffer.push_back(*(this->array)); ++(this->array);
+  }
+
+  if(this->array.end()) { this->finished = true; }
+  return this->finished;
+}
+
+void
+RankArrayBuffer::read()
+{
+  std::unique_lock<std::mutex> lock(this->mtx);
+  this->forceRead();
+  this->empty.notify_one();
+}
+
+void
+RankArrayBuffer::forceRead()
+{
+  if(this->producer_buffer.empty())
+  {
+    this->forceFill();
+  }
+  this->consumer_buffer.swap(this->producer_buffer);
+  this->producer_buffer.clear();
+}
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwt

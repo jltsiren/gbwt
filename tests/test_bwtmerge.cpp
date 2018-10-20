@@ -35,6 +35,24 @@ namespace
 
 //------------------------------------------------------------------------------
 
+void
+initLargeArray(std::vector<edge_type>& large_array, size_type seed = 0xDEADBEEF)
+{
+  constexpr size_type TOTAL_VALUES = 2 * BlockArray::BLOCK_SIZE;
+  constexpr size_type NODES = MILLION;
+  constexpr size_type OFFSETS = 1000;
+
+  large_array.clear();
+  large_array.reserve(TOTAL_VALUES);
+  std::mt19937_64 rng(seed);
+  for(size_type i = 0; i < TOTAL_VALUES; i++)
+  {
+    large_array.emplace_back(rng() % NODES, rng() % OFFSETS);
+  }
+}
+
+//------------------------------------------------------------------------------
+
 class BlockArrayTest : public ::testing::Test
 {
 public:
@@ -237,21 +255,6 @@ public:
     };
   }
 
-  void initLargeArray()
-  {
-    constexpr size_type TOTAL_VALUES = 2 * BlockArray::BLOCK_SIZE;
-    constexpr size_type NODES = MILLION;
-    constexpr size_type OFFSETS = 1000;
-
-    this->large_array.clear();
-    this->large_array.reserve(TOTAL_VALUES);
-    std::mt19937_64 rng(0xDEADBEEF);
-    for(size_type i = 0; i < TOTAL_VALUES; i++)
-    {
-      this->large_array.emplace_back(rng() % NODES, rng() % OFFSETS);
-    }
-  }
-
   static void buildAndCheckArray(const std::vector<edge_type>& values, const std::string& test_name)
   {
     std::vector<edge_type> buffer = values;
@@ -341,7 +344,7 @@ TEST_F(GapArrayTest, Merge)
 TEST_F(GapArrayTest, Large)
 {
   // Create and check GapArray.
-  initLargeArray();
+  initLargeArray(large_array);
   GapArray<BlockArray> array(large_array);
   checkArray(array, large_array, "Large");
 
@@ -375,22 +378,50 @@ public:
     };
   }
 
+  static void addFile(RankArray& array, const std::vector<edge_type>& values)
+  {
+    std::vector<edge_type> buffer = values;
+    GapArray<BlockArray> data(buffer);
+    array.addFile(data);
+  }
+
   static void checkArray(RankArray& array, const std::vector<edge_type>& values, const std::string& test_name)
   {
     std::vector<edge_type> correct_values = values;
     sequentialSort(correct_values.begin(), correct_values.end());
 
+    bool early_end = false;
     size_type wrong_values = 0;
     array.open();
     for(size_type i = 0; i < correct_values.size(); i++)
     {
-      ASSERT_FALSE(array.end()) << test_name << ": Array is too small";
+      if(array.end()) { early_end = true; break; }
       if(*array != correct_values[i]) { wrong_values++; }
       ++array;
     }
-    ASSERT_TRUE(array.end()) << test_name << ": Array is too large";
+    EXPECT_FALSE(early_end) << test_name << ": Array is too small";
+    EXPECT_TRUE(array.end()) << test_name << ": Array is too large";
     EXPECT_EQ(wrong_values, 0u) << test_name << ": " << wrong_values << " wrong values";
     array.close();
+  }
+
+  static void checkBuffer(RankArray& array, const std::vector<edge_type>& values, const std::string& test_name)
+  {
+    std::vector<edge_type> correct_values = values;
+    parallelQuickSort(correct_values.begin(), correct_values.end());
+
+    bool early_end = false;
+    size_type wrong_values = 0;
+    RankArrayBuffer buffer(array);
+    for(size_type i = 0; i < correct_values.size(); i++)
+    {
+      if(buffer.end()) { early_end = true; break; }
+      if(*buffer != correct_values[i]) { wrong_values++; }
+      ++buffer;
+    }
+    EXPECT_FALSE(early_end) << test_name << ": Array is too small";
+    EXPECT_TRUE(buffer.end()) << test_name << ": Array is too large";
+    EXPECT_EQ(wrong_values, 0u) << test_name << ": " << wrong_values << " wrong values";
   }
 };
 
@@ -398,25 +429,42 @@ TEST_F(RankArrayTest, BasicTests)
 {
   // Empty array.
   std::vector<edge_type> empty_values;
-  RankArray empty_array;
-  checkArray(empty_array, empty_values, "Empty");
+  RankArray array;
+  checkArray(array, empty_values, "Empty");
 
   // Single file.
-  GapArray<BlockArray> single_array(first);
-  RankArray single_file;
-  single_file.addFile(single_array);
-  checkArray(single_file, first, "Single");
+  addFile(array, first);
+  checkArray(array, first, "Single");
 
   // Multiple files.
-  GapArray<BlockArray> first_array(first);
-  GapArray<BlockArray> second_array(first);
   std::vector<edge_type> correct_values;
   correct_values.insert(correct_values.end(), first.begin(), first.end());
-  correct_values.insert(correct_values.end(), first.begin(), first.end());
-  RankArray multiple_files;
-  multiple_files.addFile(first_array);
-  multiple_files.addFile(second_array);
-  checkArray(multiple_files, correct_values, "Multiple");
+  correct_values.insert(correct_values.end(), second.begin(), second.end());
+  addFile(array, second);
+  checkArray(array, correct_values, "Multiple");
+}
+
+TEST_F(RankArrayTest, RankArrayBuffer)
+{
+  // Empty array.
+  std::vector<edge_type> correct_values;
+  RankArray array;
+  checkBuffer(array, correct_values, "Empty");
+
+  // Single file.
+  std::vector<edge_type> data;
+  initLargeArray(data);
+  addFile(array, data);
+  correct_values.insert(correct_values.end(), data.begin(), data.end());
+  data.clear();
+  checkBuffer(array, correct_values, "Single");
+
+  // Multiple files.
+  initLargeArray(data, 0x42424242);
+  addFile(array, data);
+  correct_values.insert(correct_values.end(), data.begin(), data.end());
+  data.clear();
+  checkBuffer(array, correct_values, "Multiple");
 }
 
 //------------------------------------------------------------------------------

@@ -26,6 +26,10 @@
 #ifndef GBWT_BWTMERGE_H
 #define GBWT_BWTMERGE_H
 
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+
 #include <gbwt/internal.h>
 
 namespace gbwt
@@ -286,7 +290,7 @@ public:
   RankArray();
   ~RankArray();
 
-  // Also clears the array. Do not call after opening the RankArray.
+  // Also clears the array. Do not call when the array is open.
   void addFile(GapArray<BlockArray>& array);
 
   void open();
@@ -334,7 +338,71 @@ private:
   void heapify();
 
   RankArray(const RankArray&) = delete;
-  RankArray& operator= (const RankArray&) = delete;
+  RankArray& operator=(const RankArray&) = delete;
+};
+
+//------------------------------------------------------------------------------
+
+/*
+  An iterator that scans RankArray in a background thread and buffers the results for
+  the main thread. More like gcsa::ReadBuffer than bwtmerge::RABuffer. The constructor
+  opens the RankArray and the destructor closes it.
+*/
+
+class RankArrayBuffer
+{
+public:
+  constexpr static size_type BUFFER_SIZE = MEGABYTE;  // Positions.
+
+  RankArrayBuffer(RankArray& data);
+  ~RankArrayBuffer();
+
+  // Producer thread.
+  RankArray&              array;
+  std::vector<edge_type>  producer_buffer;
+  bool                    finished;
+
+  // Consumer thread.
+  std::vector<edge_type>  consumer_buffer;
+  size_type               offset;
+
+  // Multithreading.
+  std::mutex              mtx;   // For producer data.
+  std::condition_variable empty; // Is producer_buffer empty?
+  std::thread             producer_thread;
+
+  // Iterator operations.
+  edge_type operator*() const { return this->consumer_buffer[this->offset]; }
+  void operator++()
+  {
+    this->offset++;
+    if(this->bufferEnd()) { this->read(); this->offset = 0; }
+  }
+  bool end() { return (this->bufferEnd() && this->producerEnd()); }
+
+private:
+  bool bufferEnd() const { return (this->offset >= this->consumer_buffer.size()); }
+  bool producerEnd(); // Grabs the mutex to determine if there is no more data after consumer_buffer.
+
+  /*
+    Fill producer_buffer and return finished. The second version assumes that the current
+    thread holds the mutex and that producer_buffer is empty.
+  */
+  bool fill();
+  bool forceFill();
+
+  /*
+    Swap the buffers and clear producer_buffer. The second version assumes that the current
+    thread holds the mutex. Both assume that consumer_buffer is empty.
+  */
+  void read();
+  void forceRead();
+
+  // Producer thread.
+  friend void produce(RankArrayBuffer* buffer);
+
+  RankArrayBuffer(const RankArrayBuffer&) = delete;
+  RankArrayBuffer& operator=(const RankArrayBuffer&) = delete;
 };
 
 //------------------------------------------------------------------------------

@@ -51,7 +51,7 @@ test_variants:test_variants.o $(LIBRARY)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 test:$(PROGRAMS)
-	$(foreach PROG,$(PROGRAMS),./$(PROG);)
+	$(foreach PROG,$(PROGRAMS),./$(PROG) || exit 1;)
 
 clean:
 	rm -f $(PROGRAMS) $(OBJS)
