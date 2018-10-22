@@ -379,6 +379,34 @@ private:
 
 //------------------------------------------------------------------------------
 
+struct MergeParameters
+{
+  constexpr static size_type POS_BUFFER_SIZE = 64; // Megabytes.
+  constexpr static size_type THREAD_BUFFER_SIZE = 256; // Megabytes.
+  constexpr static size_type MERGE_BUFFERS = 6;
+  constexpr static size_type CHUNK_SIZE = 1; // Sequences per thread.
+
+  constexpr static size_type MAX_BUFFER_SIZE = 16384; // Megabytes.
+  constexpr static size_type MAX_MERGE_BUFFERS = 16;
+
+  MergeParameters();
+
+  void setPosBufferSize(size_type megabytes);
+  void setThreadBufferSize(size_type megabytes);
+  void setMergeBuffers(size_type n);
+  void setChunkSize(size_type n);
+
+  // These return the sizes in positions/bytes.
+  size_type getPosBufferSize() const { return (this->pos_buffer_size * MEGABYTE) / sizeof(edge_type); }
+  size_type getThreadBufferSize() const { return this->thread_buffer_size * MEGABYTE; }
+
+  size_type pos_buffer_size, thread_buffer_size;
+  size_type merge_buffers;
+  size_type chunk_size;
+};
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwt
 
 #endif // GBWT_SUPPORT_H

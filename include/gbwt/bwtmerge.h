@@ -407,6 +407,50 @@ private:
 
 //------------------------------------------------------------------------------
 
+/*
+  A structure for building the RankArray object. A search thread can call insert() when it wants
+  to merge its pos_buffer into the other buffers.
+
+  1) First we merge pos_buffer with thread_buffer and clear it.
+  2) If thread_buffer is small enough, insert() returns unless force_merge is set.
+  3) We merge thread_buffer with the global merge buffers until there is an empty slot
+     or we run out of merge buffers.
+  4) If there is an empty slot, we insert thread_buffer there. Otherwise we write it to a file
+     and add the file into the RankArray. In either case, we clear the thread_buffer.
+*/
+
+class MergeBuffers
+{
+public:
+  typedef GapArray<BlockArray> buffer_type;
+
+  MergeBuffers(size_type expected_size, const MergeParameters& params);
+  ~MergeBuffers();
+
+  MergeParameters parameters;
+
+  std::mutex               buffer_lock;
+  std::vector<buffer_type> merge_buffers;
+
+  std::mutex ra_lock;
+  RankArray  ra;
+  size_type  ra_values, ra_bytes;
+  size_type  final_size;
+
+  std::mutex stderr_access;
+
+  void insert(std::vector<edge_type>& pos_buffer, buffer_type& thread_buffer, bool force_merge);
+  void flush();
+
+private:
+  void write(buffer_type& buffer);
+
+  MergeBuffers(const RankArrayBuffer&) = delete;
+  MergeBuffers& operator=(const RankArrayBuffer&) = delete;
+};
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwt
 
 #endif // GBWT_BWTMERGE_H

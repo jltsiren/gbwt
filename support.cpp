@@ -1130,4 +1130,36 @@ DASamples::limit(size_type rank) const
 
 //------------------------------------------------------------------------------
 
+MergeParameters::MergeParameters() :
+  pos_buffer_size(POS_BUFFER_SIZE), thread_buffer_size(THREAD_BUFFER_SIZE),
+  merge_buffers(MERGE_BUFFERS), chunk_size(CHUNK_SIZE)
+{
+}
+
+void
+MergeParameters::setPosBufferSize(size_type megabytes)
+{
+  this->pos_buffer_size = Range::bound(megabytes, 1, MAX_BUFFER_SIZE);
+}
+
+void
+MergeParameters::setThreadBufferSize(size_type megabytes)
+{
+  this->thread_buffer_size = Range::bound(megabytes, 1, MAX_BUFFER_SIZE);
+}
+
+void
+MergeParameters::setMergeBuffers(size_type n)
+{
+  this->merge_buffers = Range::bound(n, 1, MAX_MERGE_BUFFERS);
+}
+
+void
+MergeParameters::setChunkSize(size_type n)
+{
+  this->chunk_size = std::max(n, static_cast<size_type>(1));
+}
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwt

@@ -411,4 +411,108 @@ RankArrayBuffer::forceRead()
 
 //------------------------------------------------------------------------------
 
+MergeBuffers::MergeBuffers(size_type expected_size, const MergeParameters& params) :
+  parameters(params),
+  merge_buffers(params.merge_buffers),
+  ra_values(0), ra_bytes(0), final_size(expected_size)
+{
+}
+
+MergeBuffers::~MergeBuffers()
+{
+}
+
+void
+MergeBuffers::insert(std::vector<edge_type>& pos_buffer, buffer_type& thread_buffer, bool force_merge)
+{
+  // Compress pos_buffer.
+  buffer_type temp_buffer(pos_buffer); pos_buffer.clear();
+
+  // Merge it into thread_buffer.
+  thread_buffer = buffer_type(thread_buffer, temp_buffer);
+  if(!force_merge && thread_buffer.bytes() < this->parameters.thread_buffer_size) { return; }
+
+  if(Verbosity::level >= Verbosity::FULL)
+  {
+    std::lock_guard<std::mutex> lock(this->stderr_access);
+    std::cerr << "MergeBuffers::insert(): Thread " << omp_get_thread_num() << ": Inserting "
+              << thread_buffer.size() << " values to the merge buffers" << std::endl;
+  }
+
+  // Merge with the existing merge buffers until we find an empty slot.
+  for(size_type i = 0; i < this->merge_buffers.size(); i++)
+  {
+    {
+      std::lock_guard<std::mutex> lock(this->buffer_lock);
+      if(this->merge_buffers[i].empty())
+      {
+        thread_buffer.swap(this->merge_buffers[i]);
+        if(Verbosity::level >= Verbosity::FULL)
+        {
+          std::lock_guard<std::mutex> lock(this->stderr_access);
+          std::cerr << "MergeBuffers::insert(): Thread " << omp_get_thread_num()
+                    << ": Inserted the values to buffer " << i << std::endl;
+        }
+        return;
+      }
+      else
+      {
+        temp_buffer.swap(this->merge_buffers[i]);
+      }
+    }
+    thread_buffer = buffer_type(thread_buffer, temp_buffer);
+  }
+
+  // All slots were full, write the merged buffer to a file.
+  this->write(thread_buffer);
+}
+
+void
+MergeBuffers::flush()
+{
+  for(size_type i = 1; i < this->merge_buffers.size(); i++)
+  {
+    this->merge_buffers[i] = buffer_type(this->merge_buffers[i], this->merge_buffers[i - 1]);
+  }
+  if(Verbosity::level >= Verbosity::EXTENDED)
+  {
+    std::lock_guard<std::mutex> lock(this->stderr_access);
+    std::cerr << "buildRA(): Flushing " << this->merge_buffers.back().size() << " values to disk" << std::endl;
+  }
+  this->write(this->merge_buffers.back());
+}
+
+void
+MergeBuffers::write(buffer_type& buffer)
+{
+  if(buffer.empty()) { return; }
+
+  std::string filename;
+  size_type buffer_values = buffer.size(), buffer_bytes = buffer.bytes();
+  {
+    std::lock_guard<std::mutex> lock(this->ra_lock);
+    this->ra.addFile(buffer);
+  }
+  buffer.write(filename); buffer.clear();
+
+  double ra_done, ra_gb;
+  {
+    std::lock_guard<std::mutex> lock(this->ra_lock);
+    this->ra_values += buffer_values;
+    this->ra_bytes += buffer_bytes + sizeof(size_type);
+    ra_done = (100.0 * this->ra_values) / this->final_size;
+    ra_gb = inGigabytes(this->ra_bytes);
+  }
+
+  if(Verbosity::level >= Verbosity::EXTENDED)
+  {
+    std::lock_guard<std::mutex> lock(this->stderr_access);
+    std::cerr << "MergeBuffers::write(): Thread " << omp_get_thread_num()
+              << ": Wrote " << buffer_values << " values to the rank array" << std::endl;
+    std::cerr << "MergeBuffers::write(): " << ra_done << "% done; RA size " << ra_gb << " GB" << std::endl;
+  }
+}
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwt
