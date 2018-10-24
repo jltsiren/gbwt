@@ -171,6 +171,9 @@ struct DynamicRecord
   // The sum of count(inrank) for all 'inrank' with predecessor(inrank) < 'from'.
   size_type countBefore(node_type from) const;
 
+  // The sum of count(inrank) for all 'inrank' with predecessor(inrank) <= 'from'.
+  size_type countUntil(node_type from) const;
+
   // Increment the count of the incoming edge from 'from'.
   void increment(node_type from);
 

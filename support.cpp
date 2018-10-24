@@ -321,6 +321,17 @@ DynamicRecord::countBefore(node_type from) const
   return result;
 }
 
+size_type
+DynamicRecord::countUntil(node_type from) const
+{
+  size_type result = 0;
+  for(rank_type inrank = 0; inrank < this->indegree() && this->predecessor(inrank) <= from; inrank++)
+  {
+    result += this->count(inrank);
+  }
+  return result;
+}
+
 void
 DynamicRecord::increment(node_type from)
 {

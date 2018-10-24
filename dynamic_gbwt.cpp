@@ -24,7 +24,7 @@
 */
 
 #include <gbwt/dynamic_gbwt.h>
-#include <gbwt/internal.h>
+#include <gbwt/bwtmerge.h>
 
 namespace gbwt
 {
@@ -209,9 +209,10 @@ DynamicGBWT::samples() const
 size_type
 DynamicGBWT::fullLF(node_type from, size_type i, node_type to) const
 {
-  const DynamicRecord& from_record = this->record(from);
-  if(from_record.hasEdge(to)) { return from_record.LF(i, to); }
-  else { return this->record(to).countBefore(from); }
+  if(to == ENDMARKER) { return invalid_offset(); }
+  else if(!(this->contains(to))) { return 0; }
+  else if(!(this->hasEdge(from, to))) { return this->record(to).countBefore(from); }
+  else { return this->record(from).LF(i, to); }
 }
 
 //------------------------------------------------------------------------------
@@ -761,6 +762,43 @@ DynamicGBWT::merge(const GBWT& source, size_type batch_size, size_type sample_in
     double seconds = readTimer() - start;
     std::cerr << "DynamicGBWT::merge(): Inserted " << source.sequences() << " sequences of total length "
               << source.size() << " in " << seconds << " seconds" << std::endl;
+  }
+}
+
+//------------------------------------------------------------------------------
+
+/*
+  Builds the rank array of 'right' relative to 'left'. When the rank array RA is sorted, we
+  know that there will be RA[i] characters from left_BWT before right_BWT[i].
+
+  We assume that 'buffers' has been set to use the same number of threads as OpenMP. The
+  sequences from 'right' will get identifiers after those from 'left'.
+*/
+
+void
+buildRA(const DynamicGBWT& left, const DynamicGBWT& right, MergeBuffers& buffers)
+{
+  DecompressedRecord right_endmarker = right.endmarker();
+
+  #pragma omp parallel for schedule(dynamic, buffers.parameters.chunk_size)
+  for(size_type sequence = 0; sequence < right.sequences(); sequence++)
+  {
+    // The new sequence will be after all existing sequences in 'left'.
+    size_type thread = omp_get_thread_num();
+    buffers.insert(edge_type(ENDMARKER, left.sequences()), thread);
+
+    // Computing LF() at the endmarker can be expensive, so we do it using the incoming
+    // edges at the destination node instead.
+    edge_type right_pos = right_endmarker.LF(sequence);
+    edge_type left_pos(right_pos.first, left.record(right_pos.first).countUntil(ENDMARKER));
+
+    // Main loop. We can assume that the positions are always valid.
+    while(right_pos.first != ENDMARKER)
+    {
+      buffers.insert(left_pos, thread);
+      right_pos = right.LF(right_pos);
+      left_pos = edge_type(right_pos.first, left.fullLF(left_pos, right_pos.first));
+    }
   }
 }
 

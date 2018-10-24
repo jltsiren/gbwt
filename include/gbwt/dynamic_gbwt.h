@@ -171,7 +171,7 @@ public:
 
   bool contains(node_type node) const
   {
-    return ((node < this->sigma() && node > this->header.offset) || node == 0);
+    return ((node < this->sigma() && node > this->header.offset) || node == ENDMARKER);
   }
 
   bool contains(edge_type position) const
@@ -238,9 +238,11 @@ public:
     return this->record(from).LF(i, to);
   }
 
-  // This version works even when the edge (from, to) does not exist.
-  // On error: invalid_offset().
+  // This works even when the record 'from' or 'to' or the edge (from, to) does not exist.
+  // If 'to' is the endmarker, returns invalid_offset().
+  // If 'to' does not exist, returns 0.
   size_type fullLF(node_type from, size_type i, node_type to) const;
+  size_type fullLF(edge_type position, node_type to) const { return this->fullLF(position.first, position.second, to); }
 
   // On error: invalid_offset().
   size_type LF(edge_type position, node_type to) const
