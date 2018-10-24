@@ -281,14 +281,13 @@ RankArray::~RankArray()
   for(size_type i = 0; i < this->size(); i++) { TempFile::remove(this->filenames[i]); }
 }
 
-void
+std::string
 RankArray::addFile(GapArray<BlockArray>& array)
 {
   std::string filename = TempFile::getName(TEMP_FILE_PREFIX);
   this->filenames.push_back(filename);
   this->value_counts.push_back(array.size());
-  array.write(filename);
-  array.clear();
+  return this->filenames.back();
 }
 
 void
@@ -411,8 +410,9 @@ RankArrayBuffer::forceRead()
 
 //------------------------------------------------------------------------------
 
-MergeBuffers::MergeBuffers(size_type expected_size, const MergeParameters& params) :
+MergeBuffers::MergeBuffers(size_type expected_size, size_type num_threads, const MergeParameters& params) :
   parameters(params),
+  pos_buffers(num_threads), thread_buffers(num_threads),
   merge_buffers(params.merge_buffers),
   ra_values(0), ra_bytes(0), final_size(expected_size)
 {
@@ -423,15 +423,43 @@ MergeBuffers::~MergeBuffers()
 }
 
 void
+MergeBuffers::flush()
+{
+  // First insert all thread-specific buffers.
+  #pragma omp parallel for schedule(static, 1)
+  for(size_type thread = 0; thread < this->threads(); thread++)
+  {
+    this->insert(this->pos_buffers[thread], this->thread_buffers[thread], true);
+  }
+
+  // Then merge and write the global buffers.
+  for(size_type i = 1; i < this->merge_buffers.size(); i++)
+  {
+    this->merge_buffers[i] = buffer_type(this->merge_buffers[i], this->merge_buffers[i - 1]);
+  }
+  size_type buffer_values = this->merge_buffers.back().size();
+  this->write(this->merge_buffers.back());
+
+  if(Verbosity::level >= Verbosity::EXTENDED)
+  {
+    std::lock_guard<std::mutex> lock(this->stderr_access);
+    std::cerr << "MergeBuffers::flush(): Writing " << buffer_values << " values to disk" << std::endl;
+  }
+}
+
+void
 MergeBuffers::insert(std::vector<edge_type>& pos_buffer, buffer_type& thread_buffer, bool force_merge)
 {
-  // Compress pos_buffer.
-  buffer_type temp_buffer(pos_buffer); pos_buffer.clear();
+  // Compress the pos_buffer and merge it into thread_buffer.
+  if(!(pos_buffer.empty()))
+  {
+    buffer_type temp_buffer(pos_buffer); pos_buffer.clear();
+    thread_buffer = buffer_type(thread_buffer, temp_buffer);
+  }
 
-  // Merge it into thread_buffer.
-  thread_buffer = buffer_type(thread_buffer, temp_buffer);
-  if(!force_merge && thread_buffer.bytes() < this->parameters.thread_buffer_size) { return; }
-
+  // Should we merge thread_buffer into the merge buffers?
+  if(thread_buffer.empty()) { return; }
+  if(!force_merge && thread_buffer.bytes() < this->parameters.threadBufferBytes()) { return; }
   if(Verbosity::level >= Verbosity::FULL)
   {
     std::lock_guard<std::mutex> lock(this->stderr_access);
@@ -442,6 +470,7 @@ MergeBuffers::insert(std::vector<edge_type>& pos_buffer, buffer_type& thread_buf
   // Merge with the existing merge buffers until we find an empty slot.
   for(size_type i = 0; i < this->merge_buffers.size(); i++)
   {
+    buffer_type temp_buffer;
     {
       std::lock_guard<std::mutex> lock(this->buffer_lock);
       if(this->merge_buffers[i].empty())
@@ -468,30 +497,15 @@ MergeBuffers::insert(std::vector<edge_type>& pos_buffer, buffer_type& thread_buf
 }
 
 void
-MergeBuffers::flush()
-{
-  for(size_type i = 1; i < this->merge_buffers.size(); i++)
-  {
-    this->merge_buffers[i] = buffer_type(this->merge_buffers[i], this->merge_buffers[i - 1]);
-  }
-  if(Verbosity::level >= Verbosity::EXTENDED)
-  {
-    std::lock_guard<std::mutex> lock(this->stderr_access);
-    std::cerr << "buildRA(): Flushing " << this->merge_buffers.back().size() << " values to disk" << std::endl;
-  }
-  this->write(this->merge_buffers.back());
-}
-
-void
 MergeBuffers::write(buffer_type& buffer)
 {
   if(buffer.empty()) { return; }
 
-  std::string filename;
   size_type buffer_values = buffer.size(), buffer_bytes = buffer.bytes();
+  std::string filename;
   {
     std::lock_guard<std::mutex> lock(this->ra_lock);
-    this->ra.addFile(buffer);
+    filename = this->ra.addFile(buffer);
   }
   buffer.write(filename); buffer.clear();
 

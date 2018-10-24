@@ -364,6 +364,7 @@ public:
 
   RankArrayTest()
   {
+    Verbosity::set(Verbosity::SILENT);
   }
 
   void SetUp() override
@@ -382,7 +383,8 @@ public:
   {
     std::vector<edge_type> buffer = values;
     GapArray<BlockArray> data(buffer);
-    array.addFile(data);
+    std::string filename = array.addFile(data);
+    data.write(filename); data.clear();
   }
 
   static void checkArray(RankArray& array, const std::vector<edge_type>& values, const std::string& test_name)
@@ -405,9 +407,9 @@ public:
     array.close();
   }
 
-  static void checkBuffer(RankArray& array, const std::vector<edge_type>& values, const std::string& test_name)
+  // Note that this sorts correct_values.
+  static void checkBuffer(RankArray& array, std::vector<edge_type>& correct_values, const std::string& test_name)
   {
-    std::vector<edge_type> correct_values = values;
     parallelQuickSort(correct_values.begin(), correct_values.end());
 
     bool early_end = false;
@@ -465,6 +467,41 @@ TEST_F(RankArrayTest, RankArrayBuffer)
   correct_values.insert(correct_values.end(), data.begin(), data.end());
   data.clear();
   checkBuffer(array, correct_values, "Multiple");
+}
+
+TEST_F(RankArrayTest, MergeBuffers)
+{
+  // Merge parameters.
+  MergeParameters parameters;
+  parameters.setPosBufferSize(1);
+  parameters.setThreadBufferSize(4);
+  parameters.setMergeBuffers(2);
+
+  // Input data and buffers.
+  std::vector<std::vector<edge_type>> data(2);
+  initLargeArray(data[0]);
+  initLargeArray(data[1], 0x42424242);
+  MergeBuffers buffers(data[0].size() + data[1].size(), data.size(), parameters);
+
+  // Insert the data.
+  #pragma omp parallel for schedule(static)
+  for(size_type thread = 0; thread < data.size(); thread++)
+  {
+    for(edge_type position : data[thread])
+    {
+      buffers.insert(position, thread);
+    }
+  }
+  buffers.flush();
+
+  // Actual tests.
+  std::vector<edge_type> correct_values;
+  for(size_type i = 0; i < data.size(); i++)
+  {
+    correct_values.insert(correct_values.end(), data[i].begin(), data[i].end());
+    data[i].clear();
+  }
+  checkBuffer(buffers.ra, correct_values, "MergeBuffers");
 }
 
 //------------------------------------------------------------------------------

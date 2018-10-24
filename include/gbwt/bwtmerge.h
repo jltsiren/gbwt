@@ -290,8 +290,12 @@ public:
   RankArray();
   ~RankArray();
 
-  // Also clears the array. Do not call when the array is open.
-  void addFile(GapArray<BlockArray>& array);
+  /*
+    Create a new file for 'array' and return its name. The caller must ensure that only one
+    thread calls addFile() at the same time. Note that 'array' is not written to the file.
+    Do not call when the RankArray is open.
+  */
+  std::string addFile(GapArray<BlockArray>& array);
 
   void open();
   void close();
@@ -408,15 +412,18 @@ private:
 //------------------------------------------------------------------------------
 
 /*
-  A structure for building the RankArray object. A search thread can call insert() when it wants
-  to merge its pos_buffer into the other buffers.
+  A structure for building the RankArray object. A search thread calls insert() when it wants
+  to insert a new element into the buffers.
 
-  1) First we merge pos_buffer with thread_buffer and clear it.
-  2) If thread_buffer is small enough, insert() returns unless force_merge is set.
-  3) We merge thread_buffer with the global merge buffers until there is an empty slot
+  1) The element is inserted into pos_buffer. If the buffer is small enough, insert() returns.
+  2) We merge pos_buffer with thread_buffer and clear it.
+  3) If thread_buffer is small enough, insert() returns.
+  4) We merge thread_buffer with the global merge buffers until there is an empty slot
      or we run out of merge buffers.
-  4) If there is an empty slot, we insert thread_buffer there. Otherwise we write it to a file
+  5) If there is an empty slot, we insert thread_buffer there. Otherwise we write it to a file
      and add the file into the RankArray. In either case, we clear the thread_buffer.
+
+  Once all elements have been inserted, we need to call flush().
 */
 
 class MergeBuffers
@@ -424,14 +431,20 @@ class MergeBuffers
 public:
   typedef GapArray<BlockArray> buffer_type;
 
-  MergeBuffers(size_type expected_size, const MergeParameters& params);
+  MergeBuffers(size_type expected_size, size_type num_threads, const MergeParameters& params);
   ~MergeBuffers();
 
   MergeParameters parameters;
 
+  // Thread-specific buffers.
+  std::vector<std::vector<edge_type>> pos_buffers;
+  std::vector<buffer_type>            thread_buffers;
+
+  // Global merge buffers.
   std::mutex               buffer_lock;
   std::vector<buffer_type> merge_buffers;
 
+  // Rank array.
   std::mutex ra_lock;
   RankArray  ra;
   size_type  ra_values, ra_bytes;
@@ -439,10 +452,21 @@ public:
 
   std::mutex stderr_access;
 
-  void insert(std::vector<edge_type>& pos_buffer, buffer_type& thread_buffer, bool force_merge);
+  size_type threads() const { return this->pos_buffers.size(); }
+
+  void insert(edge_type element, size_type thread)
+  {
+    this->pos_buffers[thread].push_back(element);
+    if(this->pos_buffers[thread].size() >= this->parameters.posBufferPositions())
+    {
+      this->insert(this->pos_buffers[thread], this->thread_buffers[thread], false);
+    }
+  }
+
   void flush();
 
 private:
+  void insert(std::vector<edge_type>& pos_buffer, buffer_type& thread_buffer, bool force_merge);
   void write(buffer_type& buffer);
 
   MergeBuffers(const RankArrayBuffer&) = delete;

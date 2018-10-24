@@ -397,8 +397,8 @@ struct MergeParameters
   void setChunkSize(size_type n);
 
   // These return the sizes in positions/bytes.
-  size_type getPosBufferSize() const { return (this->pos_buffer_size * MEGABYTE) / sizeof(edge_type); }
-  size_type getThreadBufferSize() const { return this->thread_buffer_size * MEGABYTE; }
+  size_type posBufferPositions() const { return (this->pos_buffer_size * MEGABYTE) / sizeof(edge_type); }
+  size_type threadBufferBytes() const { return this->thread_buffer_size * MEGABYTE; }
 
   size_type pos_buffer_size, thread_buffer_size;
   size_type merge_buffers;
