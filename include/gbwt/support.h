@@ -86,6 +86,8 @@ void reversePath(const vector_type& path, text_type& output, size_type& tail);
   - Sampled sequence ids are sorted by the offset.
 */
 
+rank_type edgeTo(node_type to, const std::vector<edge_type>& outgoing);
+
 struct DynamicRecord
 {
   typedef gbwt::size_type size_type;
@@ -143,7 +145,7 @@ struct DynamicRecord
   bool hasEdge(node_type to) const;
 
   // Maps successor nodes to outranks.
-  rank_type edgeTo(node_type to) const;
+  rank_type edgeTo(node_type to) const { return gbwt::edgeTo(to, this->outgoing); }
 
   // This version works when the edges are not sorted.
   rank_type edgeToLinear(node_type to) const;
@@ -229,7 +231,7 @@ struct CompressedRecord
   bool hasEdge(node_type to) const;
 
   // Maps successor nodes to outranks.
-  rank_type edgeTo(node_type to) const;
+  rank_type edgeTo(node_type to) const { return gbwt::edgeTo(to, this->outgoing); };
 
   // These assume that 'outrank' is a valid outgoing edge.
   node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
@@ -271,7 +273,7 @@ struct DecompressedRecord
   bool hasEdge(node_type to) const;
 
   // Maps successor nodes to outranks.
-  rank_type edgeTo(node_type to) const;
+  rank_type edgeTo(node_type to) const { return gbwt::edgeTo(to, this->outgoing); };
 
   // These assume that 'outrank' is a valid outgoing edge.
   node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }

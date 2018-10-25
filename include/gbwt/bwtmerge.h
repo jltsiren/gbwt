@@ -377,6 +377,7 @@ public:
 
   // Iterator operations.
   edge_type operator*() const { return this->consumer_buffer[this->offset]; }
+  const edge_type* operator->() const { return &(this->consumer_buffer[this->offset]); }
   void operator++()
   {
     this->offset++;

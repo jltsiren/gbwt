@@ -51,6 +51,20 @@ reversePath(const vector_type& path, text_type& output, size_type& tail)
 
 //------------------------------------------------------------------------------
 
+rank_type
+edgeTo(node_type to, const std::vector<edge_type>& outgoing)
+{
+  rank_type low = 0, high = outgoing.size();
+  while(low < high)
+  {
+    rank_type mid = low + (high - low) / 2;
+    if(outgoing[mid].first == to) { return mid; }
+    if(outgoing[mid].first > to) { high = mid; }
+    else { low = mid + 1; }
+  }
+  return outgoing.size();
+}
+
 DynamicRecord::DynamicRecord() :
   body_size(0)
 {
@@ -282,20 +296,6 @@ DynamicRecord::hasEdge(node_type to) const
     if(this->successor(outrank) == to) { return true; }
   }
   return false;
-}
-
-rank_type
-DynamicRecord::edgeTo(node_type to) const
-{
-  rank_type low = 0, high = this->outdegree();
-  while(low < high)
-  {
-    rank_type mid = low + (high - low) / 2;
-    if(this->successor(mid) == to) { return mid; }
-    if(this->successor(mid) > to) { high = mid; }
-    else { low = mid + 1; }
-  }
-  return this->outdegree();
 }
 
 rank_type
@@ -536,20 +536,6 @@ CompressedRecord::hasEdge(node_type to) const
   return false;
 }
 
-rank_type
-CompressedRecord::edgeTo(node_type to) const
-{
-  rank_type low = 0, high = this->outdegree();
-  while(low < high)
-  {
-    rank_type mid = low + (high - low) / 2;
-    if(this->successor(mid) == to) { return mid; }
-    if(this->successor(mid) > to) { high = mid; }
-    else { low = mid + 1; }
-  }
-  return this->outdegree();
-}
-
 //------------------------------------------------------------------------------
 
 DecompressedRecord::DecompressedRecord() :
@@ -633,20 +619,6 @@ DecompressedRecord::hasEdge(node_type to) const
     if(this->successor(outrank) == to) { return true; }
   }
   return false;
-}
-
-rank_type
-DecompressedRecord::edgeTo(node_type to) const
-{
-  rank_type low = 0, high = this->outdegree();
-  while(low < high)
-  {
-    rank_type mid = low + (high - low) / 2;
-    if(this->successor(mid) == to) { return mid; }
-    if(this->successor(mid) > to) { high = mid; }
-    else { low = mid + 1; }
-  }
-  return this->outdegree();
 }
 
 //------------------------------------------------------------------------------

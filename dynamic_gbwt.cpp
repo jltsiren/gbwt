@@ -165,20 +165,7 @@ DynamicGBWT::load(std::istream& in)
   }
 
   // Rebuild the incoming edges.
-  for(comp_type comp = 0; comp < this->effective(); comp++)
-  {
-    DynamicRecord& current = this->bwt[comp];
-    std::vector<size_type> counts(current.outdegree());
-    for(run_type run : current.body) { counts[run.first] += run.second; }
-    for(rank_type outrank = 0; outrank < current.outdegree(); outrank++)
-    {
-      if(current.successor(outrank) != ENDMARKER)
-      {
-        DynamicRecord& successor = this->record(current.successor(outrank));
-        successor.addIncoming(edge_type(this->toNode(comp), counts[outrank]));
-      }
-    }
-  }
+  this->rebuildIncoming();
 }
 
 void
@@ -271,6 +258,53 @@ DynamicGBWT::recode()
   for(comp_type comp = 0; comp < this->effective(); comp++) { this->bwt[comp].recode(); }
 }
 
+void
+DynamicGBWT::rebuildIncoming()
+{
+  // Clear the existing incoming edges.
+  for(comp_type comp = 0; comp < this->effective(); comp++) { this->bwt[comp].incoming.clear(); }
+
+  // Rebuild them from record bodies and outgoing edges.
+  for(comp_type comp = 0; comp < this->effective(); comp++)
+  {
+    DynamicRecord& current = this->bwt[comp];
+    std::vector<size_type> counts(current.outdegree());
+    for(run_type run : current.body) { counts[run.first] += run.second; }
+    for(rank_type outrank = 0; outrank < current.outdegree(); outrank++)
+    {
+      if(current.successor(outrank) != ENDMARKER)
+      {
+        DynamicRecord& successor = this->record(current.successor(outrank));
+        successor.addIncoming(edge_type(this->toNode(comp), counts[outrank]));
+      }
+    }
+  }
+}
+
+void
+DynamicGBWT::rebuildOutgoing()
+{
+  for(comp_type comp = 0; comp < this->effective(); comp++)
+  {
+    node_type curr = this->toNode(comp);
+    DynamicRecord& current = this->record(curr);
+    size_type offset = 0;
+    for(rank_type inrank = 0; inrank < current.indegree(); inrank++)
+    {
+      DynamicRecord& predecessor = this->record(current.predecessor(inrank));
+      rank_type outrank = predecessor.edgeTo(curr);
+      if(outrank >= predecessor.outdegree())
+      {
+        std::cerr << "DynamicGBWT::rebuildOutgoing(): Outgoing edge from " << current.predecessor(inrank)
+                  << " to " << curr << " not found" << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      predecessor.offset(outrank) = offset;
+      offset += current.count(inrank);
+    }
+  }
+}
+
 //------------------------------------------------------------------------------
 
 /*
@@ -355,7 +389,7 @@ updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, size_type iteratio
       ++sample_iter;
     }
     swapBody(current, new_body);
-    current.ids = new_samples;
+    current.ids.swap(new_samples);
   }
   gbwt.header.size += seqs.size();
 }
@@ -799,6 +833,185 @@ buildRA(const DynamicGBWT& left, const DynamicGBWT& right, MergeBuffers& buffers
       right_pos = right.LF(right_pos);
       left_pos = edge_type(right_pos.first, left.fullLF(left_pos, right_pos.first));
     }
+  }
+
+  buffers.flush();
+}
+
+/*
+  Merge the outgoing edges. We can ignore the offsets for now.
+*/
+
+std::vector<edge_type>
+mergeOutgoing(const std::vector<edge_type>& left, const std::vector<edge_type>& right)
+{
+  std::vector<edge_type> result;
+
+  auto left_iter = left.begin();
+  auto right_iter = right.begin();
+  while(left_iter != left.end() && right_iter != right.end())
+  {
+    if(left_iter->first == right_iter->first)
+    {
+      result.push_back(*left_iter); ++left_iter; ++right_iter;
+    }
+    else if(left_iter->first < right_iter->first)
+    {
+      result.push_back(*left_iter); ++left_iter;
+    }
+    else
+    {
+      result.push_back(*right_iter); ++right_iter;
+    }
+  }
+  while(left_iter != left.end()) { result.push_back(*left_iter); ++left_iter; }
+  while(right_iter != right.end()) { result.push_back(*right_iter); ++right_iter; }
+
+  return result;
+}
+
+/*
+  Recode the run from 'source' using 'outgoing' as the list of outgoing edges.
+*/
+
+run_type
+recodeRun(run_type run, const DynamicRecord& source, const std::vector<edge_type>& outgoing)
+{
+  run.first = edgeTo(source.successor(run.first), outgoing);
+  return run;
+}
+
+/*
+  Merges 'right' into 'left' using the rank array. We need the node identifier for finding
+  the correct range in the rank array and the number of sequences in 'left' for updating the
+  samples from 'right'.
+*/
+
+void
+mergeRecords(DynamicRecord& left, const DynamicRecord& right, RankArrayBuffer& ra, node_type node, size_type left_sequences)
+{
+  // Rebuild the record using these structures.
+  std::vector<edge_type> new_outgoing = mergeOutgoing(left.outgoing, right.outgoing);
+  RunMerger new_body(new_outgoing.size());
+  std::vector<sample_type> new_samples;
+
+  // Rank array contains the number of elements from 'left' before each element from 'right'.
+  auto left_iter = left.body.begin(); auto right_iter = right.body.begin();
+  auto left_sample_iter = left.ids.begin(); auto right_sample_iter = right.ids.begin();
+  run_type left_run(0, 0), right_run(0, 0);
+  size_type insert_count = 0;
+  while(!(ra.end()) && ra->first == node)
+  {
+    // Add runs from 'left'.
+    while(new_body.size() < ra->second + insert_count)
+    {
+      if(left_run.second == 0) { left_run = recodeRun(*left_iter, left, new_outgoing); ++left_iter; }
+      size_type insert_length = std::min(static_cast<size_type>(left_run.second), ra->second + insert_count - new_body.size());
+      new_body.insert(run_type(left_run.first, insert_length));
+      left_run.second -= insert_length;
+    }
+    // Add samples from 'left'.
+    while(left_sample_iter != left.ids.end() && left_sample_iter->first < ra->second)
+    {
+      new_samples.emplace_back(left_sample_iter->first + insert_count, left_sample_iter->second);
+      ++left_sample_iter;
+    }
+    // Add a single value and the possible sample from 'right'.
+    if(right_run.second == 0) { right_run = recodeRun(*right_iter, right, new_outgoing); ++right_iter; }
+    new_body.insert(right_run.first);
+    if(right_sample_iter != right.ids.end() && right_sample_iter->first == insert_count)
+    {
+      new_samples.emplace_back(ra->second + insert_count, right_sample_iter->second + left_sequences);
+      ++right_sample_iter;
+    }
+    right_run.second--; insert_count++;
+    ++ra;
+  }
+
+  // Add the remaining runs from 'left'.
+  if(left_run.second > 0) { new_body.insert(left_run); }
+  while(left_iter != left.body.end())
+  {
+    new_body.insert(recodeRun(*left_iter, left, new_outgoing)); ++left_iter;
+  }
+  // Add the remaining samples from 'left'.
+  while(left_sample_iter != left.ids.end())
+  {
+    new_samples.emplace_back(left_sample_iter->first + insert_count, left_sample_iter->second);
+    ++left_sample_iter;
+  }
+
+  // Use the new data in 'left'.
+  swapBody(left, new_body);
+  left.outgoing.swap(new_outgoing);
+  left.ids.swap(new_samples);
+}
+
+//------------------------------------------------------------------------------
+
+void
+DynamicGBWT::merge(const DynamicGBWT& source, const MergeParameters& parameters)
+{
+  double start = readTimer();
+
+  if(source.empty())
+  {
+    if(Verbosity::level >= Verbosity::FULL)
+    {
+      std::cerr << "DynamicGBWT::merge(): The input GBWT is empty" << std::endl;
+    }
+    return;
+  }
+
+  // The merged index is bidirectional only if both indexes are bidirectional.
+  if(!(source.bidirectional())) { this->header.unset(GBWTHeader::FLAG_BIDIRECTIONAL); }
+
+  // Increase alphabet size and decrease offset if necessary.
+  this->resize(source.header.offset, source.sigma());
+
+  // Build the rank array.
+  double ra_start = readTimer();
+  MergeBuffers mb(source.size(), omp_get_max_threads(), parameters);
+  buildRA(*this, source, mb);
+  if(Verbosity::level >= Verbosity::BASIC)
+  {
+    double seconds = readTimer() - ra_start;
+    std::cerr << "DynamicGBWT::merge(): Rank array built in " << seconds << " seconds" << std::endl;
+  }
+
+  // Merge the records.
+  double merge_start = readTimer();
+  RankArrayBuffer ra(mb.ra);
+  for(comp_type comp = 0; comp < this->effective(); comp++)
+  {
+    node_type node = this->toNode(comp);
+    if(!(source.contains(node))) { continue; }
+    mergeRecords(this->record(node), source.record(node), ra, node, this->sequences());
+  }
+  if(Verbosity::level >= Verbosity::BASIC)
+  {
+    double seconds = readTimer() - merge_start;
+    std::cerr << "DynamicGBWT::merge(): Records merged in " << seconds << " seconds" << std::endl;
+  }
+
+  // Merge the headers. Note that we need the original header for merging the records.
+  this->header.size += source.size();
+  this->header.sequences += source.sequences();
+
+  // Rebuild the incoming edges from the record bodies and the outgoing edges. Then rebuild
+  // the offsets in the outgoing edges from the incoming edges.
+  if(Verbosity::level >= Verbosity::FULL)
+  {
+    std::cerr << "DynamicGBWT::merge(): Rebuilding the edges" << std::endl;
+  }
+  this->rebuildIncoming();
+  this->rebuildOutgoing();
+
+  if(Verbosity::level >= Verbosity::BASIC)
+  {
+    double seconds = readTimer() - start;
+    std::cerr << "DynamicGBWT::merge(): Inserted " << source.sequences() << " sequences of total length "
+              << source.size() << " in " << seconds << " seconds" << std::endl;
   }
 }
 

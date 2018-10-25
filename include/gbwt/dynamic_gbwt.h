@@ -94,6 +94,11 @@ public:
   */
   void merge(const GBWT& source, size_type batch_size = MERGE_BATCH_SIZE, size_type sample_interval = SAMPLE_INTERVAL);
 
+  /*
+    Parallel merging algorithm adapted from BWT-merge.
+  */
+  void merge(const DynamicGBWT& source, const MergeParameters& parameters);
+
 //------------------------------------------------------------------------------
 
   /*
@@ -301,6 +306,12 @@ private:
     as the identifiers of destination nodes are gap-encoded.
   */
   void recode();
+
+  // Rebuild the incoming edges from the record bodies.
+  void rebuildIncoming();
+
+  // Rebuild the offsets in outgoing edges from the incoming edges.
+  void rebuildOutgoing();
 
   friend class GBWTBuilder;
 
