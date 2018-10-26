@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017 Jouni Siren
+  Copyright (c) 2017, 2018 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -35,6 +35,10 @@ const std::string tool_name = "GBWT merging";
 
 void printUsage(int exit_code = EXIT_SUCCESS);
 
+enum MergingAlgorithm { ma_insert, ma_fast, ma_parallel };
+
+std::string algorithmName(MergingAlgorithm algorithm);
+
 //------------------------------------------------------------------------------
 
 int
@@ -43,21 +47,28 @@ main(int argc, char** argv)
   if(argc < 5) { printUsage(); }
 
   size_type batch_size = DynamicGBWT::MERGE_BATCH_SIZE, sample_interval = DynamicGBWT::SAMPLE_INTERVAL;
-  bool fast_merging = false;
+  MergingAlgorithm algorithm = ma_insert;
+  MergeParameters parameters;
   std::string output;
   int c = 0;
-  while((c = getopt(argc, argv, "b:fo:s:")) != -1)
+  while((c = getopt(argc, argv, "b:fio:ps:t:")) != -1)
   {
     switch(c)
     {
     case 'b':
       batch_size = std::stoul(optarg); break;
     case 'f':
-      fast_merging = true; break;
+      algorithm = ma_fast; break;
+    case 'i':
+      algorithm = ma_insert; break;
     case 'o':
       output = optarg; break;
+    case 'p':
+      algorithm = ma_parallel; break;
     case 's':
       sample_interval = std::stoul(optarg); break;
+    case 't':
+      TempFile::setDirectory(optarg); break;
     case '?':
       std::exit(EXIT_FAILURE);
     default:
@@ -71,10 +82,10 @@ main(int argc, char** argv)
 
   Version::print(std::cout, tool_name);
 
-  printHeader("Algorithm"); std::cout << (fast_merging ? "fast" : "insert") << std::endl;
+  printHeader("Algorithm"); std::cout << algorithmName(algorithm) << std::endl;
   printHeader("Input files"); std::cout << input_files << std::endl;
   printHeader("Output name"); std::cout << output << std::endl;
-  if(!fast_merging)
+  if(algorithm == ma_insert)
   {
     printHeader("Batch size"); std::cout << batch_size << std::endl;
     printHeader("Sample interval"); std::cout << sample_interval << std::endl;
@@ -83,7 +94,7 @@ main(int argc, char** argv)
 
   double start = readTimer();
 
-  if(fast_merging)
+  if(algorithm == ma_fast)
   {
     std::vector<GBWT> indexes(argc - optind);
     for(int i = optind; i < argc; i++)
@@ -109,11 +120,22 @@ main(int argc, char** argv)
     while(optind < argc)
     {
       std::string input_name = argv[optind];
-      GBWT next;
-      sdsl::load_from_file(next, input_name + GBWT::EXTENSION);
-      printStatistics(next, input_name);
-      index.merge(next, batch_size, sample_interval);
-      total_inserted += next.size();
+      if(algorithm == ma_insert)
+      {
+        GBWT next;
+        sdsl::load_from_file(next, input_name + GBWT::EXTENSION);
+        printStatistics(next, input_name);
+        index.merge(next, batch_size, sample_interval);
+        total_inserted += next.size();
+      }
+      else if(algorithm == ma_parallel)
+      {
+        DynamicGBWT next;
+        sdsl::load_from_file(next, input_name + DynamicGBWT::EXTENSION);
+        printStatistics(next, input_name);
+        index.merge(next, parameters);
+        total_inserted += next.size();
+      }
       optind++;
     }
     sdsl::store_to_file(index, output + DynamicGBWT::EXTENSION);
@@ -138,15 +160,41 @@ printUsage(int exit_code)
   Version::print(std::cerr, tool_name);
 
   std::cerr << "Usage: merge_gbwt [options] -o output input1 input2 [input3 ...]" << std::endl;
-  std::cerr << "  -b N  Use batches of N sequences for merging (default: " << DynamicGBWT::MERGE_BATCH_SIZE << ")" << std::endl;
-  std::cerr << "  -f    Fast merging algorithm (node ids must not overlap)" << std::endl;
+  std::cerr << std::endl;
+  std::cerr << "General options:" << std::endl;
   std::cerr << "  -o X  Use X as the base name for output (required)" << std::endl;
+  std::cerr << std::endl;
+  std::cerr << "Algorithm choice:" << std::endl;
+  std::cerr << "  -f    Fast algorithm (node ids must not overlap)" << std::endl;
+  std::cerr << "  -i    Insertion algorithm (default)" << std::endl;
+  std::cerr << "  -p    Parallel algorithm" << std::endl;
+  std::cerr << std::endl;
+  std::cerr << "Insertion algorithm (-i):" << std::endl;
+  std::cerr << "  -b N  Insert in batches of N sequences (default: " << DynamicGBWT::MERGE_BATCH_SIZE << ")" << std::endl;
   std::cerr << "  -s N  Sample sequence ids at one out of N positions (default: " << DynamicGBWT::SAMPLE_INTERVAL << "; use 0 for no samples)" << std::endl;
+  std::cerr << std::endl;
+  std::cerr << "Parallel algorithm (-p):" << std::endl;
+  std::cerr << "  -t X  Use directory X for temporary files (default: " << TempFile::DEFAULT_TEMP_DIR << ")" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Use base names for the inputs and the output." << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);
+}
+
+std::string algorithmName(MergingAlgorithm algorithm)
+{
+  switch(algorithm)
+  {
+  case ma_insert:
+    return "insert";
+  case ma_fast:
+    return "fast";
+  case ma_parallel:
+    return "parallel";
+  default:
+    return "unknown";
+  }
 }
 
 //------------------------------------------------------------------------------

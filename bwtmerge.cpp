@@ -443,7 +443,7 @@ MergeBuffers::flush()
   if(Verbosity::level >= Verbosity::EXTENDED)
   {
     std::lock_guard<std::mutex> lock(this->stderr_access);
-    std::cerr << "MergeBuffers::flush(): Writing " << buffer_values << " values to disk" << std::endl;
+    std::cerr << "MergeBuffers::flush(): Wrote " << buffer_values << " values to disk" << std::endl;
   }
 }
 
