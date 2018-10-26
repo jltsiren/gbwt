@@ -244,16 +244,25 @@ public:
   {
   }
 
+  // Iterator operations.
   edge_type operator*() const { return this->value; }
   void operator++() { this->pos++; this->read(); }
   bool end() const { return (this->pos >= this->array->size()); }
+
+  // Access to the GapArray.
+  size_type size() const { return this->array->size(); }
+  bool empty() const { return this->array->empty(); }
+
+  // For ProducerBuffer.
+  void open() {}
+  void close() {}
 
   GapArray<ByteArray>* array;
   size_type pos, data_pointer;
   edge_type value;
 
 private:
-  // There is a specialized destructive read() BlockArray.
+  // There is a specialized destructive read() for BlockArray.
   void read()
   {
     this->readCommon();
@@ -274,8 +283,147 @@ template<> void GapIterator<BlockArray>::read();
 //------------------------------------------------------------------------------
 
 /*
-  A RankArray is a number of temporary files containing GapArrays on disk. When the object
-  is deleted, the files are also deleted.
+  A producer-consumer buffer. The producer writes to the producer buffer in a background
+  thread, while the consumer iterates over the produced data using the consumer buffer.
+
+  Iterator value invalid_edge() is equivalent to end().
+
+  The producer must support the following operations:
+  - open(), close()
+  - empty()
+  - ++, *, end()
+*/
+
+template<class Producer>
+class ProducerBuffer;
+
+template<class Producer>
+void
+produce(ProducerBuffer<Producer>* buffer)
+{
+  while(!(buffer->fill()));
+}
+
+template<class Producer>
+class ProducerBuffer
+{
+public:
+  constexpr static size_type BUFFER_SIZE = 8 * MEGABYTE; // Positions.
+
+  ProducerBuffer(Producer& source, size_type buffer_size = BUFFER_SIZE) :
+    producer(source), buffer_capacity(buffer_size), finished(source.empty()),
+    offset(0), value(invalid_edge())
+  {
+    this->producer_buffer.reserve(this->buffer_capacity);
+    this->consumer_buffer.reserve(this->buffer_capacity);
+    this->producer.open();
+    this->producer_thread = std::thread(produce<Producer>, this);
+    this->read();
+  }
+
+  ~ProducerBuffer()
+  {
+    // Stop the producer thread.
+    this->mtx.lock();
+    this->finished = true;
+    this->mtx.unlock();
+    if(this->producer_thread.joinable()) { this->producer_thread.join(); }
+    // Close the producer.
+    this->producer.close();
+  }
+
+  // Producer thread.
+  Producer&               producer;
+  std::vector<edge_type>  producer_buffer;
+  size_type               buffer_capacity;
+  bool                    finished;
+
+  // Consumer thread.
+  std::vector<edge_type>  consumer_buffer;
+  size_type               offset;
+  edge_type               value;
+
+  // Multithreading.
+  std::mutex              mtx;   // For producer data.
+  std::condition_variable empty; // Is producer_buffer empty?
+  std::thread             producer_thread;
+
+  // Iterator operations.
+  edge_type operator*() const { return this->value; }
+  const edge_type* operator->() const { return &(this->value); }
+  void operator++()
+  {
+    this->offset++;
+    if(this->bufferEnd()) { this->read(); }
+    else { this->value = this->consumer_buffer[this->offset]; }
+  }
+  bool end() { return (this->value == invalid_edge()); }
+
+private:
+  bool bufferEnd() const { return (this->offset >= this->consumer_buffer.size()); }
+
+  /*
+    Fill producer_buffer and return finished. The second version assumes that the current
+    thread holds the mutex and that producer_buffer is empty.
+  */
+  bool fill()
+  {
+    // We need the mutex and producer_buffer must be empty.
+    std::unique_lock<std::mutex> lock(this->mtx);
+    this->empty.wait(lock, [this]() { return producer_buffer.empty(); });
+    return this->forceFill();
+  }
+
+  bool forceFill()
+  {
+    if(this->finished) { return true; }
+    while(!(this->producer.end()) && this->producer_buffer.size() < this->buffer_capacity)
+    {
+      this->producer_buffer.push_back(*(this->producer));
+      ++(this->producer);
+    }
+    if(this->producer.end()) { this->finished = true; }
+    return this->finished;
+  }
+
+  /*
+    Swap the buffers and clear producer_buffer. The second version assumes that the current
+    thread holds the mutex. Both assume that consumer_buffer is empty.
+  */
+  void read()
+  {
+    std::unique_lock<std::mutex> lock(this->mtx);
+    this->forceRead();
+    this->empty.notify_one();
+  }
+
+  void forceRead()
+  {
+    if(this->producer_buffer.empty())
+    {
+      this->forceFill();
+    }
+    this->consumer_buffer.swap(this->producer_buffer);
+    this->producer_buffer.clear();
+    this->offset = 0;
+    this->value = (this->consumer_buffer.empty() ? invalid_edge() : this->consumer_buffer[this->offset]);
+  }
+
+  // Producer thread.
+  friend void produce<Producer>(ProducerBuffer<Producer>* buffer);
+
+  ProducerBuffer(const ProducerBuffer&) = delete;
+  ProducerBuffer& operator=(const ProducerBuffer&) = delete;
+};
+
+//------------------------------------------------------------------------------
+
+/*
+  A RankArray is a number of temporary files containing GapArrays on disk. Each file is read
+  using a separate thread with ProducerBuffer. When the object is deleted, the files are also
+  deleted.
+
+  Iterator value invalid_edge() is equivalent to end().
 */
 
 class RankArray
@@ -284,6 +432,7 @@ public:
   typedef GapArray<sdsl::int_vector_buffer<8>> array_type;
   typedef array_type::size_type                size_type;
   typedef array_type::iterator                 iterator;
+  typedef std::pair<edge_type, size_type>      heap_type; // (value, source)
 
   const static std::string TEMP_FILE_PREFIX;  // "ranks"
 
@@ -297,13 +446,21 @@ public:
   */
   std::string addFile(GapArray<BlockArray>& array);
 
+  // For ProducerBuffer.
   void open();
   void close();
 
   // Iterator operations.
-  edge_type operator*() const { return *(this->iterators[0]); }
-  void operator++() { ++(this->iterators[0]); this->down(0); }
-  bool end() const { return (this->empty() || this->iterators[0].end()); }
+  edge_type operator*() const { return this->value; }
+  void operator++()
+  {
+    size_type source = this->heap.front().second;
+    this->buffers[source]->operator++();
+    this->heap.front().first = this->buffers[source]->operator*();
+    this->down(0);
+    this->value = this->heap.front().first;
+  }
+  bool end() { return (this->value == invalid_edge()); }
 
   size_type size() const { return this->filenames.size(); }
   size_type empty() const { return (this->size() == 0); }
@@ -311,8 +468,12 @@ public:
   std::vector<std::string> filenames;
   std::vector<size_type>   value_counts;
 
-  std::vector<array_type> inputs;
-  std::vector<iterator>   iterators;
+  std::vector<array_type>                inputs;
+  std::vector<iterator>                  iterators;
+  std::vector<ProducerBuffer<iterator>*> buffers;
+  std::vector<heap_type>                 heap;
+
+  edge_type value;
 
 private:
   /*
@@ -324,7 +485,7 @@ private:
 
   size_type smaller(size_type i, size_type j) const
   {
-    return (this->iterators[j].value < this->iterators[i].value ? j : i);
+    return (this->heap[j].first < this->heap[i].first ? j : i);
   }
 
   void down(size_type i)
@@ -334,7 +495,7 @@ private:
       size_type next = this->smaller(i, left(i));
       if(right(i) < this->size()) { next = this->smaller(next, right(i)); }
       if(next == i) { return; }
-      std::swap(this->iterators[i], this->iterators[next]);
+      std::swap(this->heap[i], this->heap[next]);
       i = next;
     }
   }
@@ -343,71 +504,6 @@ private:
 
   RankArray(const RankArray&) = delete;
   RankArray& operator=(const RankArray&) = delete;
-};
-
-//------------------------------------------------------------------------------
-
-/*
-  An iterator that scans RankArray in a background thread and buffers the results for
-  the main thread. More like gcsa::ReadBuffer than bwtmerge::RABuffer. The constructor
-  opens the RankArray and the destructor closes it.
-*/
-
-class RankArrayBuffer
-{
-public:
-  constexpr static size_type BUFFER_SIZE = MEGABYTE;  // Positions.
-
-  RankArrayBuffer(RankArray& data);
-  ~RankArrayBuffer();
-
-  // Producer thread.
-  RankArray&              array;
-  std::vector<edge_type>  producer_buffer;
-  bool                    finished;
-
-  // Consumer thread.
-  std::vector<edge_type>  consumer_buffer;
-  size_type               offset;
-
-  // Multithreading.
-  std::mutex              mtx;   // For producer data.
-  std::condition_variable empty; // Is producer_buffer empty?
-  std::thread             producer_thread;
-
-  // Iterator operations.
-  edge_type operator*() const { return this->consumer_buffer[this->offset]; }
-  const edge_type* operator->() const { return &(this->consumer_buffer[this->offset]); }
-  void operator++()
-  {
-    this->offset++;
-    if(this->bufferEnd()) { this->read(); this->offset = 0; }
-  }
-  bool end() { return (this->bufferEnd() && this->producerEnd()); }
-
-private:
-  bool bufferEnd() const { return (this->offset >= this->consumer_buffer.size()); }
-  bool producerEnd(); // Grabs the mutex to determine if there is no more data after consumer_buffer.
-
-  /*
-    Fill producer_buffer and return finished. The second version assumes that the current
-    thread holds the mutex and that producer_buffer is empty.
-  */
-  bool fill();
-  bool forceFill();
-
-  /*
-    Swap the buffers and clear producer_buffer. The second version assumes that the current
-    thread holds the mutex. Both assume that consumer_buffer is empty.
-  */
-  void read();
-  void forceRead();
-
-  // Producer thread.
-  friend void produce(RankArrayBuffer* buffer);
-
-  RankArrayBuffer(const RankArrayBuffer&) = delete;
-  RankArrayBuffer& operator=(const RankArrayBuffer&) = delete;
 };
 
 //------------------------------------------------------------------------------
@@ -470,8 +566,8 @@ private:
   void insert(std::vector<edge_type>& pos_buffer, buffer_type& thread_buffer, bool force_merge);
   void write(buffer_type& buffer);
 
-  MergeBuffers(const RankArrayBuffer&) = delete;
-  MergeBuffers& operator=(const RankArrayBuffer&) = delete;
+  MergeBuffers(const MergeBuffers&) = delete;
+  MergeBuffers& operator=(const MergeBuffers&) = delete;
 };
 
 //------------------------------------------------------------------------------

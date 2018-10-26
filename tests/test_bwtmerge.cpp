@@ -268,16 +268,37 @@ public:
     ASSERT_EQ(array.size(), values.size()) << test_name << ": wrong size";
     EXPECT_EQ(array.empty(), (array.size() == 0)) << test_name << ": wrong empty() result";
 
+    typename GapArray<ByteArray>::iterator iter(array);
+    checkIterator(iter, values, test_name);
+  }
+
+  template<class ByteArray>
+  static void checkBuffered(GapArray<ByteArray>& array, const std::vector<edge_type>& values, const std::string& test_name)
+  {
+    ASSERT_EQ(array.size(), values.size()) << test_name << ": wrong size";
+    EXPECT_EQ(array.empty(), (array.size() == 0)) << test_name << ": wrong empty() result";
+
+    typename GapArray<ByteArray>::iterator iter(array);
+    ProducerBuffer<typename GapArray<ByteArray>::iterator> buffer(iter, MEGABYTE);
+    checkIterator(buffer, values, test_name);
+  }
+
+  template<class Iterator>
+  static void checkIterator(Iterator& iter, const std::vector<edge_type>& values, const std::string& test_name)
+  {
     std::vector<edge_type> correct_values = values;
     sequentialSort(correct_values.begin(), correct_values.end());
 
-    size_type wrong_values = 0;
-    typename GapArray<ByteArray>::iterator iter(array);
+    bool early_end = false;
+    size_type wrong_values = 0, end_at = 0;
     for(size_type i = 0; i < correct_values.size(); i++)
     {
+      if(iter.end()) { early_end = true; end_at = i; break; }
       if(*iter != correct_values[i]) { wrong_values++; }
       ++iter;
     }
+    EXPECT_FALSE(early_end) << test_name << ": Array ended early (" << end_at << " / " << correct_values.size() << ")";
+    EXPECT_TRUE(iter.end()) << test_name << ": Array is too large";
     EXPECT_EQ(wrong_values, 0u) << test_name << ": " << wrong_values << " wrong values";
   }
 
@@ -307,6 +328,13 @@ TEST_F(GapArrayTest, BasicTests)
 
   // Unsorted array.
   buildAndCheckArray(small_array, "Unsorted");
+}
+
+TEST_F(GapArrayTest, BufferedReading)
+{
+  std::vector<edge_type> buffer = small_array;
+  GapArray<BlockArray> array(buffer);
+  checkBuffered(array, small_array, "Buffered");
 }
 
 TEST_F(GapArrayTest, Serialization)
@@ -393,15 +421,15 @@ public:
     sequentialSort(correct_values.begin(), correct_values.end());
 
     bool early_end = false;
-    size_type wrong_values = 0;
+    size_type wrong_values = 0, end_at = 0;
     array.open();
     for(size_type i = 0; i < correct_values.size(); i++)
     {
-      if(array.end()) { early_end = true; break; }
+      if(array.end()) { early_end = true; end_at = i; break; }
       if(*array != correct_values[i]) { wrong_values++; }
       ++array;
     }
-    EXPECT_FALSE(early_end) << test_name << ": Array is too small";
+    EXPECT_FALSE(early_end) << test_name << ": Array ended early (" << end_at << " / " << correct_values.size() << ")";
     EXPECT_TRUE(array.end()) << test_name << ": Array is too large";
     EXPECT_EQ(wrong_values, 0u) << test_name << ": " << wrong_values << " wrong values";
     array.close();
@@ -413,15 +441,15 @@ public:
     parallelQuickSort(correct_values.begin(), correct_values.end());
 
     bool early_end = false;
-    size_type wrong_values = 0;
-    RankArrayBuffer buffer(array);
+    size_type wrong_values = 0, end_at = 0;
+    ProducerBuffer<RankArray> buffer(array), MEGABYTE);
     for(size_type i = 0; i < correct_values.size(); i++)
     {
-      if(buffer.end()) { early_end = true; break; }
+      if(buffer.end()) { early_end = true; end_at = i; break; }
       if(*buffer != correct_values[i]) { wrong_values++; }
       ++buffer;
     }
-    EXPECT_FALSE(early_end) << test_name << ": Array is too small";
+    EXPECT_FALSE(early_end) << test_name << ": Array ended early (" << end_at << " / " << correct_values.size() << ")";
     EXPECT_TRUE(buffer.end()) << test_name << ": Array is too large";
     EXPECT_EQ(wrong_values, 0u) << test_name << ": " << wrong_values << " wrong values";
   }
@@ -446,7 +474,7 @@ TEST_F(RankArrayTest, BasicTests)
   checkArray(array, correct_values, "Multiple");
 }
 
-TEST_F(RankArrayTest, RankArrayBuffer)
+TEST_F(RankArrayTest, BufferedReading)
 {
   // Empty array.
   std::vector<edge_type> correct_values;

@@ -271,7 +271,8 @@ GapIterator<BlockArray>::read()
 
 const std::string RankArray::TEMP_FILE_PREFIX = "ranks";
 
-RankArray::RankArray()
+RankArray::RankArray() :
+  value(invalid_edge())
 {
 }
 
@@ -296,21 +297,34 @@ RankArray::open()
   this->close();
   this->inputs = std::vector<array_type>(this->size());
   this->iterators = std::vector<iterator>(this->size());
+  this->buffers = std::vector<ProducerBuffer<iterator>*>(this->size());
+  this->heap = std::vector<heap_type>(this->size());
 
   for(size_type i = 0; i < this->size(); i++)
   {
     gbwt::open(this->inputs[i], this->filenames[i], this->value_counts[i]);
     this->iterators[i] = iterator(this->inputs[i]);
+    this->buffers[i] = new ProducerBuffer<iterator>(this->iterators[i]);
+    this->heap[i] = heap_type(this->buffers[i]->operator*(), i);
   }
 
   this->heapify();
+  this->value = (this->empty() ? invalid_edge() : this->heap.front().first);
 }
 
 void
 RankArray::close()
 {
+  for(size_type i = 0; i < this->buffers.size(); i++)
+  {
+    delete this->buffers[i]; this->buffers[i] = nullptr;
+  }
+  this->buffers.clear();
   this->iterators.clear();
   this->inputs.clear();
+  this->heap.clear();
+
+  this->value = invalid_edge();
 }
 
 void
@@ -325,87 +339,6 @@ RankArray::heapify()
     if(i == 0) { break; }
     i--;
   }
-}
-
-//------------------------------------------------------------------------------
-
-void
-produce(RankArrayBuffer* buffer)
-{
-  while(!(buffer->fill()));
-}
-
-RankArrayBuffer::RankArrayBuffer(RankArray& data) :
-  array(data), finished(data.empty()),
-  offset(0)
-{
-  this->producer_buffer.reserve(BUFFER_SIZE);
-  this->consumer_buffer.reserve(BUFFER_SIZE);
-
-  this->array.open();
-  this->producer_thread = std::thread(produce, this);
-  this->read();
-}
-
-RankArrayBuffer::~RankArrayBuffer()
-{
-  // Stop the producer thread.
-  this->mtx.lock();
-  this->finished = true;
-  this->mtx.unlock();
-  if(this->producer_thread.joinable()) { this->producer_thread.join(); }
-
-  this->array.close();
-}
-
-bool
-RankArrayBuffer::producerEnd()
-{
-  std::unique_lock<std::mutex> lock(this->mtx);
-  return (this->finished && this->producer_buffer.empty());
-}
-
-bool
-RankArrayBuffer::fill()
-{
-  // We need the mutex and producer_buffer must be empty.
-  std::unique_lock<std::mutex> lock(this->mtx);
-  this->empty.wait(lock, [this]() { return producer_buffer.empty(); });
-
-  return this->forceFill();
-}
-
-bool
-RankArrayBuffer::forceFill()
-{
-  if(this->finished) { return true; }
-
-  while(this->producer_buffer.size() < BUFFER_SIZE && !(this->array.end()))
-  {
-    this->producer_buffer.push_back(*(this->array)); ++(this->array);
-  }
-
-  if(this->array.end()) { this->finished = true; }
-  return this->finished;
-}
-
-void
-RankArrayBuffer::read()
-{
-  std::unique_lock<std::mutex> lock(this->mtx);
-  this->forceRead();
-  this->empty.notify_one();
-}
-
-void
-RankArrayBuffer::forceRead()
-{
-  if(this->producer_buffer.empty())
-  {
-    this->forceFill();
-  }
-  this->consumer_buffer.swap(this->producer_buffer);
-  this->producer_buffer.clear();
 }
 
 //------------------------------------------------------------------------------
