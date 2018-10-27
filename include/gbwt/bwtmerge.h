@@ -304,11 +304,13 @@ produce(ProducerBuffer<Producer>* buffer)
   while(!(buffer->fill()));
 }
 
+constexpr static size_type PRODUCER_BUFFER_SIZE = 8 * MEGABYTE; // Positions.
+
 template<class Producer>
 class ProducerBuffer
 {
 public:
-  constexpr static size_type BUFFER_SIZE = 8 * MEGABYTE; // Positions.
+  constexpr static size_type BUFFER_SIZE = PRODUCER_BUFFER_SIZE;
 
   ProducerBuffer(Producer& source, size_type buffer_size = BUFFER_SIZE) :
     producer(source), buffer_capacity(buffer_size), finished(source.empty()),
@@ -452,6 +454,7 @@ public:
 
   // Iterator operations.
   edge_type operator*() const { return this->value; }
+  const edge_type* operator->() const { return &(this->value); }
   void operator++()
   {
     size_type source = this->heap.front().second;

@@ -245,7 +245,9 @@ GapArray<BlockArray>::write(const std::string& filename)
 void
 open(GapArray<sdsl::int_vector_buffer<8>>& array, const std::string filename, size_type values)
 {
-  array.data = sdsl::int_vector_buffer<8>(filename);
+  // Use a block size of 4 bytes per element in the producer buffer.
+  // This way we should avoid starving the producer thread.
+  array.data = sdsl::int_vector_buffer<8>(filename, std::ios::in, 4 * PRODUCER_BUFFER_SIZE);
   array.value_count = values;
 }
 

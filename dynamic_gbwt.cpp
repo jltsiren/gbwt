@@ -888,7 +888,7 @@ recodeRun(run_type run, const DynamicRecord& source, const std::vector<edge_type
 */
 
 void
-mergeRecords(DynamicRecord& left, const DynamicRecord& right, ProducerBuffer<RankArray>& ra, node_type node, size_type left_sequences)
+mergeRecords(DynamicRecord& left, const DynamicRecord& right, RankArray& ra, node_type node, size_type left_sequences)
 {
   // Rebuild the record using these structures.
   std::vector<edge_type> new_outgoing = mergeOutgoing(left.outgoing, right.outgoing);
@@ -981,13 +981,14 @@ DynamicGBWT::merge(const DynamicGBWT& source, const MergeParameters& parameters)
 
   // Merge the records.
   double merge_start = readTimer();
-  ProducerBuffer<RankArray> ra(mb.ra);
+  mb.ra.open();
   for(comp_type comp = 0; comp < this->effective(); comp++)
   {
     node_type node = this->toNode(comp);
     if(!(source.contains(node))) { continue; }
-    mergeRecords(this->record(node), source.record(node), ra, node, this->sequences());
+    mergeRecords(this->record(node), source.record(node), mb.ra, node, this->sequences());
   }
+  mb.ra.close();
   if(Verbosity::level >= Verbosity::BASIC)
   {
     double seconds = readTimer() - merge_start;
