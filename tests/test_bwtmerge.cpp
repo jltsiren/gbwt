@@ -436,21 +436,21 @@ public:
   }
 
   // Note that this sorts correct_values.
-  static void checkLarge(RankArray& array, std::vector<edge_type>& correct_values, const std::string& test_name)
+  static void checkBuffer(RankArray& array, std::vector<edge_type>& correct_values, const std::string& test_name)
   {
     parallelQuickSort(correct_values.begin(), correct_values.end());
 
     bool early_end = false;
     size_type wrong_values = 0, end_at = 0;
-    array.open();
+    ProducerBuffer<RankArray> buffer(array);
     for(size_type i = 0; i < correct_values.size(); i++)
     {
-      if(array.end()) { early_end = true; end_at = i; break; }
-      if(*array != correct_values[i]) { wrong_values++; }
-      ++array;
+      if(buffer.end()) { early_end = true; end_at = i; break; }
+      if(*buffer != correct_values[i]) { wrong_values++; }
+      ++buffer;
     }
     EXPECT_FALSE(early_end) << test_name << ": Array ended early (" << end_at << " / " << correct_values.size() << ")";
-    EXPECT_TRUE(array.end()) << test_name << ": Array is too large";
+    EXPECT_TRUE(buffer.end()) << test_name << ": Array is too large";
     EXPECT_EQ(wrong_values, 0u) << test_name << ": " << wrong_values << " wrong values";
     array.close();
   }
@@ -475,12 +475,12 @@ TEST_F(RankArrayTest, BasicTests)
   checkArray(array, correct_values, "Multiple");
 }
 
-TEST_F(RankArrayTest, LargeArray)
+TEST_F(RankArrayTest, BufferedReading)
 {
   // Empty array.
   std::vector<edge_type> correct_values;
   RankArray array;
-  checkLarge(array, correct_values, "Empty");
+  checkBuffer(array, correct_values, "Empty");
 
   // Single file.
   std::vector<edge_type> data;
@@ -488,14 +488,14 @@ TEST_F(RankArrayTest, LargeArray)
   addFile(array, data);
   correct_values.insert(correct_values.end(), data.begin(), data.end());
   data.clear();
-  checkLarge(array, correct_values, "Single");
+  checkBuffer(array, correct_values, "Single");
 
   // Multiple files.
   initLargeArray(data, 0x42424242);
   addFile(array, data);
   correct_values.insert(correct_values.end(), data.begin(), data.end());
   data.clear();
-  checkLarge(array, correct_values, "Multiple");
+  checkBuffer(array, correct_values, "Multiple");
 }
 
 TEST_F(RankArrayTest, MergeBuffers)
@@ -530,7 +530,7 @@ TEST_F(RankArrayTest, MergeBuffers)
     correct_values.insert(correct_values.end(), data[i].begin(), data[i].end());
     data[i].clear();
   }
-  checkLarge(buffers.ra, correct_values, "MergeBuffers");
+  checkBuffer(buffers.ra, correct_values, "MergeBuffers");
 }
 
 //------------------------------------------------------------------------------
