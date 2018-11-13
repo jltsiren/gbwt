@@ -274,7 +274,7 @@ GapIterator<BlockArray>::read()
 const std::string RankArray::TEMP_FILE_PREFIX = "ranks";
 
 RankArray::RankArray() :
-  tournament_tree(1, tree_type(invalid_edge(), 0))
+  value(invalid_edge())
 {
 }
 
@@ -321,7 +321,8 @@ RankArray::close()
   this->buffers.clear();
   this->iterators.clear();
   this->inputs.clear();
-  this->tournament_tree = std::vector<tree_type>(1, tree_type(invalid_edge(), 0));
+  this->tournament_tree.clear();
+  this->value = invalid_edge();
 }
 
 void RankArray::operator++()
@@ -329,7 +330,11 @@ void RankArray::operator++()
   // Advance the active file.
   size_type pos = this->tournament_tree.back().second;
   this->buffers[pos]->operator++();
+#ifdef GBWT_SAVE_MEMORY
+  this->tournament_tree[pos].first = pack(this->buffers[pos]->operator*());
+#else
   this->tournament_tree[pos].first = this->buffers[pos]->operator*();
+#endif
 
   // Update the tournament tree.
   size_type level_size = this->leaves, level_offset = 0;
@@ -340,6 +345,9 @@ void RankArray::operator++()
     level_offset = next_offset;
     pos /= 2; level_size /= 2;
   }
+
+  // Cache the next value.
+  this->cacheValue();
 }
 
 void
@@ -349,10 +357,26 @@ RankArray::initTree()
   this->leaves = 1;
   while(this->leaves < this->size()) { this->leaves *= 2; }
 
-  // Build the tournament tree.
-  this->tournament_tree = std::vector<tree_type>(2 * this->leaves - 1, tree_type(invalid_edge(), 0));
-  for(size_type i = 0; i < this->size(); i++) { this->tournament_tree[i].first = this->buffers[i]->operator*(); }
+  // Allocate the tree and fill it with empty values.
+#ifdef GBWT_SAVE_MEMORY
+  tree_type empty_value(pack(invalid_edge()), 0);
+#else
+  tree_type empty_value(invalid_edge(), 0);
+#endif
+  this->tournament_tree = std::vector<tree_type>(2 * this->leaves - 1, empty_value);
+
+  // Initialize the leaves.
+  for(size_type i = 0; i < this->size(); i++)
+  {
+#ifdef GBWT_SAVE_MEMORY
+    this->tournament_tree[i].first = pack(this->buffers[i]->operator*());
+#else
+    this->tournament_tree[i].first = this->buffers[i]->operator*();
+#endif
+  }
   for(size_type i = 0; i < this->leaves; i++) { this->tournament_tree[i].second = i; }
+
+  // Compute the upper levels.
   size_type level_size = this->leaves, level_offset = 0;
   while(level_size > 1)
   {
@@ -364,6 +388,9 @@ RankArray::initTree()
     level_offset = next_offset;
     level_size /= 2;
   }
+
+  // Cache the next value.
+  this->cacheValue();
 }
 
 //------------------------------------------------------------------------------

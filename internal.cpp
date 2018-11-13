@@ -80,18 +80,6 @@ Run::Run(size_type alphabet_size) :
 
 //------------------------------------------------------------------------------
 
-void
-RunMerger::flush()
-{
-  if(this->accumulator.second > 0)
-  {
-    this->runs.push_back(this->accumulator);
-    this->accumulator.second = 0;
-  }
-}
-
-//------------------------------------------------------------------------------
-
 Sequence::Sequence() :
   id(0), curr(ENDMARKER), next(ENDMARKER), offset(0), pos(0)
 {

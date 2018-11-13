@@ -268,9 +268,21 @@ struct RunMerger
     else { this->flush(); this->accumulator = run; }
   }
 
-  void insert(rank_type outrank) { this->insert(run_type(outrank, 1)); }
+  void insert(rank_type outrank)
+  {
+    this->total_size++; counts[outrank]++;
+    if(outrank == accumulator.first) { accumulator.second++; }
+    else { this->flush(); this->accumulator = run_type(outrank, 1); }
+  }
 
-  void flush();
+  void flush()
+  {
+    if(this->accumulator.second > 0)
+    {
+      this->runs.push_back(this->accumulator);
+      this->accumulator.second = 0;
+    }
+  }
 
   void addEdge() { this->counts.push_back(0); }
 };

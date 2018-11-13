@@ -434,7 +434,13 @@ public:
   typedef GapArray<sdsl::int_vector_buffer<8>> array_type;
   typedef array_type::size_type                size_type;
   typedef array_type::iterator                 iterator;
+
+#ifdef GBWT_SAVE_MEMORY
+  // Avoid comparisons by packing the pair of 32-bit values into a 64-bit integer.
+  typedef std::pair<size_type, size_type>      tree_type; // (packed value, source)
+#else
   typedef std::pair<edge_type, size_type>      tree_type; // (value, source)
+#endif
 
   const static std::string TEMP_FILE_PREFIX;  // "ranks"
 
@@ -453,10 +459,10 @@ public:
   void close();
 
   // Iterator operations.
-  edge_type operator*() const { return this->tournament_tree.back().first; }
-  const edge_type* operator->() const { return &(this->tournament_tree.back().first); }
+  edge_type operator*() const { return this->value; }
+  const edge_type* operator->() const { return &(this->value); }
   void operator++();
-  bool end() { return (this->tournament_tree.back().first == invalid_edge()); }
+  bool end() { return (this->value == invalid_edge()); }
 
   size_type size() const { return this->filenames.size(); }
   size_type empty() const { return (this->size() == 0); }
@@ -473,12 +479,36 @@ public:
   std::vector<tree_type> tournament_tree;
   size_type              leaves;
 
+  // Cached value.
+  edge_type value;
+
 private:
   // Tournament tree operations.
   void initTree();
   tree_type smaller(size_type tree_offset) const
   {
-    return std::min(this->tournament_tree[tree_offset], this->tournament_tree[tree_offset ^ 0x1]);
+    if(this->tournament_tree[tree_offset].first <= this->tournament_tree[tree_offset ^ 0x1].first)
+    {
+      return this->tournament_tree[tree_offset];
+    }
+    else
+    {
+      return this->tournament_tree[tree_offset ^ 0x1];
+    }
+  }
+
+#ifdef GBWT_SAVE_MEMORY
+  static size_type pack(edge_type edge) { return (static_cast<size_type>(edge.first) << S_WORD_BITS) | edge.second; }
+  static edge_type unpack(size_type packed) { return edge_type(packed >> S_WORD_BITS, packed & LOW_MASK); }
+#endif
+
+  void cacheValue()
+  {
+#ifdef GBWT_SAVE_MEMORY
+    this->value = unpack(this->tournament_tree.back().first);
+#else
+    this->value = this->tournament_tree.back().first;
+#endif
   }
 
   RankArray(const RankArray&) = delete;

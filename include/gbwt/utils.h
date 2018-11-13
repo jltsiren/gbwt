@@ -81,7 +81,10 @@ typedef std::pair<size_type, size_type>   sample_type;  // (i, DA[i]) within a r
 //------------------------------------------------------------------------------
 
 constexpr size_type BYTE_BITS    = 8;
+constexpr size_type S_WORD_BITS  = 32;
 constexpr size_type WORD_BITS    = 64;
+
+constexpr size_type LOW_MASK     = 0xFFFFFFFFULL;
 
 constexpr size_type KILOBYTE     = 1024;
 constexpr size_type MEGABYTE     = KILOBYTE * KILOBYTE;
