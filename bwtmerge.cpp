@@ -274,7 +274,7 @@ GapIterator<BlockArray>::read()
 const std::string RankArray::TEMP_FILE_PREFIX = "ranks";
 
 RankArray::RankArray() :
-  value(invalid_edge())
+  tournament_tree(1, tree_type(invalid_edge(), 0))
 {
 }
 
@@ -300,18 +300,15 @@ RankArray::open()
   this->inputs = std::vector<array_type>(this->size());
   this->iterators = std::vector<iterator>(this->size());
   this->buffers = std::vector<ProducerBuffer<iterator>*>(this->size());
-  this->heap = std::vector<heap_type>(this->size());
 
   for(size_type i = 0; i < this->size(); i++)
   {
     gbwt::open(this->inputs[i], this->filenames[i], this->value_counts[i]);
     this->iterators[i] = iterator(this->inputs[i]);
     this->buffers[i] = new ProducerBuffer<iterator>(this->iterators[i]);
-    this->heap[i] = heap_type(this->buffers[i]->operator*(), i);
   }
 
-  this->heapify();
-  this->value = (this->empty() ? invalid_edge() : this->heap.front().first);
+  this->initTree();
 }
 
 void
@@ -324,22 +321,48 @@ RankArray::close()
   this->buffers.clear();
   this->iterators.clear();
   this->inputs.clear();
-  this->heap.clear();
+  this->tournament_tree = std::vector<tree_type>(1, tree_type(invalid_edge(), 0));
+}
 
-  this->value = invalid_edge();
+void RankArray::operator++()
+{
+  // Advance the active file.
+  size_type pos = this->tournament_tree.back().second;
+  this->buffers[pos]->operator++();
+  this->tournament_tree[pos].first = this->buffers[pos]->operator*();
+
+  // Update the tournament tree.
+  size_type level_size = this->leaves, level_offset = 0;
+  while(level_size > 1)
+  {
+    size_type next_offset = level_offset + level_size;
+    this->tournament_tree[next_offset + pos / 2] = this->smaller(level_offset + pos);
+    level_offset = next_offset;
+    pos /= 2; level_size /= 2;
+  }
 }
 
 void
-RankArray::heapify()
+RankArray::initTree()
 {
-  if(this->size() <= 1) { return; }
+  // The number of leaves must be a power of two.
+  this->leaves = 1;
+  while(this->leaves < this->size()) { this->leaves *= 2; }
 
-  size_type i = parent(this->size() - 1);
-  while(true)
+  // Build the tournament tree.
+  this->tournament_tree = std::vector<tree_type>(2 * this->leaves - 1, tree_type(invalid_edge(), 0));
+  for(size_type i = 0; i < this->size(); i++) { this->tournament_tree[i].first = this->buffers[i]->operator*(); }
+  for(size_type i = 0; i < this->leaves; i++) { this->tournament_tree[i].second = i; }
+  size_type level_size = this->leaves, level_offset = 0;
+  while(level_size > 1)
   {
-    this->down(i);
-    if(i == 0) { break; }
-    i--;
+    size_type next_offset = level_offset + level_size;
+    for(size_type i = 0; i < level_size; i += 2)
+    {
+      this->tournament_tree[next_offset + i / 2] = this->smaller(level_offset + i);
+    }
+    level_offset = next_offset;
+    level_size /= 2;
   }
 }
 

@@ -434,7 +434,7 @@ public:
   typedef GapArray<sdsl::int_vector_buffer<8>> array_type;
   typedef array_type::size_type                size_type;
   typedef array_type::iterator                 iterator;
-  typedef std::pair<edge_type, size_type>      heap_type; // (value, source)
+  typedef std::pair<edge_type, size_type>      tree_type; // (value, source)
 
   const static std::string TEMP_FILE_PREFIX;  // "ranks"
 
@@ -453,17 +453,10 @@ public:
   void close();
 
   // Iterator operations.
-  edge_type operator*() const { return this->value; }
-  const edge_type* operator->() const { return &(this->value); }
-  void operator++()
-  {
-    size_type source = this->heap.front().second;
-    this->buffers[source]->operator++();
-    this->heap.front().first = this->buffers[source]->operator*();
-    this->down(0);
-    this->value = this->heap.front().first;
-  }
-  bool end() { return (this->value == invalid_edge()); }
+  edge_type operator*() const { return this->tournament_tree.back().first; }
+  const edge_type* operator->() const { return &(this->tournament_tree.back().first); }
+  void operator++();
+  bool end() { return (this->tournament_tree.back().first == invalid_edge()); }
 
   size_type size() const { return this->filenames.size(); }
   size_type empty() const { return (this->size() == 0); }
@@ -474,36 +467,19 @@ public:
   std::vector<array_type>                inputs;
   std::vector<iterator>                  iterators;
   std::vector<ProducerBuffer<iterator>*> buffers;
-  std::vector<heap_type>                 heap;
 
-  edge_type value;
+  // Use a tournament tree instead of a priority queue.
+  // The number of leaves is a power of two.
+  std::vector<tree_type> tournament_tree;
+  size_type              leaves;
 
 private:
-  /*
-    Heap operations.
-  */
-  static size_type parent(size_type i) { return (i - 1) / 2; }
-  static size_type left(size_type i) { return 2 * i + 1; }
-  static size_type right(size_type i) { return 2 * i + 2; }
-
-  size_type smaller(size_type i, size_type j) const
+  // Tournament tree operations.
+  void initTree();
+  tree_type smaller(size_type tree_offset) const
   {
-    return (this->heap[j].first < this->heap[i].first ? j : i);
+    return std::min(this->tournament_tree[tree_offset], this->tournament_tree[tree_offset ^ 0x1]);
   }
-
-  void down(size_type i)
-  {
-    while(left(i) < this->size())
-    {
-      size_type next = this->smaller(i, left(i));
-      if(right(i) < this->size()) { next = this->smaller(next, right(i)); }
-      if(next == i) { return; }
-      std::swap(this->heap[i], this->heap[next]);
-      i = next;
-    }
-  }
-
-  void heapify();
 
   RankArray(const RankArray&) = delete;
   RankArray& operator=(const RankArray&) = delete;
