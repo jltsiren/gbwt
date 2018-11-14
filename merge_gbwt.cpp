@@ -51,24 +51,34 @@ main(int argc, char** argv)
   MergeParameters parameters;
   std::string output;
   int c = 0;
-  while((c = getopt(argc, argv, "b:fio:ps:t:")) != -1)
+  while((c = getopt(argc, argv, "b:C:fiM:o:pP:s:S:t:T:")) != -1)
   {
     switch(c)
     {
     case 'b':
       batch_size = std::stoul(optarg); break;
+    case 'C':
+      parameters.setChunkSize(std::stoul(optarg)); break;
     case 'f':
       algorithm = ma_fast; break;
     case 'i':
       algorithm = ma_insert; break;
+    case 'M':
+      parameters.setMergeBuffers(std::stoul(optarg)); break;
     case 'o':
       output = optarg; break;
     case 'p':
       algorithm = ma_parallel; break;
+    case 'P':
+      parameters.setPosBufferSize(std::stoul(optarg)); break;
     case 's':
       sample_interval = std::stoul(optarg); break;
+    case 'S':
+      omp_set_num_threads(std::stoul(optarg)); break;
     case 't':
       TempFile::setDirectory(optarg); break;
+    case 'T':
+      parameters.setThreadBufferSize(std::stoul(optarg)); break;
     case '?':
       std::exit(EXIT_FAILURE);
     default:
@@ -89,6 +99,15 @@ main(int argc, char** argv)
   {
     printHeader("Batch size"); std::cout << batch_size << std::endl;
     printHeader("Sample interval"); std::cout << sample_interval << std::endl;
+  }
+  else if(algorithm == ma_parallel)
+  {
+    printHeader("Temp directory"); std::cout << TempFile::temp_dir << std::endl;
+    printHeader("Search threads"); std::cout << omp_get_max_threads() << std::endl;
+    printHeader("Pos buffers"); std::cout << parameters.pos_buffer_size << " MB" << std::endl;
+    printHeader("Thread buffers"); std::cout << parameters.thread_buffer_size << " MB" << std::endl;
+    printHeader("Merge buffers"); std::cout << parameters.merge_buffers << std::endl;
+    printHeader("Chunk size"); std::cout << parameters.chunk_size << std::endl;
   }
   std::cout << std::endl;
 
@@ -174,7 +193,12 @@ printUsage(int exit_code)
   std::cerr << "  -s N  Sample sequence ids at one out of N positions (default: " << DynamicGBWT::SAMPLE_INTERVAL << "; use 0 for no samples)" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Parallel algorithm (-p):" << std::endl;
+  std::cerr << "  -C N  Parallelize search in chunks of N sequences (default: " << MergeParameters::CHUNK_SIZE << ")" << std::endl;
+  std::cerr << "  -M N  Use N merge buffers (default: " << MergeParameters::MERGE_BUFFERS << ")" << std::endl;
+  std::cerr << "  -P N  Use N-megabyte position buffers (default: " << MergeParameters::POS_BUFFER_SIZE << ")" << std::endl;
+  std::cerr << "  -S N  Use N search threads (default: " << omp_get_max_threads() << ")" << std::endl;
   std::cerr << "  -t X  Use directory X for temporary files (default: " << TempFile::DEFAULT_TEMP_DIR << ")" << std::endl;
+  std::cerr << "  -T N  Use N-megabyte thread buffers (default: " << MergeParameters::THREAD_BUFFER_SIZE << ")" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Use base names for the inputs and the output." << std::endl;
   std::cerr << std::endl;
