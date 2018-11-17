@@ -59,6 +59,7 @@ GBWT::swap(GBWT& another)
     this->header.swap(another.header);
     this->bwt.swap(another.bwt);
     this->da_samples.swap(another.da_samples);
+    this->metadata.swap(another.metadata);
     this->cacheEndmarker(); another.cacheEndmarker();
   }
 }
@@ -78,6 +79,7 @@ GBWT::operator=(GBWT&& source)
     this->header = std::move(source.header);
     this->bwt = std::move(source.bwt);
     this->da_samples = std::move(source.da_samples);
+    this->metadata = std::move(source.metadata);
     this->cacheEndmarker();
   }
   return *this;
@@ -92,6 +94,11 @@ GBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string nam
   written_bytes += this->header.serialize(out, child, "header");
   written_bytes += this->bwt.serialize(out, child, "bwt");
   written_bytes += this->da_samples.serialize(out, child, "da_samples");
+
+  if(this->hasMetadata())
+  {
+    written_bytes += this->metadata.serialize(out, child, "metadata");
+  }
 
   sdsl::structure_tree::add_size(child, written_bytes);
   return written_bytes;
@@ -110,6 +117,17 @@ GBWT::load(std::istream& in)
   this->bwt.load(in);
   this->da_samples.load(in);
 
+  // Read the metadata.
+  if(this->hasMetadata())
+  {
+    this->metadata.load(in);
+    if(!(this->metadata.check()))
+    {
+      std::cerr << "GBWT::load(): Invalid metadata: " << this->metadata << std::endl;
+    }
+    this->metadata.setVersion();  // Update to the current version.
+  }
+
   this->cacheEndmarker();
 }
 
@@ -119,6 +137,7 @@ GBWT::copy(const GBWT& source)
   this->header = source.header;
   this->bwt = source.bwt;
   this->da_samples = source.da_samples;
+  this->metadata = source.metadata;
   this->cacheEndmarker();
 }
 
@@ -197,6 +216,30 @@ GBWT::GBWT(const std::vector<GBWT>& sources)
       sequence_counts[i] = sources[i].sequences();
     }
     this->da_samples = DASamples(sample_sources, origins, record_offsets, sequence_counts);
+  }
+
+  // Merge the metadata.
+  {
+    bool has_metadata = false, all_metadata = true;
+    for(size_type i = 0; i < sources.size(); i++)
+    {
+      has_metadata |= sources[i].hasMetadata();
+      all_metadata &= sources[i].hasMetadata();
+    }
+    if(has_metadata)
+    {
+      if(all_metadata)
+      {
+        std::vector<const Metadata*> source_metadata(sources.size());
+        for(size_type i = 0; i < sources.size(); i++) { source_metadata[i] = &(sources[i].metadata); }
+        this->metadata.merge(source_metadata, true, false); // Same samples, different contigs.
+        this->addMetadata();
+      }
+      else if(Verbosity::level >= Verbosity::BASIC)
+      {
+        std::cerr << "GBWT::merge(): All inputs do not have metadata" << std::endl;
+      }
+    }
   }
 
   this->cacheEndmarker();
@@ -313,6 +356,10 @@ printStatistics(const GBWT& gbwt, const std::string& name)
   printHeader("BWT"); std::cout << inMegabytes(sdsl::size_in_bytes(gbwt.bwt)) << " MB" << std::endl;
   printHeader("Samples"); std::cout << inMegabytes(sdsl::size_in_bytes(gbwt.da_samples)) << " MB" << std::endl;
   printHeader("Total"); std::cout << inMegabytes(sdsl::size_in_bytes(gbwt)) << " MB" << std::endl;
+  if(gbwt.hasMetadata())
+  {
+    printHeader("Metadata"); std::cout << gbwt.metadata << std::endl;
+  }
   std::cout << std::endl;
 }
 

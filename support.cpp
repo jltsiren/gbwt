@@ -1145,4 +1145,124 @@ MergeParameters::setChunkSize(size_type n)
 
 //------------------------------------------------------------------------------
 
+Metadata::Metadata() :
+  tag(TAG), version(VERSION),
+  sample_count(0), haplotype_count(0), contig_count(0),
+  flags(0)
+{
+}
+
+size_type
+Metadata::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
+{
+  sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
+  size_type written_bytes = 0;
+  written_bytes += sdsl::write_member(this->tag, out, child, "tag");
+  written_bytes += sdsl::write_member(this->version, out, child, "version");
+  written_bytes += sdsl::write_member(this->sample_count, out, child, "sample_count");
+  written_bytes += sdsl::write_member(this->haplotype_count, out, child, "haplotype_count");
+  written_bytes += sdsl::write_member(this->contig_count, out, child, "contig_count");
+  written_bytes += sdsl::write_member(this->flags, out, child, "flags");
+  sdsl::structure_tree::add_size(child, written_bytes);
+  return written_bytes;
+}
+
+void
+Metadata::load(std::istream& in)
+{
+  sdsl::read_member(this->tag, in);
+  sdsl::read_member(this->version, in);
+  sdsl::read_member(this->sample_count, in);
+  sdsl::read_member(this->haplotype_count, in);
+  sdsl::read_member(this->contig_count, in);
+  sdsl::read_member(this->flags, in);
+}
+
+bool
+Metadata::check() const
+{
+  if(this->tag != TAG) { return false; }
+  if(this->version == VERSION)
+  {
+    return ((this->flags & FLAG_MASK) == this->flags);
+  }
+  return false;
+}
+
+bool
+Metadata::checkNew() const
+{
+  return (this->tag == TAG && this->version > VERSION);
+}
+
+void
+Metadata::swap(Metadata& another)
+{
+  if(this != &another)
+  {
+    std::swap(this->tag, another.tag);
+    std::swap(this->version, another.version);
+    std::swap(this->sample_count, another.sample_count);
+    std::swap(this->haplotype_count, another.haplotype_count);
+    std::swap(this->contig_count, another.contig_count);
+    std::swap(this->flags, another.flags);
+  }
+}
+
+bool
+Metadata::operator==(const Metadata& another) const
+{
+  return (this->tag == another.tag &&
+          this->version == another.version &&
+          this->sample_count == another.sample_count &&
+          this->haplotype_count == another.haplotype_count &&
+          this->contig_count == another.contig_count &&
+          this->flags == another.flags);
+}
+
+void
+Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
+{
+  if(same_samples)
+  {
+    this->sample_count = std::max(this->sample_count, source.sample_count);
+    this->haplotype_count = std::max(this->haplotype_count, source.haplotype_count);
+  }
+  else
+  {
+    this->sample_count += source.sample_count;
+    this->haplotype_count += source.haplotype_count;
+  }
+
+  if(same_contigs)
+  {
+    this->contig_count = std::max(this->contig_count, source.contig_count);
+  }
+  else
+  {
+    this->contig_count += source.contig_count;
+  }
+}
+
+void
+Metadata::merge(std::vector<const Metadata*> sources, bool same_samples, bool same_contigs)
+{
+  for(const Metadata* source : sources) { this->merge(*source, same_samples, same_contigs); }
+}
+
+void
+Metadata::clear()
+{
+  *this = Metadata();
+}
+
+std::ostream& operator<<(std::ostream& stream, const Metadata& metadata)
+{
+  return stream << metadata.samples() << " sample(s), "
+                << metadata.haplotypes() << " haplotype(s), "
+                << metadata.contigs() << " contig(s)";
+}
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwt

@@ -75,6 +75,8 @@ public:
 
     Set has_both_orientations to true if the text has both orientations of each sequence.
     Both orientations are required for bidirectional search.
+
+    Does not update the metadata.
   */
   void insert(const text_type& text, bool has_both_orientations = false, size_type sample_interval = SAMPLE_INTERVAL);
   void insert(const text_type& text, size_type text_length, bool has_both_orientations = false, size_type sample_interval = SAMPLE_INTERVAL);
@@ -85,17 +87,23 @@ public:
     size 0 to insert the entire text at once. By default, the sequences are only inserted in
     forward orientation. Set both_orientations = true to insert the reverse complement as well.
     Both orientations are required for bidirectional search.
+
+    Does not update the metadata.
   */
   void insert(text_buffer_type& text, size_type batch_size = INSERT_BATCH_SIZE, bool both_orientations = false, size_type sample_interval = DynamicGBWT::SAMPLE_INTERVAL);
 
   /*
     Insert the sequences from the other GBWT into this. Use batch size 0 to insert all
     sequences at once.
+
+    Merges the metadata if both indexes contain it.
   */
   void merge(const GBWT& source, size_type batch_size = MERGE_BATCH_SIZE, size_type sample_interval = SAMPLE_INTERVAL);
 
   /*
     Parallel merging algorithm adapted from BWT-merge.
+
+    Merges the metadata if both indexes contain it.
   */
   void merge(const DynamicGBWT& source, const MergeParameters& parameters);
 
@@ -115,6 +123,16 @@ public:
   size_type samples() const;  // Expensive.
 
   bool bidirectional() const { return this->header.get(GBWTHeader::FLAG_BIDIRECTIONAL); }
+
+//------------------------------------------------------------------------------
+
+  /*
+    Metadata interface.
+  */
+
+  bool hasMetadata() const { return this->header.get(GBWTHeader::FLAG_METADATA); }
+  void addMetadata() { this->header.set(GBWTHeader::FLAG_METADATA); }
+  void clearMetadata() { this->metadata.clear(); this->header.unset(GBWTHeader::FLAG_METADATA); };
 
 //------------------------------------------------------------------------------
 
@@ -291,6 +309,7 @@ public:
 
   GBWTHeader                 header;
   std::vector<DynamicRecord> bwt;
+  Metadata                   metadata;
 
 //------------------------------------------------------------------------------
 

@@ -5,6 +5,7 @@ prepare_text
 build_gbwt
 merge_gbwt
 benchmark
+metadata
 
 test_bwtmerge
 test_variants

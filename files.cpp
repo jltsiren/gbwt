@@ -72,15 +72,17 @@ bool
 GBWTHeader::check() const
 {
   if(this->tag != TAG) { return false; }
-  if(this->version == VERSION)
+  switch(this->version)
   {
+  case VERSION:
     return ((this->flags & FLAG_MASK) == this->flags);
+  case BD_VERSION:
+    return ((this->flags & BD_FLAG_MASK) == this->flags);
+  case OLD_VERSION:
+    return ((this->flags & OLD_FLAG_MASK) == this->flags);
+  default:
+    return false;
   }
-  if(this->version >= MIN_VERSION && this->version < VERSION)
-  {
-    return (this->flags == 0);
-  }
-  return false;
 }
 
 bool

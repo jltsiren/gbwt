@@ -52,6 +52,7 @@ public:
   ~GBWT();
 
   // Merge the sources, assuming that node ids do not overlap.
+  // Also merges the metadata if all indexes contain it.
   explicit GBWT(const std::vector<GBWT>& sources);
 
   void swap(GBWT& another);
@@ -79,6 +80,16 @@ public:
   size_type samples() const { return this->da_samples.size(); }
 
   bool bidirectional() const { return this->header.get(GBWTHeader::FLAG_BIDIRECTIONAL); }
+
+//------------------------------------------------------------------------------
+
+  /*
+    Metadata interface.
+  */
+
+  bool hasMetadata() const { return this->header.get(GBWTHeader::FLAG_METADATA); }
+  void addMetadata() { this->header.set(GBWTHeader::FLAG_METADATA); }
+  void clearMetadata() { this->metadata.clear(); this->header.unset(GBWTHeader::FLAG_METADATA); };
 
 //------------------------------------------------------------------------------
 
@@ -249,6 +260,7 @@ public:
   GBWTHeader  header;
   RecordArray bwt;
   DASamples   da_samples;
+  Metadata    metadata;
 
   // Decompress and cache the endmarker, because decompressing it is expensive.
   DecompressedRecord endmarker_record;

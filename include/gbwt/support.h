@@ -412,6 +412,69 @@ struct MergeParameters
 
 //------------------------------------------------------------------------------
 
+/*
+  GBWT metadata. Merging assumes that all metadata records cover the same samples
+  and haplotypes.
+
+  Version 0:
+  - Preliminary version with counts of samples, haplotypes, and contigs.
+
+  Next version:
+  - Haplotype coverage over ranges of node ids (run-length encode with sd_vector).
+  - Assign contig ids to ranges of node ids (as above).
+  - Contig and sample names.
+  - Sequence names as tuples (sample, phase, count) with implied orientation.
+*/
+
+struct Metadata
+{
+  typedef gbwt::size_type size_type;  // Needed for SDSL serialization.
+
+  std::uint32_t tag;
+  std::uint32_t version;
+  std::uint64_t sample_count;
+  std::uint64_t haplotype_count;
+  std::uint64_t contig_count;
+  std::uint64_t flags;
+
+  constexpr static std::uint32_t TAG = 0x6B375E7A;
+  constexpr static std::uint32_t VERSION = Version::METADATA_VERSION;
+
+  // Flag masks for old compatible versions.
+
+  constexpr static std::uint64_t FLAG_MASK = 0x0000;
+
+  Metadata();
+
+  size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
+  void load(std::istream& in);
+  bool check() const;
+  bool checkNew() const;
+
+  void setVersion() { this->version = VERSION; }
+
+  void set(std::uint64_t flag) { this->flags |= flag; }
+  void unset(std::uint64_t flag) { this->flags &= ~flag; }
+  bool get(std::uint64_t flag) const { return (this->flags & flag); }
+
+  void swap(Metadata& another);
+
+  bool operator==(const Metadata& another) const;
+  bool operator!=(const Metadata& another) const { return !(this->operator==(another)); }
+
+  size_type samples() const { return this->sample_count; }
+  size_type haplotypes() const { return this->haplotype_count; }
+  size_type contigs() const { return this->contig_count; }
+
+  void merge(const Metadata& source, bool same_samples, bool same_contigs);
+  void merge(std::vector<const Metadata*> sources, bool same_samples, bool same_contigs);
+  void clear();
+};
+
+std::ostream& operator<<(std::ostream& stream, const Metadata& metadata);
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwt
 
 #endif // GBWT_SUPPORT_H

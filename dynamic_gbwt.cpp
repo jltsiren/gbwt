@@ -58,6 +58,7 @@ DynamicGBWT::swap(DynamicGBWT& another)
   {
     this->header.swap(another.header);
     this->bwt.swap(another.bwt);
+    this->metadata.swap(another.metadata);
   }
 }
 
@@ -75,6 +76,7 @@ DynamicGBWT::operator=(DynamicGBWT&& source)
   {
     this->header = std::move(source.header);
     this->bwt = std::move(source.bwt);
+    this->metadata = std::move(source.metadata);
   }
   return *this;
 }
@@ -95,6 +97,11 @@ DynamicGBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::str
   {
     DASamples compressed_samples(this->bwt);
     written_bytes += compressed_samples.serialize(out, child, "da_samples");
+  }
+
+  if(this->hasMetadata())
+  {
+    written_bytes += this->metadata.serialize(out, child, "metadata");
   }
 
   sdsl::structure_tree::add_size(child, written_bytes);
@@ -164,6 +171,17 @@ DynamicGBWT::load(std::istream& in)
     }
   }
 
+  // Read the metadata.
+  if(this->hasMetadata())
+  {
+    this->metadata.load(in);
+    if(!(this->metadata.check()))
+    {
+      std::cerr << "DynamicGBWT::load(): Invalid metadata: " << this->metadata << std::endl;
+    }
+    this->metadata.setVersion();  // Update to the current version.
+  }
+
   // Rebuild the incoming edges.
   this->rebuildIncoming();
 }
@@ -173,6 +191,7 @@ DynamicGBWT::copy(const DynamicGBWT& source)
 {
   this->header = source.header;
   this->bwt = source.bwt;
+  this->metadata = source.metadata;
 }
 
 //------------------------------------------------------------------------------
@@ -741,6 +760,24 @@ DynamicGBWT::insert(text_buffer_type& text, size_type batch_size, bool both_orie
 
 //------------------------------------------------------------------------------
 
+template<class GBWTType>
+void
+mergeMetadata(DynamicGBWT& index, const GBWTType& source)
+{
+  if(index.hasMetadata() && source.hasMetadata())
+  {
+    index.metadata.merge(source.metadata, false, true); // Different samples, same contigs.
+  }
+  else if(index.hasMetadata())
+  {
+    if(Verbosity::level >= Verbosity::BASIC)
+    {
+      std::cerr << "DynamicGBWT::merge(): Clearing metadata: no metadata in the other GBWT" << std::endl;
+    }
+    index.clearMetadata();
+  }
+}
+
 void
 DynamicGBWT::merge(const GBWT& source, size_type batch_size, size_type sample_interval)
 {
@@ -790,6 +827,9 @@ DynamicGBWT::merge(const GBWT& source, size_type batch_size, size_type sample_in
 
   // Finally sort the outgoing edges.
   this->recode();
+
+  // Merge the metadata.
+  mergeMetadata(*this, source);
 
   if(Verbosity::level >= Verbosity::BASIC)
   {
@@ -1007,6 +1047,9 @@ DynamicGBWT::merge(const DynamicGBWT& source, const MergeParameters& parameters)
   this->rebuildIncoming();
   this->rebuildOutgoing();
 
+  // Merge the metadata.
+  mergeMetadata(*this, source);
+
   if(Verbosity::level >= Verbosity::BASIC)
   {
     double seconds = readTimer() - start;
@@ -1103,6 +1146,10 @@ printStatistics(const DynamicGBWT& gbwt, const std::string& name)
   printHeader("Effective"); std::cout << gbwt.effective() << std::endl;
   printHeader("Runs"); std::cout << gbwt.runs() << std::endl;
   printHeader("Samples"); std::cout << gbwt.samples() << std::endl;
+  if(gbwt.hasMetadata())
+  {
+    printHeader("Metadata"); std::cout << gbwt.metadata << std::endl;
+  }
   std::cout << std::endl;
 }
 

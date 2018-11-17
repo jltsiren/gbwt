@@ -40,6 +40,10 @@ namespace gbwt
 /*
   GBWT file header.
 
+  Version 3:
+  - Includes a flag for metadata.
+  - Compatible with versions 1 and 2.
+
   Version 2:
   - Includes a flag for a bidirectional index.
   - Compatible with version 1.
@@ -66,10 +70,17 @@ struct GBWTHeader
 
   constexpr static std::uint32_t TAG = 0x6B376B37;
   constexpr static std::uint32_t VERSION = Version::GBWT_VERSION;
-  constexpr static std::uint32_t MIN_VERSION = 1;
 
-  constexpr static std::uint64_t FLAG_MASK          = 0x0001;
-  constexpr static std::uint64_t FLAG_BIDIRECTIONAL = 0x0001;
+  constexpr static std::uint64_t FLAG_MASK          = 0x0003;
+  constexpr static std::uint64_t FLAG_BIDIRECTIONAL = 0x0001; // The index is bidirectional.
+  constexpr static std::uint64_t FLAG_METADATA      = 0x0002; // The index includes metadata.
+
+  // Flag masks for old compatible versions.
+  constexpr static std::uint32_t BD_VERSION         = 2;
+  constexpr static std::uint64_t BD_FLAG_MASK       = 0x0001;
+
+  constexpr static std::uint32_t OLD_VERSION        = 1;
+  constexpr static std::uint64_t OLD_FLAG_MASK      = 0x0000;
 
   GBWTHeader();
 
