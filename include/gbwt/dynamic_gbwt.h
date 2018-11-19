@@ -171,6 +171,7 @@ public:
 
   vector_type extract(size_type sequence) const { return gbwt::extract(*this, sequence); }
   vector_type extract(edge_type position) const { return gbwt::extract(*this, position); }
+  vector_type extract(edge_type position, size_type max_length) const { return gbwt::extract(*this, position, max_length); }
 
 //------------------------------------------------------------------------------
 

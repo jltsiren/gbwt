@@ -112,7 +112,7 @@ printUsage(int exit_code)
 {
   Version::print(std::cerr, tool_name);
 
-  std::cerr << "Usage: metadata [options] index_base" << std::endl;
+  std::cerr << "Usage: metadata [options] basename" << std::endl;
   std::cerr << "  -c N  Set the number of contigs to N" << std::endl;
   std::cerr << "  -h N  Set the number of haplotypes to N" << std::endl;
   std::cerr << "  -r    Remove all metadata" << std::endl;

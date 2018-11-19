@@ -226,6 +226,22 @@ locate(const GBWTType& index, edge_type position)
 
 template<class GBWTType>
 vector_type
+extract(const GBWTType& index, edge_type position, size_type max_length)
+{
+  vector_type result;
+  if(position == invalid_edge() || !(index.contains(position))) { return result; }
+
+  // No need to check for invalid_edge(), if the initial position is valid.
+  while(position.first != ENDMARKER && result.size() < max_length)
+  {
+    result.push_back(position.first);
+    position = index.LF(position);
+  }
+  return result;
+}
+
+template<class GBWTType>
+vector_type
 extract(const GBWTType& index, edge_type position)
 {
   vector_type result;
