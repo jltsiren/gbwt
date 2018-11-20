@@ -466,6 +466,10 @@ struct Metadata
   size_type haplotypes() const { return this->haplotype_count; }
   size_type contigs() const { return this->contig_count; }
 
+  void setSamples(size_type n) { this->sample_count = n; }
+  void setHaplotypes(size_type n) { this->haplotype_count = n; }
+  void setContigs(size_type n) { this->contig_count = n; }
+
   void merge(const Metadata& source, bool same_samples, bool same_contigs);
   void merge(std::vector<const Metadata*> sources, bool same_samples, bool same_contigs);
   void clear();

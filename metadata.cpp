@@ -79,17 +79,17 @@ main(int argc, char** argv)
   bool modified = false;
   if(set_haplotypes)
   {
-    gbwt.metadata.haplotype_count = new_haplotypes;
+    gbwt.metadata.setHaplotypes(new_haplotypes);
     modified = true;
   }
   if(set_samples)
   {
-    gbwt.metadata.sample_count = new_samples;
+    gbwt.metadata.setSamples(new_samples);
     modified = true;
   }
   if(set_contigs)
   {
-    gbwt.metadata.contig_count = new_contigs;
+    gbwt.metadata.setContigs(new_contigs);
     modified = true;
   }
   if(remove_metadata)
