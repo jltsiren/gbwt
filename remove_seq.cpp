@@ -42,10 +42,11 @@ main(int argc, char** argv)
 {
   if(argc < 3) { printUsage(); }
 
+  int c = 0;
   std::string output;
   size_type chunk_size = DynamicGBWT::REMOVE_CHUNK_SIZE;
-  int c = 0;
-  while((c = getopt(argc, argv, "c:o:")) != -1)
+  bool range = false;
+  while((c = getopt(argc, argv, "c:o:r")) != -1)
   {
     switch(c)
     {
@@ -54,6 +55,8 @@ main(int argc, char** argv)
       break;
     case 'o':
       output = optarg; break;
+    case 'r':
+      range = true; break;
     case '?':
       std::exit(EXIT_FAILURE);
     default:
@@ -65,10 +68,24 @@ main(int argc, char** argv)
   std::string base_name = argv[optind]; optind++;
   if(output.empty()) { output = base_name; }
   std::vector<size_type> seq_ids;
-  while(optind < argc)
+  if(range)
   {
-    seq_ids.push_back(std::stoul(argv[optind]));
-    optind++;
+    if(argc != optind + 2) { printUsage(EXIT_FAILURE); }
+    size_type start = std::stoul(argv[optind]); optind++;
+    size_type stop = std::stoul(argv[optind]); optind++;
+    if(stop < start) { printUsage(EXIT_FAILURE); }
+    for(size_type seq_id = start; seq_id <= stop; seq_id++)
+    {
+      seq_ids.push_back(seq_id);
+    }
+  }
+  else
+  {
+    while(optind < argc)
+    {
+      seq_ids.push_back(std::stoul(argv[optind]));
+      optind++;
+    }
   }
 
   Version::print(std::cout, tool_name);
@@ -110,6 +127,7 @@ printUsage(int exit_code)
   std::cerr << std::endl;
   std::cerr << "  -c N  Build the R in chunks of N sequences per thread (default: " << DynamicGBWT::REMOVE_CHUNK_SIZE << ")" << std::endl;
   std::cerr << "  -o X  Use X as the base name for output" << std::endl;
+  std::cerr << "  -r    Remove a range of sequences (inclusive; requires 2 sequence ids)" << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);
