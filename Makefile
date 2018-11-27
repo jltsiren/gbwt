@@ -39,7 +39,8 @@ HEADERS=$(wildcard include/gbwt/*.h)
 OBJS=$(SOURCES:.cpp=.o)
 
 LIBRARY=libgbwt.a
-PROGRAMS=prepare_text build_gbwt merge_gbwt benchmark metadata
+PROGRAMS=build_gbwt merge_gbwt benchmark metadata remove_seq
+OBSOLETE=prepare_text prepare_text.o
 
 all:$(LIBRARY) $(PROGRAMS)
 
@@ -48,9 +49,6 @@ all:$(LIBRARY) $(PROGRAMS)
 
 $(LIBRARY):$(LIBOBJS)
 	ar rcs $@ $(LIBOBJS)
-
-prepare_text:prepare_text.o $(LIBRARY)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 build_gbwt:build_gbwt.o $(LIBRARY)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
@@ -64,8 +62,11 @@ benchmark:benchmark.o $(LIBRARY)
 metadata:metadata.o $(LIBRARY)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
+remove_seq:remove_seq.o $(LIBRARY)
+	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+
 test:$(LIBRARY)
 	cd tests && make test
 
 clean:
-	rm -f $(PROGRAMS) $(OBJS) $(LIBRARY)
+	rm -f $(PROGRAMS) $(OBJS) $(LIBRARY) $(OBSOLETE)

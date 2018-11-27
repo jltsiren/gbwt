@@ -241,29 +241,73 @@ DynamicGBWT::resize(size_type new_offset, size_type new_sigma)
     std::exit(EXIT_FAILURE);
   }
 
-  if(new_offset != this->header.offset || new_sigma != this->sigma())
+  this->forceResize(new_offset, new_sigma);
+}
+
+void
+DynamicGBWT::resize()
+{
+  if(this->effective() == 0) { return; }
+
+  // Determine the new effective alphabet.
+  size_type new_offset = this->header.offset, new_sigma = this->sigma();
+  if(this->empty())
   {
     if(Verbosity::level >= Verbosity::FULL)
     {
-      if(new_offset != this->header.offset)
-      {
-        std::cerr << "DynamicGBWT::resize(): Changing alphabet offset to " << new_offset << std::endl;
-      }
-      if(new_sigma != this->sigma())
-      {
-        std::cerr << "DynamicGBWT::resize(): Increasing alphabet size to " << new_sigma << std::endl;
-      }
+      std::cerr << "DynamicGBWT::resize(): The index is empty" << std::endl;
     }
-
-    std::vector<DynamicRecord> new_bwt(new_sigma - new_offset);
-    if(this->effective() > 0) { new_bwt[0].swap(this->bwt[0]); }
-    for(comp_type comp = 1; comp < this->effective(); comp++)
-    {
-      new_bwt[comp + this->header.offset - new_offset].swap(this->bwt[comp]);
-    }
-    this->bwt.swap(new_bwt);
-    this->header.offset = new_offset; this->header.alphabet_size = new_sigma;
+    new_offset = 0; new_sigma = 0;
   }
+  else
+  {
+    size_type head_empty = 0;
+    while(head_empty + 1 < this->effective() && this->bwt[head_empty + 1].empty()) { head_empty++; }
+    if(head_empty + 1 >= this->effective())
+    {
+      if(Verbosity::level >= Verbosity::FULL)
+      {
+        std::cerr << "DynamicGBWT::resize(): All nodes apart from the endmarker are empty" << std::endl;
+      }
+      new_offset = 0; new_sigma = 1;
+    }
+    else
+    {
+      new_offset += head_empty;
+      for(comp_type tail = this->effective() - 1; this->bwt[tail].empty(); tail--) { new_sigma--; }
+    }
+  }
+
+  this->forceResize(new_offset, new_sigma);
+}
+
+void
+DynamicGBWT::forceResize(size_type new_offset, size_type new_sigma)
+{
+  if(new_offset == this->header.offset && new_sigma == this->sigma()) { return; }
+
+  if(Verbosity::level >= Verbosity::FULL)
+  {
+    if(new_offset != this->header.offset)
+    {
+      std::cerr << "DynamicGBWT::resize(): Changing alphabet offset to " << new_offset << std::endl;
+    }
+    if(new_sigma != this->sigma())
+    {
+      std::cerr << "DynamicGBWT::resize(): Changing alphabet size to " << new_sigma << std::endl;
+    }
+  }
+
+  std::vector<DynamicRecord> new_bwt(new_sigma - new_offset);
+  if(this->effective() > 0) { new_bwt.front().swap(this->bwt.front()); }
+  comp_type first_comp = 1 + (new_offset > this->header.offset ? new_offset - this->header.offset : 0);
+  comp_type comp_tail = this->effective() - (new_sigma < this->sigma() ? this->sigma() - new_sigma : 0);
+  for(comp_type comp = first_comp; comp < comp_tail; comp++)
+  {
+    new_bwt[comp + this->header.offset - new_offset].swap(this->bwt[comp]);
+  }
+  this->bwt.swap(new_bwt);
+  this->header.offset = new_offset; this->header.alphabet_size = new_sigma;
 }
 
 void
@@ -757,6 +801,195 @@ DynamicGBWT::insert(text_buffer_type& text, size_type batch_size, bool both_orie
               << " in " << seconds << " seconds" << std::endl;
   }
 }
+
+//------------------------------------------------------------------------------
+
+void
+removePositions(DynamicRecord& record, node_type node, const std::vector<edge_type>& ra, size_type& rank_offset)
+{
+  if(ra[rank_offset].first != node) { return; }
+
+  size_type body_offset = 0, body_tail = 0;
+  size_type bwt_offset = (record.body.empty() ? 0 : record.body.front().second);
+  size_type sample_offset = 0, sample_tail = 0;
+  size_type removed = 0;
+
+  // Process the removed positions in this record.
+  while(rank_offset < ra.size() && ra[rank_offset].first == node)
+  {
+    // Copy runs that are before the next removed position. Then adjust the run
+    // covering the removed position and skip it if it becomes empty.
+    // We can safely assume that the run covering the position exists.
+    while(bwt_offset <= ra[rank_offset].second)
+    {
+      record.body[body_tail] = record.body[body_offset];
+      body_tail++; body_offset++;
+      bwt_offset += record.body[body_offset].second;
+    }
+    record.body[body_offset].second--;
+    if(record.body[body_offset].second == 0)
+    {
+      body_offset++;
+      if(body_offset < record.body.size()) { bwt_offset += record.body[body_offset].second; }
+    }
+    record.body_size--;
+
+    // Update the samples that are before the next removed position.
+    // Then delete the sample that may cover the position.
+    while(sample_offset < record.ids.size() && record.ids[sample_offset].first < ra[rank_offset].second)
+    {
+      record.ids[sample_tail].first = record.ids[sample_offset].first - removed;
+      record.ids[sample_tail].second = record.ids[sample_offset].second;
+      sample_tail++; sample_offset++;
+    }
+    if(sample_offset < record.ids.size() && record.ids[sample_offset].first == ra[rank_offset].second)
+    {
+      sample_offset++;
+    }
+
+    rank_offset++;
+    removed++;
+  }
+
+  // Process the tail of the record and resize the arrays.
+  while(body_offset < record.body.size())
+  {
+    record.body[body_tail] = record.body[body_offset];
+    body_tail++; body_offset++;
+  }
+  record.body.resize(body_tail);
+  while(sample_offset < record.ids.size())
+  {
+    record.ids[sample_tail].first = record.ids[sample_offset].first - removed;
+    record.ids[sample_tail].second = record.ids[sample_offset].second;
+    sample_tail++; sample_offset++;
+  }
+  record.ids.resize(sample_tail);
+
+  // Remove unused outgoing edges.
+  record.removeUnusedEdges();
+}
+
+void
+updateSamples(DynamicRecord& record, const sdsl::bit_vector::rank_1_type& remaining_rank)
+{
+  for(sample_type& sample : record.ids)
+  {
+    sample.second = remaining_rank(sample.second);
+  }
+}
+
+size_type
+DynamicGBWT::remove(const std::vector<size_type>& seq_ids, size_type chunk_size)
+{
+  double start = readTimer();
+
+  if(seq_ids.empty())
+  {
+    if(Verbosity::level >= Verbosity::FULL)
+    {
+      std::cerr << "DynamicGBWT::remove(): No sequences to remove" << std::endl;
+    }
+    return 0;
+  }
+
+  std::vector<size_type> to_remove;
+  for(size_type seq_id : seq_ids)
+  {
+    if(this->bidirectional())
+    {
+      to_remove.push_back(Path::encode(seq_id, false));
+      to_remove.push_back(Path::encode(seq_id, true));
+    }
+    else { to_remove.push_back(seq_id); }
+  }
+  for(size_type seq_id : to_remove)
+  {
+    if(seq_id >= this->sequences())
+    {
+      std::cerr << "DynamicGBWT::remove(): Invalid sequence id: " << seq_id << std::endl;
+      return 0;
+    }
+  }
+
+  // Build a bitvector of the sequences that will remain.
+  sdsl::bit_vector remaining(this->sequences(), 1);
+  for(size_type seq_id : to_remove) { remaining[seq_id] = 0; }
+  sdsl::bit_vector::rank_1_type remaining_rank;
+  sdsl::util::init_support(remaining_rank, &remaining);  
+
+  // Build the rank array.
+  double ra_start = readTimer();
+  std::vector<edge_type> ra;
+  std::vector<std::vector<edge_type>> buffers(omp_get_max_threads());
+  DecompressedRecord fast_endmarker = this->endmarker();
+  #pragma omp parallel for schedule(dynamic, chunk_size)
+  for(size_type i = 0; i < to_remove.size(); i++)
+  {
+    std::vector<edge_type>& buffer = buffers[omp_get_thread_num()];
+    buffer.push_back(edge_type(ENDMARKER, to_remove[i]));
+    edge_type pos = fast_endmarker.LF(to_remove[i]);
+    while(pos.first != ENDMARKER)
+    {
+      buffer.push_back(pos);
+      pos = this->LF(pos);
+    }
+    #pragma omp critical
+    {
+      ra.insert(ra.end(), buffer.begin(), buffer.end());
+    }
+    buffer.clear();
+  }
+  parallelQuickSort(ra.begin(), ra.end());
+  if(Verbosity::level >= Verbosity::BASIC)
+  {
+    double seconds = readTimer() - ra_start;
+    std::cerr << "DynamicGBWT::remove(): Rank array built in " << seconds << " seconds" << std::endl;
+  }
+
+  // Remove the sequences.
+  double update_start = readTimer();
+  size_type offset = 0; // Current offset in ra.
+  for(comp_type comp = 0; comp < this->effective(); comp++)
+  {
+    node_type node = this->toNode(comp);
+    if(offset < ra.size()) { removePositions(this->record(node), node, ra, offset); }
+    updateSamples(this->record(node), remaining_rank);
+  }
+  if(Verbosity::level >= Verbosity::BASIC)
+  {
+    double seconds = readTimer() - update_start;
+    std::cerr << "DynamicGBWT::remove(): Records updated in " << seconds << " seconds" << std::endl;
+  }
+
+  // Update the header.
+  this->header.sequences -= to_remove.size();
+  this->header.size -= ra.size();
+
+  // Remove empty nodes from both ends and rebuild the edges from the BWT.
+  this->resize();
+  if(Verbosity::level >= Verbosity::FULL)
+  {
+    std::cerr << "DynamicGBWT::merge(): Rebuilding the edges" << std::endl;
+  }
+  this->rebuildIncoming();
+  this->rebuildOutgoing();
+
+  if(Verbosity::level >= Verbosity::BASIC)
+  {
+    double seconds = readTimer() - start;
+    std::cerr << "DynamicGBWT::remove(): Removed " << to_remove.size() << " sequences of total length "
+              << ra.size() << " in " << seconds << " seconds" << std::endl;
+  }
+
+  return ra.size();
+}
+
+size_type
+DynamicGBWT::remove(size_type seq_id, size_type chunk_size)
+{
+  return this->remove(std::vector<size_type>(seq_id, 1), chunk_size);
+}  
 
 //------------------------------------------------------------------------------
 

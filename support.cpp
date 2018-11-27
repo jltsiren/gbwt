@@ -110,6 +110,30 @@ DynamicRecord::recode()
 }
 
 void
+DynamicRecord::removeUnusedEdges()
+{
+  // Determine which edges are used and replace the outranks with node identifiers.
+  std::vector<bool> used(this->outdegree(), false);
+  for(run_type& run : this->body)
+  {
+    used[run.first] = true;
+    run.first = this->successor(run.first);
+  }
+
+  // Remove unused edges.
+  size_type tail = 0;
+  for(size_type i = 0; i < this->outdegree(); i++)
+  {
+    this->outgoing[tail] = this->outgoing[i];
+    if(used[i]) { tail++; }
+  }
+  this->outgoing.resize(tail);
+
+  // Recode the body.
+  for(run_type& run : this->body) { run.first = this->edgeTo(run.first); }
+}
+
+void
 DynamicRecord::writeBWT(std::vector<byte_type>& data) const
 {
   // Write the outgoing edges.

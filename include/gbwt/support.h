@@ -116,6 +116,9 @@ struct DynamicRecord
   // Sort the outgoing edges if they are not sorted.
   void recode();
 
+  // Remove outgoing edges that are not used and recode the body.
+  void removeUnusedEdges();
+
   // Write the compressed representation.
   void writeBWT(std::vector<byte_type>& data) const;
 

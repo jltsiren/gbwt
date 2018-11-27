@@ -47,6 +47,7 @@ public:
   typedef DynamicRecord::size_type size_type;
 
   constexpr static size_type INSERT_BATCH_SIZE = 100 * MILLION; // Nodes.
+  constexpr static size_type REMOVE_CHUNK_SIZE = 1;             // Sequences.
   constexpr static size_type MERGE_BATCH_SIZE = 2000;           // Sequences.
   constexpr static size_type SAMPLE_INTERVAL = 1024;            // Positions in a sequence.
 
@@ -91,6 +92,19 @@ public:
     Does not update the metadata.
   */
   void insert(text_buffer_type& text, size_type batch_size = INSERT_BATCH_SIZE, bool both_orientations = false, size_type sample_interval = DynamicGBWT::SAMPLE_INTERVAL);
+
+  /*
+    Remove the specified sequence(s) from the index. If the index is bidirectional, remove both
+    Path::encode(seq_id, false) and Path::encode(seq_id, true). Returns the total length of the
+    removed sequences.
+
+    The algorithm searches for the sequences in parallel using the specified chunk size. The
+    rank array is stored in memory.
+
+    Does not update the metadata.
+  */
+  size_type remove(size_type seq_id, size_type chunk_size = REMOVE_CHUNK_SIZE);
+  size_type remove(const std::vector<size_type>& seq_ids, size_type chunk_size = REMOVE_CHUNK_SIZE);
 
   /*
     Insert the sequences from the other GBWT into this. Use batch size 0 to insert all
@@ -317,8 +331,14 @@ public:
   // Change offset or alphabet size if the new values are beyond the current values.
   void resize(size_type new_offset, size_type new_sigma);
 
+  // Change offset or alphabet size to remove unused nodes.
+  void resize();
+
 private:
   void copy(const DynamicGBWT& source);
+
+  // Change offset and alphabet size.
+  void forceResize(size_type new_offset, size_type new_sigma);
 
   /*
     Sort the outgoing edges and change the outranks in the runs accordingly.

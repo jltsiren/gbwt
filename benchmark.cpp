@@ -39,6 +39,8 @@ const size_type RANDOM_SEED  = 0xDEADBEEF;
 
 void printUsage(int exit_code = EXIT_SUCCESS);
 
+void compareIndexes(const GBWT& first, const GBWT& second, const std::string& first_name, const std::string& second_name);
+
 void extendedStatistics(const DynamicGBWT& index);
 
 std::vector<SearchState> findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type find_queries, size_type pattern_length, std::vector<vector_type>& queries);
@@ -58,12 +60,17 @@ main(int argc, char** argv)
   if(argc < 2) { printUsage(); }
 
   int c = 0;
-  bool find = false, locate = false, extract = false, statistics = false;
+  bool compare = false, find = false, locate = false, extract = false, statistics = false;
   size_type find_queries = 0, pattern_length = 0, extract_queries = 0;
-  while((c = getopt(argc, argv, "f:p:le:s")) != -1)
+  std::string compare_base;
+  while((c = getopt(argc, argv, "c:f:p:le:s")) != -1)
   {
     switch(c)
     {
+    case 'c':
+      compare = true;
+      compare_base = optarg;
+      break;
     case 'f':
       find = true;
       find_queries = std::stoul(optarg); break;
@@ -126,6 +133,15 @@ main(int argc, char** argv)
   GBWT compressed_index;
   sdsl::load_from_file(compressed_index, index_base + GBWT::EXTENSION);
   printStatistics(compressed_index, index_base);
+
+  if(compare)
+  {
+    GBWT second_index;
+    sdsl::load_from_file(second_index, compare_base + GBWT::EXTENSION);
+    printStatistics(second_index, compare_base);
+    compareIndexes(compressed_index, second_index, index_base, compare_base);
+  }
+
   if(!(find || locate || extract || statistics)) { return 0; }
 
   DynamicGBWT dynamic_index;
@@ -133,6 +149,7 @@ main(int argc, char** argv)
   printStatistics(dynamic_index, index_base);
 
   if(statistics) { extendedStatistics(dynamic_index); }
+
   if(!(find || locate || extract)) { return 0; }
 
   if(find)
@@ -166,6 +183,7 @@ printUsage(int exit_code)
   Version::print(std::cerr, tool_name);
 
   std::cerr << "Usage: benchmark [options] index_base" << std::endl;
+  std::cerr << "  -c X  Compare to the index with base name X" << std::endl;
   std::cerr << "  -f N  Benchmark N find() queries (requires -p)" << std::endl;
   std::cerr << "  -p N  Use patterns of length N" << std::endl;
   std::cerr << "  -l    Benchmark locate() queries (requires -f)" << std::endl;
@@ -174,6 +192,57 @@ printUsage(int exit_code)
   std::cerr << std::endl;
 
   std::exit(exit_code);
+}
+
+//------------------------------------------------------------------------------
+
+void
+compareIndexes(const GBWT& first, const GBWT& second, const std::string& first_name, const std::string& second_name)
+{
+  std::cout << "Headers" << std::endl;
+  if(first.header != second.header)
+  {
+    printHeader(first_name); std::cout << first.header << std::endl;
+    printHeader(second_name); std::cout << second.header << std::endl;
+  }
+  std::cout << std::endl;
+
+  // FIXME bwt
+
+  std::cout << "Samples" << std::endl;
+  if(first.da_samples.size() != second.da_samples.size() || first.da_samples.records() != second.da_samples.records())
+  {
+    printHeader(first_name); std::cout << first.da_samples.size() << " samples in " << first.da_samples.records() << " records" << std::endl;
+    printHeader(second_name); std::cout << second.da_samples.size() << " samples in " << second.da_samples.records() << " records" << std::endl;
+  }
+  for(comp_type comp = 0; comp < first.effective() && comp < second.effective(); comp++)
+  {
+    if(first.da_samples.isSampled(comp) != second.da_samples.isSampled(comp))
+    {
+      printHeader(first_name); std::cout << "Record " << comp << " has samples: " << first.da_samples.isSampled(comp) << std::endl;
+      printHeader(second_name); std::cout << "Record " << comp << " has samples: " << second.da_samples.isSampled(comp) << std::endl;
+      break;
+    }
+  }
+  // FIXME other structures in DASamples
+  for(size_type i = 0; i < first.da_samples.size() && i < second.da_samples.size(); i++)
+  {
+    if(first.da_samples.array[i] != second.da_samples.array[i])
+    {
+      printHeader(first_name); std::cout << "Sample " << i << ": " << first.da_samples.array[i] << std::endl;
+      printHeader(second_name); std::cout << "Sample " << i << ": " << second.da_samples.array[i] << std::endl;
+      break;
+    }
+  }
+  std::cout << std::endl;
+
+  std::cout << "Metadata" << std::endl;
+  if(first.metadata != second.metadata)
+  {
+    printHeader(first_name); std::cout << first.metadata << std::endl;
+    printHeader(second_name); std::cout << second.metadata << std::endl;
+  }
+  std::cout << std::endl;
 }
 
 //------------------------------------------------------------------------------

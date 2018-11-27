@@ -1,13 +1,20 @@
+# Objects and libraries
 *.o
 *.a
 
-prepare_text
+# Tools
 build_gbwt
 merge_gbwt
 benchmark
 metadata
+remove_seq
 
+# Tests
 test_bwtmerge
 test_variants
 
+# Legacy tools
+prepare_text
+
+# Mac
 .DS_Store
