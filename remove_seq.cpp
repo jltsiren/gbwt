@@ -103,8 +103,11 @@ main(int argc, char** argv)
   printStatistics(index, base_name);
 
   size_type total_length = index.remove(seq_ids, chunk_size);
-  sdsl::store_to_file(index, output + DynamicGBWT::EXTENSION);
-  printStatistics(index, output);
+  if(total_length > 0)
+  {
+    sdsl::store_to_file(index, output + DynamicGBWT::EXTENSION);
+    printStatistics(index, output);
+  }
 
   double seconds = readTimer() - start;
 
