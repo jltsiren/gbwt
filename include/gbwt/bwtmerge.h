@@ -193,8 +193,26 @@ public:
     out.close();
   }
 
+  // Write the specified node ranges to separate files. The ranges must be contiguous.
+  // Calls clear() after the write completes.
+  // This function requires a specialized version for the particular ByteArray.
+  void write(const std::vector<std::string>& filenames,
+             const std::vector<range_type>& node_ranges,
+             std::vector<size_type>& value_counts)
+  {
+    std::cerr << "GapArray::write(): Unsupported ByteArray type" << std::endl;
+  }
+
   ByteArray data;
   size_type value_count;
+
+  static void writeValue(ByteArray& data, edge_type curr, edge_type& prev)
+  {
+    ByteCode::write(data, curr.first - prev.first);
+    if(curr.first != prev.first) { prev.second = 0; } // Node changed, set previous offset to 0.
+    ByteCode::write(data, curr.second - prev.second);
+    prev = curr;
+  }
 
 private:
   void copy(const GapArray& source)
@@ -205,10 +223,7 @@ private:
 
   void writeValue(edge_type curr, edge_type& prev)
   {
-    ByteCode::write(this->data, curr.first - prev.first);
-    if(curr.first != prev.first) { prev.second = 0; } // Node changed, set previous offset to 0.
-    ByteCode::write(this->data, curr.second - prev.second);
-    prev = curr;
+    writeValue(this->data, curr, prev);
   }
 };  // class GapArray
 
@@ -216,6 +231,9 @@ template<> GapArray<BlockArray>::GapArray(std::vector<edge_type>& source);
 template<> GapArray<BlockArray>::GapArray(GapArray& a, GapArray& b);
 template<> void GapArray<BlockArray>::clear();
 template<> void GapArray<BlockArray>::write(const std::string& filename);
+template<> void GapArray<BlockArray>::write(const std::vector<std::string>& filenames,
+                                            const std::vector<range_type>& node_ranges,
+                                            std::vector<size_type>& value_counts);
 
 void open(GapArray<sdsl::int_vector_buffer<8>>& array, const std::string filename, size_type values);
 template<> void GapArray<sdsl::int_vector_buffer<8>>::clear();
@@ -246,6 +264,7 @@ public:
 
   // Iterator operations.
   edge_type operator*() const { return this->value; }
+  const edge_type* operator->() const { return &(this->value); }
   void operator++() { this->pos++; this->read(); }
   bool end() const { return (this->pos >= this->array->size()); }
 

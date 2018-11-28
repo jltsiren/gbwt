@@ -241,6 +241,56 @@ GapArray<BlockArray>::write(const std::string& filename)
   out.close();
 }
 
+template<>
+void
+GapArray<BlockArray>::write(const std::vector<std::string>& filenames,
+                            const std::vector<range_type>& node_ranges,
+                            std::vector<size_type>& value_counts)
+{
+  if(filenames.empty())
+  {
+    std::cerr << "GapArray::write(): No output files specified" << std::endl;
+    return;
+  }
+  if(filenames.size() != node_ranges.size())
+  {
+    std::cerr << "GapArray::write(): The number of files and node ranges must match" << std::endl;
+    return;
+  }
+  size_type expect = 0;
+  for(range_type range : node_ranges)
+  {
+    if(range.first != expect || range.second < range.first)
+    {
+      std::cerr << "GapArray::write(): The node ranges are not contiguous" << std::endl;
+      return;
+    }
+    expect = range.second + 1;
+  }
+  if(node_ranges.back().second >= invalid_node())
+  {
+    std::cerr << "GapArray::write(): The last range is invalid" << std::endl;
+    return;
+  }
+  value_counts.clear();
+
+  iterator iter(*this);
+  for(size_type i = 0; i < filenames.size(); i++)
+  {
+    size_type count = 0;
+    edge_type prev(ENDMARKER, 0);
+    sdsl::int_vector_buffer<8> out(filenames[i], std::ios::out);
+    while(iter->first <= node_ranges[i].second)
+    {
+      GapArray<sdsl::int_vector_buffer<8>>::writeValue(out, *iter, prev);
+      count++; ++iter;
+    }
+    value_counts.push_back(count);
+    out.close();
+  }
+
+  this->clear();
+}
 
 void
 open(GapArray<sdsl::int_vector_buffer<8>>& array, const std::string filename, size_type values)

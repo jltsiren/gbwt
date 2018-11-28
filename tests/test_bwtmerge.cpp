@@ -257,9 +257,9 @@ public:
 
   static void buildAndCheckArray(const std::vector<edge_type>& values, const std::string& test_name)
   {
-    std::vector<edge_type> buffer = values;
-    GapArray<BlockArray> array(buffer);
-    checkArray(array, values, test_name);
+    std::vector<edge_type> correct_values = values;
+    GapArray<BlockArray> array(correct_values);
+    checkArray(array, correct_values, test_name);
   }
 
   template<class ByteArray>
@@ -323,7 +323,7 @@ TEST_F(GapArrayTest, BasicTests)
 
   // Sorted array.
   std::vector<edge_type> sorted_values = small_array;
-  sequentialSort(small_array.begin(), small_array.end());
+  sequentialSort(sorted_values.begin(), sorted_values.end());
   buildAndCheckArray(sorted_values, "Sorted");
 
   // Unsorted array.
@@ -354,19 +354,69 @@ TEST_F(GapArrayTest, Serialization)
 TEST_F(GapArrayTest, Merge)
 {
   // Initialize vectors.
+  std::vector<edge_type> first_array = small_array;
   std::vector<edge_type> second_array =
   {
     { 1, 3 }, { 1, 4 }, { 0, 1 }, { 3, 5 }, { 3, 0 }, { 3, 7 }, { 6, 0 }, { 5, 1 }, { 5, 3 }
   };
   std::vector<edge_type> correct_values;
-  correct_values.insert(correct_values.end(), small_array.begin(), small_array.end());
+  correct_values.insert(correct_values.end(), first_array.begin(), first_array.end());
   correct_values.insert(correct_values.end(), second_array.begin(), second_array.end());
 
   // Create and merge GapArrays.
-  GapArray<BlockArray> first(small_array);
+  GapArray<BlockArray> first(first_array);
   GapArray<BlockArray> second(second_array);
   GapArray<BlockArray> merged(first, second);
   checkArray(merged, correct_values, "Merged");
+}
+
+TEST_F(GapArrayTest, MultipleFiles)
+{
+  // Two files.
+  std::vector<std::string> filenames;
+  filenames.push_back(TempFile::getName("GapArray"));
+  filenames.push_back(TempFile::getName("GapArray"));
+  std::vector<range_type> node_ranges =  { { 0, 3 }, { 4, 6 } };
+
+  // Build and split the array.
+  std::vector<edge_type> correct_values = small_array;
+  GapArray<BlockArray> array(correct_values);
+  std::vector<size_type> value_counts;
+  array.write(filenames, node_ranges, value_counts);
+
+  // Basic tests.
+  ASSERT_EQ(value_counts.size(), filenames.size()) << "Wrong number of value counts";
+  size_type total_values = 0;
+  for(size_type count : value_counts) { total_values += count; }
+  ASSERT_EQ(total_values, correct_values.size()) << "Total value count is wrong";
+
+  // Test each file separately.
+  std::vector<edge_type>::iterator array_iter = correct_values.begin();
+  for(size_type file = 0; file < filenames.size(); file++)
+  {
+    GapArray<sdsl::int_vector_buffer<8>> part;
+    open(part, filenames[file], value_counts[file]);
+    GapArray<sdsl::int_vector_buffer<8>>::iterator part_iter(part);
+    size_type values = 0, wrong_values = 0;
+    bool early_end = false;
+    while(array_iter != correct_values.end() && array_iter->first <= node_ranges[file].second)
+    {
+      if(part_iter.end()) { early_end = true; break; }
+      if(*part_iter != *array_iter) { wrong_values++; }
+      values++;
+      ++array_iter; ++part_iter;
+    }
+    EXPECT_FALSE(early_end) << "File " << file << " ended early";
+    EXPECT_TRUE(part_iter.end()) << "File " << file << " is too large";
+    EXPECT_EQ(values, value_counts[file]) << "File " << file << ": wrong number of values";
+    EXPECT_EQ(wrong_values, 0u) << "File " << file << ": " << wrong_values << " wrong values";
+
+    // Skip the values that were missing from the file.
+    while(array_iter != correct_values.end() && array_iter->first <= node_ranges[file].second) { ++array_iter; }
+  }
+
+  // Cleanup.
+  for(std::string& filename : filenames) { TempFile::remove(filename); }
 }
 
 TEST_F(GapArrayTest, Large)
