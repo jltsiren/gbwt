@@ -903,6 +903,7 @@ DynamicGBWT::remove(const std::vector<size_type>& seq_ids, size_type chunk_size)
     }
     else { to_remove.push_back(seq_id); }
   }
+  removeDuplicates(to_remove, false);
   for(size_type seq_id : to_remove)
   {
     if(seq_id >= this->sequences())
