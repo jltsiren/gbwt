@@ -468,15 +468,15 @@ public:
   ~RankArray();
 
   /*
-    Add a new file and return its name. The caller must ensure that only one thread calls addFile()
-    at the same time. Do not call when the RankArray is open.
+    Add a new file and return its name and number. The caller must ensure that only one thread
+    calls addFile() at the same time. Do not call when the RankArray is open.
   */
-  std::string addFile();
+  std::pair<std::string, size_type> addFile();
 
   /*
     Sets the value count for the last added file. Do not call when the RankArray is open.
   */
-  void addValueCount(size_type value_count);
+  void addValueCount(size_type file, size_type value_count);
 
   // For ProducerBuffer.
   void open();

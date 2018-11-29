@@ -334,17 +334,18 @@ RankArray::~RankArray()
   for(size_type i = 0; i < this->size(); i++) { TempFile::remove(this->filenames[i]); }
 }
 
-std::string
+std::pair<std::string, size_type>
 RankArray::addFile()
 {
   this->filenames.push_back(TempFile::getName(TEMP_FILE_PREFIX));
-  return this->filenames.back();
+  this->value_counts.push_back(0);
+  return std::pair<std::string, size_type>(this->filenames.back(), this->filenames.size() - 1);
 }
 
 void
-RankArray::addValueCount(size_type value_count)
+RankArray::addValueCount(size_type file, size_type value_count)
 {
-  this->value_counts.push_back(value_count);
+  this->value_counts[file] = value_count;
 }
 
 void
@@ -554,11 +555,16 @@ MergeBuffers::write(buffer_type& buffer)
   // Get the filenames for each RankArray and write the buffer to the files.
   std::vector<std::string> filenames;
   std::vector<size_type> value_counts;
+  std::vector<size_type> file_numbers;
   {
     std::lock_guard<std::mutex> lock(this->ra_lock);
     for(size_type i = 0; i < this->jobs(); i++)
     {
-      filenames.push_back(this->ra[i]->addFile());
+      std::string filename;
+      size_type file_num = 0;
+      std::tie(filename, file_num) = this->ra[i]->addFile();
+      filenames.push_back(filename);
+      file_numbers.push_back(file_num);
     }
   }
   buffer.write(filenames, this->job_ranges, value_counts);
@@ -569,7 +575,7 @@ MergeBuffers::write(buffer_type& buffer)
     std::lock_guard<std::mutex> lock(this->ra_lock);
     for(size_type i = 0; i < this->jobs(); i++)
     {
-      this->ra[i]->addValueCount(value_counts[i]);
+      this->ra[i]->addValueCount(file_numbers[i], value_counts[i]);
     }
     this->ra_values += buffer_values;
     this->ra_bytes += buffer_bytes + sizeof(size_type);

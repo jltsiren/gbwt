@@ -461,8 +461,10 @@ public:
   {
     std::vector<edge_type> buffer = values;
     GapArray<BlockArray> data(buffer);
-    std::string filename = array.addFile();
-    array.addValueCount(data.size());
+    size_type file_num = 0;
+    std::string filename;
+    std::tie(filename, file_num) = array.addFile();
+    array.addValueCount(file_num, data.size());
     data.write(filename); data.clear();
   }
 
