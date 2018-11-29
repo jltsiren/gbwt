@@ -352,9 +352,9 @@ printStatistics(const GBWT& gbwt, const std::string& name)
   printHeader("Alphabet size"); std::cout << gbwt.sigma() << std::endl;
   printHeader("Effective"); std::cout << gbwt.effective() << std::endl;
   printHeader("Runs"); std::cout << gbwt.runs() << std::endl;
-  printHeader("Samples"); std::cout << gbwt.samples() << std::endl;
+  printHeader("DA samples"); std::cout << gbwt.samples() << std::endl;
   printHeader("BWT"); std::cout << inMegabytes(sdsl::size_in_bytes(gbwt.bwt)) << " MB" << std::endl;
-  printHeader("Samples"); std::cout << inMegabytes(sdsl::size_in_bytes(gbwt.da_samples)) << " MB" << std::endl;
+  printHeader("DA samples"); std::cout << inMegabytes(sdsl::size_in_bytes(gbwt.da_samples)) << " MB" << std::endl;
   printHeader("Total"); std::cout << inMegabytes(sdsl::size_in_bytes(gbwt)) << " MB" << std::endl;
   if(gbwt.hasMetadata())
   {

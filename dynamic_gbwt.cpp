@@ -1390,7 +1390,7 @@ printStatistics(const DynamicGBWT& gbwt, const std::string& name)
   printHeader("Alphabet size"); std::cout << gbwt.sigma() << std::endl;
   printHeader("Effective"); std::cout << gbwt.effective() << std::endl;
   printHeader("Runs"); std::cout << gbwt.runs() << std::endl;
-  printHeader("Samples"); std::cout << gbwt.samples() << std::endl;
+  printHeader("DA samples"); std::cout << gbwt.samples() << std::endl;
   if(gbwt.hasMetadata())
   {
     printHeader("Metadata"); std::cout << gbwt.metadata << std::endl;
