@@ -71,6 +71,7 @@ struct DiskIO
       if(out.fail())
       {
         std::cerr << "DiskIO::write(): Write failed" << std::endl;
+        std::cerr << "DiskIO::write(): You may have run out of temporary disk space at " << TempFile::temp_dir << std::endl;
         std::exit(EXIT_FAILURE);
       }
     }
