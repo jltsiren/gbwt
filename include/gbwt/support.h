@@ -393,9 +393,11 @@ struct MergeParameters
   constexpr static size_type THREAD_BUFFER_SIZE = 256; // Megabytes.
   constexpr static size_type MERGE_BUFFERS = 6;
   constexpr static size_type CHUNK_SIZE = 1; // Sequences per thread.
+  constexpr static size_type MERGE_JOBS = 4;
 
   constexpr static size_type MAX_BUFFER_SIZE = 16384; // Megabytes.
   constexpr static size_type MAX_MERGE_BUFFERS = 16;
+  constexpr static size_type MAX_MERGE_JOBS = 16;
 
   MergeParameters();
 
@@ -403,6 +405,7 @@ struct MergeParameters
   void setThreadBufferSize(size_type megabytes);
   void setMergeBuffers(size_type n);
   void setChunkSize(size_type n);
+  void setMergeJobs(size_type n);
 
   // These return the sizes in positions/bytes.
   size_type posBufferPositions() const { return (this->pos_buffer_size * MEGABYTE) / sizeof(edge_type); }
@@ -411,6 +414,7 @@ struct MergeParameters
   size_type pos_buffer_size, thread_buffer_size;
   size_type merge_buffers;
   size_type chunk_size;
+  size_type merge_jobs;
 };
 
 //------------------------------------------------------------------------------

@@ -201,6 +201,7 @@ public:
              std::vector<size_type>& value_counts)
   {
     std::cerr << "GapArray::write(): Unsupported ByteArray type" << std::endl;
+    this->clear();
   }
 
   ByteArray data;
@@ -467,11 +468,15 @@ public:
   ~RankArray();
 
   /*
-    Create a new file for 'array' and return its name. The caller must ensure that only one
-    thread calls addFile() at the same time. Note that 'array' is not written to the file.
-    Do not call when the RankArray is open.
+    Add a new file and return its name. The caller must ensure that only one thread calls addFile()
+    at the same time. Do not call when the RankArray is open.
   */
-  std::string addFile(GapArray<BlockArray>& array);
+  std::string addFile();
+
+  /*
+    Sets the value count for the last added file. Do not call when the RankArray is open.
+  */
+  void addValueCount(size_type value_count);
 
   // For ProducerBuffer.
   void open();
@@ -537,7 +542,7 @@ private:
 //------------------------------------------------------------------------------
 
 /*
-  A structure for building the RankArray object. A search thread calls insert() when it wants
+  A structure for building RankArray objects. A search thread calls insert() when it wants
   to insert a new element into the buffers.
 
   1) The element is inserted into pos_buffer. If the buffer is small enough, insert() returns.
@@ -545,8 +550,8 @@ private:
   3) If thread_buffer is small enough, insert() returns.
   4) We merge thread_buffer with the global merge buffers until there is an empty slot
      or we run out of merge buffers.
-  5) If there is an empty slot, we insert thread_buffer there. Otherwise we write it to a file
-     and add the file into the RankArray. In either case, we clear the thread_buffer.
+  5) If there is an empty slot, we insert thread_buffer there. Otherwise we write it to files
+     and add the files into the RankArrays. In either case, we clear the thread_buffer.
 
   Once all elements have been inserted, we need to call flush().
 */
@@ -556,7 +561,7 @@ class MergeBuffers
 public:
   typedef GapArray<BlockArray> buffer_type;
 
-  MergeBuffers(size_type expected_size, size_type num_threads, const MergeParameters& params);
+  MergeBuffers(size_type expected_size, size_type num_threads, const MergeParameters& params, const std::vector<range_type>& node_ranges);
   ~MergeBuffers();
 
   MergeParameters parameters;
@@ -570,14 +575,16 @@ public:
   std::vector<buffer_type> merge_buffers;
 
   // Rank array.
-  std::mutex ra_lock;
-  RankArray  ra;
-  size_type  ra_values, ra_bytes;
-  size_type  final_size;
+  std::mutex              ra_lock;
+  std::vector<range_type> job_ranges;
+  std::vector<RankArray*> ra;
+  size_type               ra_values, ra_bytes;
+  size_type               final_size;
 
   std::mutex stderr_access;
 
   size_type threads() const { return this->pos_buffers.size(); }
+  size_type jobs() const { return this->job_ranges.size(); }
 
   void insert(edge_type element, size_type thread)
   {

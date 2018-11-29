@@ -461,7 +461,8 @@ public:
   {
     std::vector<edge_type> buffer = values;
     GapArray<BlockArray> data(buffer);
-    std::string filename = array.addFile(data);
+    std::string filename = array.addFile();
+    array.addValueCount(data.size());
     data.write(filename); data.clear();
   }
 
@@ -555,12 +556,26 @@ TEST_F(RankArrayTest, MergeBuffers)
   parameters.setPosBufferSize(1);
   parameters.setThreadBufferSize(4);
   parameters.setMergeBuffers(2);
+  parameters.setMergeJobs(2);
 
   // Input data and buffers.
   std::vector<std::vector<edge_type>> data(2);
   initLargeArray(data[0]);
   initLargeArray(data[1], 0x42424242);
-  MergeBuffers buffers(data[0].size() + data[1].size(), data.size(), parameters);
+
+  // Determine the node ranges.
+  node_type max_node = 0;
+  for(size_type i = 0; i < data.size(); i++)
+  {
+    for(size_type j = 0; j < data[i].size(); j++)
+    {
+      if(data[i][j].first > max_node) { max_node = data[i][j].first; }
+    }
+  }
+  std::vector<range_type> node_ranges = Range::partition(range_type(0, max_node), parameters.merge_jobs);
+
+  // Create the merge buffers.
+  MergeBuffers buffers(data[0].size() + data[1].size(), data.size(), parameters, node_ranges);
 
   // Insert the data.
   #pragma omp parallel for schedule(static)
@@ -573,14 +588,35 @@ TEST_F(RankArrayTest, MergeBuffers)
   }
   buffers.flush();
 
-  // Actual tests.
+  // Generate the correct values.
   std::vector<edge_type> correct_values;
   for(size_type i = 0; i < data.size(); i++)
   {
     correct_values.insert(correct_values.end(), data[i].begin(), data[i].end());
     data[i].clear();
   }
-  checkBuffer(buffers.ra, correct_values, "MergeBuffers");
+  parallelQuickSort(correct_values.begin(), correct_values.end());
+
+  // Test each RankArray separately.
+  std::vector<edge_type>::iterator array_iter = correct_values.begin();
+  for(size_type i = 0; i < buffers.ra.size(); i++)
+  {
+    bool early_end = false;
+    size_type wrong_values = 0;
+    ProducerBuffer<RankArray> buffer(*(buffers.ra[i]));
+    while(array_iter != correct_values.end() && array_iter->first <= node_ranges[i].second)
+    {
+      if(buffer.end()) { early_end = true; break; }
+      if(*buffer != *array_iter) { wrong_values++; }
+      ++array_iter; ++buffer;
+    }
+    EXPECT_FALSE(early_end) << "Rank array " << i << " ended early";
+    EXPECT_TRUE(buffer.end()) << "Rank array " << i << " is too large";
+    EXPECT_EQ(wrong_values, 0u) << "Rank array " << i << ": " << wrong_values << " wrong values";
+
+    // Skip the values that were missing from the file.
+    while(array_iter != correct_values.end() && array_iter->first <= node_ranges[i].second) { ++array_iter; }
+  }
 }
 
 //------------------------------------------------------------------------------

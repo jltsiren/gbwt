@@ -1243,9 +1243,17 @@ DynamicGBWT::merge(const DynamicGBWT& source, const MergeParameters& parameters)
   // Increase alphabet size and decrease offset if necessary.
   this->resize(source.header.offset, source.sigma());
 
+  // Determine the node ranges for merge jobs.
+  std::vector<range_type> node_ranges = Range::partition(range_type(0, this->effective() - 1), parameters.merge_jobs);
+  for(range_type& range : node_ranges)
+  {
+    range.first = this->toNode(range.first);
+    range.second = this->toNode(range.second);
+  }
+
   // Build the rank array.
   double ra_start = readTimer();
-  MergeBuffers mb(source.size(), omp_get_max_threads(), parameters);
+  MergeBuffers mb(source.size(), omp_get_max_threads(), parameters, node_ranges);
   buildRA(*this, source, mb);
   if(Verbosity::level >= Verbosity::BASIC)
   {
@@ -1255,12 +1263,15 @@ DynamicGBWT::merge(const DynamicGBWT& source, const MergeParameters& parameters)
 
   // Merge the records.
   double merge_start = readTimer();
-  ProducerBuffer<RankArray> ra(mb.ra);
-  for(comp_type comp = 0; comp < this->effective(); comp++)
+  #pragma omp parallel for schedule(static)
+  for(size_type job = 0; job < node_ranges.size(); job++)
   {
-    node_type node = this->toNode(comp);
-    if(!(source.contains(node))) { continue; }
-    mergeRecords(this->record(node), source.record(node), ra, node, this->sequences());
+    ProducerBuffer<RankArray> ra(*(mb.ra[job]));
+    for(node_type node = node_ranges[job].first; node <= node_ranges[job].second; node++)
+    {
+      if(!(source.contains(node))) { continue; }
+      mergeRecords(this->record(node), source.record(node), ra, node, this->sequences());
+    }
   }
   if(Verbosity::level >= Verbosity::BASIC)
   {

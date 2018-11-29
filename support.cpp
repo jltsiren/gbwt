@@ -1139,7 +1139,7 @@ DASamples::limit(size_type rank) const
 
 MergeParameters::MergeParameters() :
   pos_buffer_size(POS_BUFFER_SIZE), thread_buffer_size(THREAD_BUFFER_SIZE),
-  merge_buffers(MERGE_BUFFERS), chunk_size(CHUNK_SIZE)
+  merge_buffers(MERGE_BUFFERS), chunk_size(CHUNK_SIZE), merge_jobs(MERGE_JOBS)
 {
 }
 
@@ -1165,6 +1165,12 @@ void
 MergeParameters::setChunkSize(size_type n)
 {
   this->chunk_size = std::max(n, static_cast<size_type>(1));
+}
+
+void
+MergeParameters::setMergeJobs(size_type n)
+{
+  this->merge_jobs = Range::bound(n, 1, MAX_MERGE_JOBS);
 }
 
 //------------------------------------------------------------------------------

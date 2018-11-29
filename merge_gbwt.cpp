@@ -51,7 +51,7 @@ main(int argc, char** argv)
   MergeParameters parameters;
   std::string output;
   int c = 0;
-  while((c = getopt(argc, argv, "b:C:fiM:o:pP:s:S:t:T:")) != -1)
+  while((c = getopt(argc, argv, "b:C:fiJ:M:o:pP:s:S:t:T:")) != -1)
   {
     switch(c)
     {
@@ -63,6 +63,8 @@ main(int argc, char** argv)
       algorithm = ma_fast; break;
     case 'i':
       algorithm = ma_insert; break;
+    case 'J':
+      parameters.setMergeJobs(std::stoul(optarg)); break;
     case 'M':
       parameters.setMergeBuffers(std::stoul(optarg)); break;
     case 'o':
@@ -108,6 +110,7 @@ main(int argc, char** argv)
     printHeader("Thread buffers"); std::cout << parameters.thread_buffer_size << " MB" << std::endl;
     printHeader("Merge buffers"); std::cout << parameters.merge_buffers << std::endl;
     printHeader("Chunk size"); std::cout << parameters.chunk_size << std::endl;
+    printHeader("Merge jobs"); std::cout << parameters.merge_jobs << std::endl;
   }
   std::cout << std::endl;
 
@@ -194,6 +197,7 @@ printUsage(int exit_code)
   std::cerr << std::endl;
   std::cerr << "Parallel algorithm (-p):" << std::endl;
   std::cerr << "  -C N  Parallelize search in chunks of N sequences (default: " << MergeParameters::CHUNK_SIZE << ")" << std::endl;
+  std::cerr << "  -J N  Run N parallel merge jobs (default: " << MergeParameters::MERGE_JOBS << ")" << std::endl;
   std::cerr << "  -M N  Use N merge buffers (default: " << MergeParameters::MERGE_BUFFERS << ")" << std::endl;
   std::cerr << "  -P N  Use N-megabyte position buffers (default: " << MergeParameters::POS_BUFFER_SIZE << ")" << std::endl;
   std::cerr << "  -S N  Use N search threads (default: " << omp_get_max_threads() << ")" << std::endl;

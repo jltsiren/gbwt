@@ -335,12 +335,16 @@ RankArray::~RankArray()
 }
 
 std::string
-RankArray::addFile(GapArray<BlockArray>& array)
+RankArray::addFile()
 {
-  std::string filename = TempFile::getName(TEMP_FILE_PREFIX);
-  this->filenames.push_back(filename);
-  this->value_counts.push_back(array.size());
+  this->filenames.push_back(TempFile::getName(TEMP_FILE_PREFIX));
   return this->filenames.back();
+}
+
+void
+RankArray::addValueCount(size_type value_count)
+{
+  this->value_counts.push_back(value_count);
 }
 
 void
@@ -445,16 +449,25 @@ RankArray::initTree()
 
 //------------------------------------------------------------------------------
 
-MergeBuffers::MergeBuffers(size_type expected_size, size_type num_threads, const MergeParameters& params) :
+MergeBuffers::MergeBuffers(size_type expected_size, size_type num_threads, const MergeParameters& params, const std::vector<range_type>& node_ranges) :
   parameters(params),
   pos_buffers(num_threads), thread_buffers(num_threads),
   merge_buffers(params.merge_buffers),
+  job_ranges(node_ranges), ra(node_ranges.size(), nullptr),
   ra_values(0), ra_bytes(0), final_size(expected_size)
 {
+  for(size_type i = 0; i < this->ra.size(); i++)
+  {
+    this->ra[i] = new RankArray();
+  }
 }
 
 MergeBuffers::~MergeBuffers()
 {
+  for(size_type i = 0; i < this->ra.size(); i++)
+  {
+    delete this->ra[i]; this->ra[i] = nullptr;
+  }
 }
 
 void
@@ -537,16 +550,27 @@ MergeBuffers::write(buffer_type& buffer)
   if(buffer.empty()) { return; }
 
   size_type buffer_values = buffer.size(), buffer_bytes = buffer.bytes();
-  std::string filename;
+
+  // Get the filenames for each RankArray and write the buffer to the files.
+  std::vector<std::string> filenames;
+  std::vector<size_type> value_counts;
   {
     std::lock_guard<std::mutex> lock(this->ra_lock);
-    filename = this->ra.addFile(buffer);
+    for(size_type i = 0; i < this->jobs(); i++)
+    {
+      filenames.push_back(this->ra[i]->addFile());
+    }
   }
-  buffer.write(filename); buffer.clear();
+  buffer.write(filenames, this->job_ranges, value_counts);
 
+  // Set the value counts for each file and compute some statistics.
   double ra_done, ra_gb;
   {
     std::lock_guard<std::mutex> lock(this->ra_lock);
+    for(size_type i = 0; i < this->jobs(); i++)
+    {
+      this->ra[i]->addValueCount(value_counts[i]);
+    }
     this->ra_values += buffer_values;
     this->ra_bytes += buffer_bytes + sizeof(size_type);
     ra_done = (100.0 * this->ra_values) / this->final_size;
