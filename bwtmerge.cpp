@@ -242,7 +242,7 @@ GapArray<BlockArray>::write(const std::string& filename)
 }
 
 template<>
-void
+size_type
 GapArray<BlockArray>::write(const std::vector<std::string>& filenames,
                             const std::vector<range_type>& node_ranges,
                             std::vector<size_type>& value_counts)
@@ -250,12 +250,12 @@ GapArray<BlockArray>::write(const std::vector<std::string>& filenames,
   if(filenames.empty())
   {
     std::cerr << "GapArray::write(): No output files specified" << std::endl;
-    return;
+    return 0;
   }
   if(filenames.size() != node_ranges.size())
   {
     std::cerr << "GapArray::write(): The number of files and node ranges must match" << std::endl;
-    return;
+    return 0;
   }
   size_type expect = 0;
   for(range_type range : node_ranges)
@@ -263,18 +263,19 @@ GapArray<BlockArray>::write(const std::vector<std::string>& filenames,
     if(range.first != expect || range.second < range.first)
     {
       std::cerr << "GapArray::write(): The node ranges are not contiguous" << std::endl;
-      return;
+      return 0;
     }
     expect = range.second + 1;
   }
   if(node_ranges.back().second >= invalid_node())
   {
     std::cerr << "GapArray::write(): The last range is invalid" << std::endl;
-    return;
+    return 0;
   }
   value_counts.clear();
 
   iterator iter(*this);
+  size_type total_size = 0;
   for(size_type i = 0; i < filenames.size(); i++)
   {
     size_type count = 0;
@@ -286,10 +287,12 @@ GapArray<BlockArray>::write(const std::vector<std::string>& filenames,
       count++; ++iter;
     }
     value_counts.push_back(count);
+    total_size += out.size();
     out.close();
   }
 
   this->clear();
+  return total_size;
 }
 
 void
@@ -550,7 +553,7 @@ MergeBuffers::write(buffer_type& buffer)
 {
   if(buffer.empty()) { return; }
 
-  size_type buffer_values = buffer.size(), buffer_bytes = buffer.bytes();
+  size_type buffer_values = buffer.size();
 
   // Get the filenames for each RankArray and write the buffer to the files.
   std::vector<std::string> filenames;
@@ -567,7 +570,7 @@ MergeBuffers::write(buffer_type& buffer)
       file_numbers.push_back(file_num);
     }
   }
-  buffer.write(filenames, this->job_ranges, value_counts);
+  size_type buffer_bytes = buffer.write(filenames, this->job_ranges, value_counts);
 
   // Set the value counts for each file and compute some statistics.
   double ra_done, ra_gb;

@@ -194,14 +194,15 @@ public:
   }
 
   // Write the specified node ranges to separate files. The ranges must be contiguous.
-  // Calls clear() after the write completes.
+  // Calls clear() after the write completes. Returns the total size of the files.
   // This function requires a specialized version for the particular ByteArray.
-  void write(const std::vector<std::string>& filenames,
+  size_type write(const std::vector<std::string>& filenames,
              const std::vector<range_type>& node_ranges,
              std::vector<size_type>& value_counts)
   {
     std::cerr << "GapArray::write(): Unsupported ByteArray type" << std::endl;
     this->clear();
+    return 0;
   }
 
   ByteArray data;
@@ -232,7 +233,7 @@ template<> GapArray<BlockArray>::GapArray(std::vector<edge_type>& source);
 template<> GapArray<BlockArray>::GapArray(GapArray& a, GapArray& b);
 template<> void GapArray<BlockArray>::clear();
 template<> void GapArray<BlockArray>::write(const std::string& filename);
-template<> void GapArray<BlockArray>::write(const std::vector<std::string>& filenames,
+template<> size_type GapArray<BlockArray>::write(const std::vector<std::string>& filenames,
                                             const std::vector<range_type>& node_ranges,
                                             std::vector<size_type>& value_counts);
 
