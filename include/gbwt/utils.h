@@ -316,6 +316,7 @@ namespace TempFile
 }
 
 // Returns the total length of the rows, excluding line ends.
+// If 'rows' is nonempty, appends to it.
 size_type readRows(const std::string& filename, std::vector<std::string>& rows, bool skip_empty_rows);
 
 size_type fileSize(std::ifstream& file);

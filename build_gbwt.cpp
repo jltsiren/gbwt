@@ -24,6 +24,7 @@
 */
 
 #include <random>
+#include <set>
 #include <unistd.h>
 
 #include <atomic>
@@ -62,10 +63,11 @@ main(int argc, char** argv)
   size_type batch_size = DynamicGBWT::INSERT_BATCH_SIZE / MILLION, sample_interval = DynamicGBWT::SAMPLE_INTERVAL;
   bool verify_index = false, both_orientations = false, build_index = true;
   bool build_from_parse = false, skip_overlaps = false, check_overlaps = false;
-  std::string index_base, input_base, output_base;
+  std::string index_base, output_base;
   std::set<std::string> phasing_files;
+  std::vector<std::string> input_files;
   int c = 0;
-  while((c = getopt(argc, argv, "b:cfi:lo:pP:rs:Sv")) != -1)
+  while((c = getopt(argc, argv, "b:cfF:i:lL:o:pP:rs:Sv")) != -1)
   {
     switch(c)
     {
@@ -75,10 +77,19 @@ main(int argc, char** argv)
       check_overlaps = true; break;
     case 'f':
       both_orientations = false; break;
+    case 'F':
+      readRows(optarg, input_files, true); break;
     case 'i':
       index_base = optarg; break;
     case 'l':
       build_index = false; break;
+    case 'L':
+      {
+        std::vector<std::string> rows;
+        readRows(optarg, rows, true);
+        phasing_files.insert(rows.begin(), rows.end());
+      }
+      break;
     case 'o':
       output_base = optarg; break;
     case 'p':
@@ -100,11 +111,11 @@ main(int argc, char** argv)
     }
   }
 
-  size_type input_files = argc - optind;
-  size_type input_size = 0;
-  if(index_base.empty() && output_base.empty() && input_files == 1) { output_base = argv[optind]; }
-  if(input_files == 0 || output_base.empty()) { printUsage(EXIT_FAILURE); }
-  if(verify_index && !(input_files == 1 && index_base.empty() && !build_from_parse))
+  // Append the remaining arguments to the list of input files and check the parameters.
+  while(optind < argc) { input_files.push_back(argv[optind]); optind++; }
+  if(index_base.empty() && output_base.empty() && input_files.size() == 1) { output_base = input_files.front(); }
+  if(input_files.empty() || output_base.empty()) { printUsage(EXIT_FAILURE); }
+  if(verify_index && !(input_files.size() == 1 && index_base.empty() && !build_from_parse))
   {
     std::cerr << "build_gbwt: Verification only works with indexes for a single non-parse file" << std::endl;
     verify_index = false;
@@ -119,7 +130,7 @@ main(int argc, char** argv)
   Version::print(std::cout, tool_name);
 
   if(!(index_base.empty())) { printHeader("Index name"); std::cout << index_base << std::endl; }
-  printHeader("Input files"); std::cout << input_files;
+  printHeader("Input files"); std::cout << input_files.size();
   if(build_from_parse)
   {
     std::cout << " (VCF parses";
@@ -146,9 +157,11 @@ main(int argc, char** argv)
       printStatistics(dynamic_index, index_base);
     }
 
-    while(optind < argc)
+    size_type input_size = 0;
+    std::set<size_type> samples;
+    std::set<range_type> haplotypes;
+    for(const std::string& input_base : input_files)
     {
-      input_base = argv[optind];
       printHeader("Input name"); std::cout << input_base << std::endl;
       if(build_from_parse)
       {
@@ -162,7 +175,12 @@ main(int argc, char** argv)
         builder.swapIndex(dynamic_index);
         generateHaplotypes(variants, phasing_files,
           [](size_type) -> bool { return true; },
-          [&builder, &both_orientations](const Haplotype& haplotype) { builder.insert(haplotype.path, both_orientations); },
+          [&builder, &both_orientations, &samples, &haplotypes](const Haplotype& haplotype)
+          {
+            builder.insert(haplotype.path, both_orientations);
+            samples.insert(haplotype.sample);
+            haplotypes.insert(range_type(haplotype.sample, haplotype.phase));
+          },
           [&skip_overlaps, &check_overlaps, &overlaps](size_type site, size_type allele) -> bool
           {
             if(check_overlaps) { overlaps.insert(range_type(site, allele)); }
@@ -190,6 +208,27 @@ main(int argc, char** argv)
     }
     std::cout << std::endl;
 
+    // Set metadata if we built from parse.
+    if(build_from_parse)
+    {
+      if(index_base.empty())
+      {
+        // We built a new index, so we can just write the metadata.
+        dynamic_index.addMetadata();
+        dynamic_index.metadata.setSamples(samples.size());
+        dynamic_index.metadata.setHaplotypes(haplotypes.size());
+        dynamic_index.metadata.setContigs(input_files.size());
+      }
+      else if(dynamic_index.hasMetadata())
+      {
+        // If there was existing metadata, we assume that we inserted new samples
+        // over the same contigs.
+        dynamic_index.metadata.setSamples(dynamic_index.metadata.samples() + samples.size());
+        dynamic_index.metadata.setHaplotypes(dynamic_index.metadata.haplotypes() + haplotypes.size());
+        dynamic_index.metadata.setContigs(std::max(dynamic_index.metadata.contigs(), static_cast<size_type>(input_files.size())));
+      }
+    }
+
     sdsl::store_to_file(dynamic_index, gbwt_name);
     printStatistics(dynamic_index, output_base);
 
@@ -199,10 +238,10 @@ main(int argc, char** argv)
     std::cout << "Memory usage " << inGigabytes(memoryUsage()) << " GB" << std::endl;
     std::cout << std::endl;
   }
-  else { input_base = argv[optind]; }
 
   if(verify_index)
   {
+    std::string input_base = input_files.front();
     std::cout << "Verifying the index..." << std::endl;
     double verify_start = readTimer();
     std::cout << std::endl;
@@ -242,8 +281,10 @@ printUsage(int exit_code)
   std::cerr << "  -b N  Insert in batches of N million nodes (default: " << (DynamicGBWT::INSERT_BATCH_SIZE / MILLION) << ")" << std::endl;
   std::cerr << "  -c    Check for overlapping variants in haplotypes (use with -p)" << std::endl;
   std::cerr << "  -f    Index the sequences only in forward orientation (default)" << std::endl;
+  std::cerr << "  -F X  Read a list of input files from X, one file per line (no input1 needed; may repeat)" << std::endl;
   std::cerr << "  -i X  Insert the sequences into an existing index with base name X" << std::endl;
   std::cerr << "  -l    Load an existing index instead of building it" << std::endl;
+  std::cerr << "  -L X  Read a list of phasing files from X, one file per line (use with -p; may repeat)" << std::endl;
   std::cerr << "  -o X  Use base name X for output (default: the only input)" << std::endl;
   std::cerr << "  -p    The input is a parsed VCF file" << std::endl;
   std::cerr << "  -P X  Only use the phasing information in file X (use with -p; may repeat)" << std::endl;
