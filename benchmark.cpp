@@ -313,18 +313,17 @@ extendedStatistics(const DynamicGBWT& index)
 std::vector<vector_type>
 generateQueries(const DynamicGBWT& index, size_type find_queries, size_type pattern_length)
 {
-  std::mt19937_64 rng(RANDOM_SEED);
   std::vector<vector_type> result;
+  std::mt19937_64 rng(RANDOM_SEED);
 
   size_type attempts = 0;
-  while(result.size() < find_queries && attempts < 2 * find_queries)
+  while(result.size() < find_queries && attempts < 10 * find_queries)
   {
-    vector_type sequence = index.extract(rng() % index.sequences());
-    if(sequence.size() >= pattern_length)
-    {
-      size_type start_offset = rng() % (sequence.size() + 1 - pattern_length);
-      result.push_back(vector_type(sequence.begin() + start_offset, sequence.begin() + start_offset + pattern_length));
-    }
+    node_type node = index.toNode(rng() % (index.effective() - 1) + 1);
+    if(index.record(node).empty()) { attempts++; continue; }
+    edge_type position(node, rng() % index.record(node).size());
+    vector_type sequence = index.extract(position, pattern_length);
+    if(sequence.size() == pattern_length) { result.push_back(sequence); }
     attempts++;
   }
 

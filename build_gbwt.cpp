@@ -317,6 +317,8 @@ totalLength(const std::vector<SearchState>& states)
 
 /*
   find() queries: Ensure that both index types give the same results.
+  FIXME We could validate the actual results in DynamicGBWT by extracting backwards
+  using Psi(). Psi() can be implemented using the incoming edges.
 */
 
 std::vector<SearchState>
