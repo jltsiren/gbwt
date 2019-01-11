@@ -325,6 +325,7 @@ produce(ProducerBuffer<Producer>* buffer)
   while(!(buffer->fill()));
 }
 
+// FIXME Maybe this should be a parameter?
 constexpr static size_type PRODUCER_BUFFER_SIZE = 8 * MEGABYTE; // Positions.
 
 template<class Producer>
