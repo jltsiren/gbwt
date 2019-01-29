@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018 Jouni Siren
+  Copyright (c) 2017, 2018, 2019 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -22,8 +22,9 @@
   SOFTWARE.
 */
 
-#include <random>
+#include <fstream>
 #include <map>
+#include <random>
 #include <string>
 #include <unistd.h>
 
@@ -60,10 +61,10 @@ main(int argc, char** argv)
   if(argc < 2) { printUsage(); }
 
   int c = 0;
-  bool compare = false, find = false, locate = false, extract = false, statistics = false;
+  bool compare = false, find = false, locate = false, extract = false, statistics = false, breakdown = false;
   size_type find_queries = 0, pattern_length = 0, extract_queries = 0;
   std::string compare_base;
-  while((c = getopt(argc, argv, "c:f:p:le:s")) != -1)
+  while((c = getopt(argc, argv, "c:f:p:le:sS")) != -1)
   {
     switch(c)
     {
@@ -83,6 +84,9 @@ main(int argc, char** argv)
       extract_queries = std::stoul(optarg); break;
     case 's':
       statistics = true;
+      break;
+    case 'S':
+      breakdown = true;
       break;
     case '?':
       std::exit(EXIT_FAILURE);
@@ -133,6 +137,21 @@ main(int argc, char** argv)
   GBWT compressed_index;
   sdsl::load_from_file(compressed_index, index_base + GBWT::EXTENSION);
   printStatistics(compressed_index, index_base);
+
+  if(breakdown)
+  {
+    std::string filename = index_base + ".html";
+    std::cout << "Writing space breakdown to " << filename << std::endl;
+    std::ofstream out(filename, std::ios_base::binary);
+    if(!out)
+    {
+      std::cerr << "benchmark: Cannot open output file " << filename << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    sdsl::write_structure<sdsl::HTML_FORMAT>(compressed_index, out);
+    out.close();
+    std::cout << std::endl;
+  }
 
   if(compare)
   {
@@ -189,6 +208,7 @@ printUsage(int exit_code)
   std::cerr << "  -l    Benchmark locate() queries (requires -f)" << std::endl;
   std::cerr << "  -e N  Benchmark N extract() queries" << std::endl;
   std::cerr << "  -s    Print extended statistics" << std::endl;
+  std::cerr << "  -S    Write size breakdown to index_base.html" << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);
