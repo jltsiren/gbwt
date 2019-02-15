@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018 Jouni Siren
+  Copyright (c) 2017, 2018, 2019 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -282,6 +282,43 @@ struct DecompressedRecord
   node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
   size_type offset(rank_type outrank) const { return this->outgoing[outrank].second; }
   size_type offsetAfter(rank_type outrank) const { return this->after[outrank].second; }
+};
+
+//------------------------------------------------------------------------------
+
+/*
+  An iterator over the 1-bits in sdsl::sd_vector<>.
+*/
+struct SDIterator
+{
+  const sdsl::sd_vector<>& vector;
+
+  size_type low_offset, high_offset;
+  size_type vector_offset;
+
+  SDIterator(const sdsl::sd_vector<>& v, size_type i) :
+    vector(v),
+    low_offset(i - 1), high_offset(v.high_1_select(i)),
+    vector_offset(v.low[low_offset] + ((high_offset + 1 - i) << v.wl))
+  {
+  }
+
+  size_type operator*() const { return this->vector_offset; }
+  size_type rank() const { return this->low_offset; }
+  size_type size() const { return this->vector.low.size(); }
+  bool end() const { return (this->rank() >= this->size()); }
+
+  void operator++()
+  {
+    this->low_offset++;
+    if(this->end()) { return; }
+    do
+    {
+      this->high_offset++;
+    }
+    while(this->vector.high[this->high_offset] != 1);
+    this->vector_offset = this->vector.low[low_offset] + ((this->high_offset - this->low_offset) << this->vector.wl);
+  }
 };
 
 //------------------------------------------------------------------------------

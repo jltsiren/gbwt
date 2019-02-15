@@ -37,7 +37,7 @@ OTHER_FLAGS=$(PARALLEL_FLAGS)
 CXX_FLAGS=$(MY_CXX_FLAGS) $(OTHER_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(INC_DIR) -I$(GBWT_DIR)/include
 SOURCES=$(wildcard *.cpp)
 OBJS=$(SOURCES:.cpp=.o)
-PROGRAMS=test_bwtmerge test_variants
+PROGRAMS=test_bwtmerge test_support test_variants
 
 all:$(PROGRAMS)
 
@@ -45,6 +45,9 @@ all:$(PROGRAMS)
 	$(MY_CXX) $(CXX_FLAGS) -c $<
 
 test_bwtmerge:test_bwtmerge.o $(LIBRARY)
+	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+
+test_support:test_support.o $(LIBRARY)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 test_variants:test_variants.o $(LIBRARY)

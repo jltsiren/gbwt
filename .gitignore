@@ -11,6 +11,7 @@ remove_seq
 
 # Tests
 test_bwtmerge
+test_support
 test_variants
 
 # Legacy tools
