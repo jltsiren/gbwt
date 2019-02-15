@@ -297,16 +297,22 @@ struct SDIterator
   size_type vector_offset;
 
   SDIterator(const sdsl::sd_vector<>& v, size_type i) :
-    vector(v),
-    low_offset(i - 1), high_offset(v.high_1_select(i)),
-    vector_offset(v.low[low_offset] + ((high_offset + 1 - i) << v.wl))
+    vector(v)
   {
+    this->select(i);
   }
 
   size_type operator*() const { return this->vector_offset; }
   size_type rank() const { return this->low_offset; }
   size_type size() const { return this->vector.low.size(); }
   bool end() const { return (this->rank() >= this->size()); }
+
+  void select(size_type i)
+  {
+    this->low_offset = i - 1;
+    this->high_offset = this->vector.high_1_select(i);
+    this->vector_offset = this->vector.low[this->low_offset] + ((this->high_offset + 1 - i) << this->vector.wl);
+  }
 
   void operator++()
   {
