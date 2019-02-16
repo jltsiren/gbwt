@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018 Jouni Siren
+  Copyright (c) 2018, 2019 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -99,13 +99,21 @@ main(int argc, char** argv)
   double start = readTimer();
 
   DynamicGBWT index;
-  sdsl::load_from_file(index, base_name + DynamicGBWT::EXTENSION);
+  if(!sdsl::load_from_file(index, base_name + DynamicGBWT::EXTENSION))
+  {
+    std::cerr << "remove_seq: Cannot load the index from " << (base_name + DynamicGBWT::EXTENSION) << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   printStatistics(index, base_name);
 
   size_type total_length = index.remove(seq_ids, chunk_size);
   if(total_length > 0)
   {
-    sdsl::store_to_file(index, output + DynamicGBWT::EXTENSION);
+    if(!sdsl::store_to_file(index, output + DynamicGBWT::EXTENSION))
+    {
+      std::cerr << "remove_seq: Cannot write the index to " << (output + DynamicGBWT::EXTENSION) << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
     printStatistics(index, output);
   }
 

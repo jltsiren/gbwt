@@ -135,7 +135,11 @@ main(int argc, char** argv)
   std::cout << std::endl;
 
   GBWT compressed_index;
-  sdsl::load_from_file(compressed_index, index_base + GBWT::EXTENSION);
+  if(!sdsl::load_from_file(compressed_index, index_base + GBWT::EXTENSION))
+  {
+    std::cerr << "benchmark: Cannot load the index from " << (index_base + GBWT::EXTENSION) << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   printStatistics(compressed_index, index_base);
 
   if(breakdown)
@@ -156,7 +160,11 @@ main(int argc, char** argv)
   if(compare)
   {
     GBWT second_index;
-    sdsl::load_from_file(second_index, compare_base + GBWT::EXTENSION);
+    if(!sdsl::load_from_file(second_index, compare_base + GBWT::EXTENSION))
+    {
+      std::cerr << "benchmark: Cannot load the index from " << (compare_base + GBWT::EXTENSION) << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
     printStatistics(second_index, compare_base);
     compareIndexes(compressed_index, second_index, index_base, compare_base);
   }
@@ -164,7 +172,11 @@ main(int argc, char** argv)
   if(!(find || locate || extract || statistics)) { return 0; }
 
   DynamicGBWT dynamic_index;
-  sdsl::load_from_file(dynamic_index, index_base + DynamicGBWT::EXTENSION);
+  if(!sdsl::load_from_file(dynamic_index, index_base + DynamicGBWT::EXTENSION))
+  {
+    std::cerr << "benchmark: Cannot load the index from " << (index_base + DynamicGBWT::EXTENSION) << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   printStatistics(dynamic_index, index_base);
 
   if(statistics) { extendedStatistics(dynamic_index); }

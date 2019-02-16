@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018 Jouni Siren
+  Copyright (c) 2018, 2019 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -153,7 +153,11 @@ main(int argc, char** argv)
     DynamicGBWT dynamic_index;
     if(!(index_base.empty()))
     {
-      sdsl::load_from_file(dynamic_index, index_base + DynamicGBWT::EXTENSION);
+      if(!sdsl::load_from_file(dynamic_index, index_base + DynamicGBWT::EXTENSION))
+      {
+        std::cerr << "build_gbwt: Cannot load the index from " << (index_base + DynamicGBWT::EXTENSION) << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
       printStatistics(dynamic_index, index_base);
     }
 
@@ -166,7 +170,11 @@ main(int argc, char** argv)
       if(build_from_parse)
       {
         VariantPaths variants;
-        sdsl::load_from_file(variants, input_base);
+        if(!sdsl::load_from_file(variants, input_base))
+        {
+          std::cerr << "build_gbwt: Cannot load variants from " << input_base << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
         if(check_overlaps) { checkOverlaps(variants, std::cerr, true); }
         std::set<range_type> overlaps;
         size_type node_width = variants.nodeWidth(both_orientations);
@@ -229,7 +237,11 @@ main(int argc, char** argv)
       }
     }
 
-    sdsl::store_to_file(dynamic_index, gbwt_name);
+    if(!sdsl::store_to_file(dynamic_index, gbwt_name))
+    {
+      std::cerr << "build_gbwt: Cannot write the index to " << gbwt_name << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
     printStatistics(dynamic_index, output_base);
 
     double seconds = readTimer() - start;
@@ -247,9 +259,17 @@ main(int argc, char** argv)
     std::cout << std::endl;
 
     GBWT compressed_index;
-    sdsl::load_from_file(compressed_index, gbwt_name);
+    if(!sdsl::load_from_file(compressed_index, gbwt_name))
+    {
+      std::cerr << "build_gbwt: Cannot load the index from " << gbwt_name << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
     DynamicGBWT dynamic_index;
-    sdsl::load_from_file(dynamic_index, gbwt_name);
+    if(!sdsl::load_from_file(dynamic_index, gbwt_name))
+    {
+      std::cerr << "build_gbwt: Cannot load the index from " << gbwt_name << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
 
     std::vector<vector_type> queries;
     std::vector<SearchState> results = verifyFind(compressed_index, dynamic_index, input_base, queries);

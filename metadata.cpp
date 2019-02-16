@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018 Jouni Siren
+  Copyright (c) 2018, 2019 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -74,7 +74,11 @@ main(int argc, char** argv)
 
   Version::print(std::cout, tool_name);
   GBWT gbwt;
-  sdsl::load_from_file(gbwt, index_base + GBWT::EXTENSION);
+  if(!sdsl::load_from_file(gbwt, index_base + GBWT::EXTENSION))
+  {
+    std::cerr << "metadata: Cannot load the index from " << (index_base + GBWT::EXTENSION) << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
 
   bool modified = false;
   if(set_haplotypes)
@@ -100,7 +104,14 @@ main(int argc, char** argv)
   if(modified && !remove_metadata) { gbwt.addMetadata(); }
 
   printStatistics(gbwt, index_base);
-  if(modified) { sdsl::store_to_file(gbwt, index_base + GBWT::EXTENSION); }
+  if(modified)
+  {
+    if(!sdsl::store_to_file(gbwt, index_base + GBWT::EXTENSION))
+    {
+      std::cerr << "metadata: Cannot write the index to " << (index_base + GBWT::EXTENSION) << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
 
   return 0;
 }

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018 Jouni Siren
+  Copyright (c) 2017, 2018, 2019 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -122,12 +122,20 @@ main(int argc, char** argv)
     for(int i = optind; i < argc; i++)
     {
       std::string input_name = argv[i];
-      sdsl::load_from_file(indexes[i - optind], input_name + GBWT::EXTENSION);
+      if(!sdsl::load_from_file(indexes[i - optind], input_name + GBWT::EXTENSION))
+      {
+        std::cerr << "merge_gbwt: Cannot load the index from " << (input_name + GBWT::EXTENSION) << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
       printStatistics(indexes[i - optind], input_name);
       total_inserted += indexes[i - optind].size();
     }
     GBWT merged(indexes);
-    sdsl::store_to_file(merged, output + GBWT::EXTENSION);
+    if(!sdsl::store_to_file(merged, output + GBWT::EXTENSION))
+    {
+      std::cerr << "merge_gbwt: Cannot write the index to " << (output + GBWT::EXTENSION) << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
     printStatistics(merged, output);
   }
   else
@@ -135,7 +143,11 @@ main(int argc, char** argv)
     DynamicGBWT index;
     {
       std::string input_name = argv[optind];
-      sdsl::load_from_file(index, input_name + DynamicGBWT::EXTENSION);
+      if(!sdsl::load_from_file(index, input_name + DynamicGBWT::EXTENSION))
+      {
+        std::cerr << "merge_gbwt: Cannot load the index from " << (input_name + DynamicGBWT::EXTENSION) << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
       printStatistics(index, input_name);
       optind++;
     }
@@ -145,7 +157,11 @@ main(int argc, char** argv)
       if(algorithm == ma_insert)
       {
         GBWT next;
-        sdsl::load_from_file(next, input_name + GBWT::EXTENSION);
+        if(!sdsl::load_from_file(next, input_name + GBWT::EXTENSION))
+        {
+          std::cerr << "merge_gbwt: Cannot load the index from " << (input_name + GBWT::EXTENSION) << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
         printStatistics(next, input_name);
         index.merge(next, batch_size, sample_interval);
         total_inserted += next.size();
@@ -153,14 +169,22 @@ main(int argc, char** argv)
       else if(algorithm == ma_parallel)
       {
         DynamicGBWT next;
-        sdsl::load_from_file(next, input_name + DynamicGBWT::EXTENSION);
+        if(!sdsl::load_from_file(next, input_name + DynamicGBWT::EXTENSION))
+        {
+          std::cerr << "merge_gbwt: Cannot load the index from " << (input_name + DynamicGBWT::EXTENSION) << std::endl;
+          std::exit(EXIT_FAILURE);
+        }
         printStatistics(next, input_name);
         index.merge(next, parameters);
         total_inserted += next.size();
       }
       optind++;
     }
-    sdsl::store_to_file(index, output + DynamicGBWT::EXTENSION);
+    if(!sdsl::store_to_file(index, output + DynamicGBWT::EXTENSION))
+    {
+      std::cerr << "merge_gbwt: Cannot write the index to " << (output + DynamicGBWT::EXTENSION) << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
     printStatistics(index, output);
   }
 
