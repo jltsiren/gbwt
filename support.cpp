@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018 Jouni Siren
+  Copyright (c) 2017, 2018, 2019 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -420,6 +420,12 @@ CompressedRecord::CompressedRecord(const std::vector<byte_type>& source, size_ty
 
   this->body = source.data() + start;
   this->data_size = limit - start;
+}
+
+bool
+CompressedRecord::emptyRecord(const std::vector<byte_type>& source, size_type start)
+{
+  return (ByteCode::read(source, start) == 0);
 }
 
 size_type

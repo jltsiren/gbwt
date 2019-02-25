@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018 Jouni Siren
+  Copyright (c) 2017, 2018, 2019 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -237,6 +237,7 @@ public:
   node_type toNode(comp_type comp) const { return (comp == 0 ? comp : comp + this->header.offset); }
 
   size_type nodeSize(node_type node) const { return this->record(node).size(); }
+  bool empty(node_type node) const { return this->record(node).empty(); }
 
   DynamicRecord& record(node_type node)
   {

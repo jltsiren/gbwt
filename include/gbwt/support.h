@@ -207,6 +207,9 @@ struct CompressedRecord
   CompressedRecord();
   CompressedRecord(const std::vector<byte_type>& source, size_type start, size_type limit);
 
+  // Checks whether the record starting at the given position is empty.
+  static bool emptyRecord(const std::vector<byte_type>& source, size_type start);
+
   size_type size() const; // Expensive.
   bool empty() const { return (this->size() == 0); }
   size_type runs() const; // Expensive.
@@ -359,6 +362,7 @@ struct RecordArray
 
   size_type size() const { return this->records; }
   bool empty() const { return (this->size() == 0); }
+  bool empty(size_type record) const { return CompressedRecord::emptyRecord(this->data, this->start(record)); }
 
   // 0-based indexing.
   size_type start(size_type record) const { return this->select(record + 1); }
