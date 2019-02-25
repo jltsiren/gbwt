@@ -232,6 +232,7 @@ public:
     return this->record(from).outgoing;
   }
 
+  node_type firstNode() const { return this->header.offset + 1; }
   comp_type toComp(node_type node) const { return (node == 0 ? node : node - this->header.offset); }
   node_type toNode(comp_type comp) const { return (comp == 0 ? comp : comp + this->header.offset); }
 
