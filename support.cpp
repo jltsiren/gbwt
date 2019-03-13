@@ -1193,12 +1193,19 @@ Metadata::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string
 {
   sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
   size_type written_bytes = 0;
+
   written_bytes += sdsl::write_member(this->tag, out, child, "tag");
   written_bytes += sdsl::write_member(this->version, out, child, "version");
   written_bytes += sdsl::write_member(this->sample_count, out, child, "sample_count");
   written_bytes += sdsl::write_member(this->haplotype_count, out, child, "haplotype_count");
   written_bytes += sdsl::write_member(this->contig_count, out, child, "contig_count");
   written_bytes += sdsl::write_member(this->flags, out, child, "flags");
+
+  if(this->get(FLAG_PATH_NAMES) && this->paths() > 0)
+  {
+    written_bytes += serializeVector(this->path_names, out, child, "path_names");
+  }
+
   sdsl::structure_tree::add_size(child, written_bytes);
   return written_bytes;
 }
@@ -1212,23 +1219,26 @@ Metadata::load(std::istream& in)
   sdsl::read_member(this->haplotype_count, in);
   sdsl::read_member(this->contig_count, in);
   sdsl::read_member(this->flags, in);
+
+  if(this->get(FLAG_PATH_NAMES))
+  {
+    loadVector(this->path_names, in);
+  }
 }
 
 bool
 Metadata::check() const
 {
   if(this->tag != TAG) { return false; }
-  if(this->version == VERSION)
+  switch(this->version)
   {
+  case VERSION:
     return ((this->flags & FLAG_MASK) == this->flags);
+  case INITIAL_VERSION:
+    return ((this->flags & INITIAL_FLAG_MASK) == this->flags);
+  default:
+    return false;
   }
-  return false;
-}
-
-bool
-Metadata::checkNew() const
-{
-  return (this->tag == TAG && this->version > VERSION);
 }
 
 void
@@ -1242,6 +1252,8 @@ Metadata::swap(Metadata& another)
     std::swap(this->haplotype_count, another.haplotype_count);
     std::swap(this->contig_count, another.contig_count);
     std::swap(this->flags, another.flags);
+
+    this->path_names.swap(another.path_names);
   }
 }
 
@@ -1253,7 +1265,77 @@ Metadata::operator==(const Metadata& another) const
           this->sample_count == another.sample_count &&
           this->haplotype_count == another.haplotype_count &&
           this->contig_count == another.contig_count &&
-          this->flags == another.flags);
+          this->flags == another.flags &&
+          this->path_names == another.path_names);
+}
+
+std::vector<size_type>
+Metadata::findPaths(size_type sample_id, size_type contig_id) const
+{
+  std::vector<size_type> result;
+  for(size_type i = 0; i < this->paths(); i++)
+  {
+    if(this->path(i).sample == sample_id && this->path(i).contig == contig_id)
+    {
+      result.push_back(i);
+    }
+  }
+  return result;
+}
+
+std::vector<size_type>
+Metadata::pathsForSample(size_type sample_id) const
+{
+  std::vector<size_type> result;
+  for(size_type i = 0; i < this->paths(); i++)
+  {
+    if(this->path(i).sample == sample_id)
+    {
+      result.push_back(i);
+    }
+  }
+
+  return result;
+}
+
+std::vector<size_type>
+Metadata::pathsForContig(size_type contig_id) const
+{
+  std::vector<size_type> result;
+  for(size_type i = 0; i < this->paths(); i++)
+  {
+    if(this->path(i).contig == contig_id)
+    {
+      result.push_back(i);
+    }
+  }
+  return result;
+}
+
+void
+Metadata::addPath(const PathName& path)
+{
+  this->set(FLAG_PATH_NAMES);
+  this->path_names.push_back(path);
+}
+
+void
+Metadata::clearPaths()
+{
+  this->unset(FLAG_PATH_NAMES);
+  this->path_names = std::vector<PathName>();
+}
+
+void
+Metadata::clearSamples()
+{
+  this->unset(FLAG_SAMPLE_NAMES);
+}
+
+void
+Metadata::clearContigs()
+{
+  this->unset(FLAG_CONTIG_NAMES);
 }
 
 void
@@ -1278,6 +1360,8 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
   {
     this->contig_count += source.contig_count;
   }
+
+  this->path_names.insert(this->path_names.end(), source.path_names.begin(), source.path_names.end());
 }
 
 void
@@ -1294,9 +1378,21 @@ Metadata::clear()
 
 std::ostream& operator<<(std::ostream& stream, const Metadata& metadata)
 {
-  return stream << metadata.samples() << " sample(s), "
-                << metadata.haplotypes() << " haplotype(s), "
-                << metadata.contigs() << " contig(s)";
+  if(metadata.get(Metadata::FLAG_PATH_NAMES))
+  {
+    stream << metadata.paths() << " paths with names, ";
+  }
+
+  stream << metadata.samples() << " samples";
+  if(metadata.get(Metadata::FLAG_SAMPLE_NAMES)) { stream << " with names"; }
+  stream << ", ";
+
+  stream << metadata.haplotypes() << " haplotypes, ";
+
+  stream << metadata.contigs() << " contigs";
+  if(metadata.get(Metadata::FLAG_CONTIG_NAMES)) { stream << " with names"; }
+
+  return stream;
 }
 
 //------------------------------------------------------------------------------

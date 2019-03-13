@@ -42,25 +42,35 @@ main(int argc, char** argv)
   int c = 0;
   bool set_samples = false, set_haplotypes = false, set_contigs = false;
   size_type new_samples = 0, new_haplotypes = 0, new_contigs = 0;
+  bool clear_paths = false, clear_samples = false, clear_contigs = false;
   bool remove_metadata = false;
-  while((c = getopt(argc, argv, "c:h:rs:")) != -1)
+  while((c = getopt(argc, argv, "s:h:c:PSRr")) != -1)
   {
     switch(c)
     {
-    case 'c':
-      set_contigs = true;
-      new_contigs = std::stoul(optarg);
+    case 's':
+      set_samples = true;
+      new_samples = std::stoul(optarg);
       break;
     case 'h':
       set_haplotypes = true;
       new_haplotypes = std::stoul(optarg);
       break;
+    case 'c':
+      set_contigs = true;
+      new_contigs = std::stoul(optarg);
+      break;
+    case 'P':
+      clear_paths = true;
+      break;
+    case 'S':
+      clear_samples = true;
+      break;
+    case 'C':
+      clear_contigs = true;
+      break;
     case 'r':
       remove_metadata = true;
-      break;
-    case 's':
-      set_samples = true;
-      new_samples = std::stoul(optarg);
       break;
     case '?':
       std::exit(EXIT_FAILURE);
@@ -81,18 +91,41 @@ main(int argc, char** argv)
   }
 
   bool modified = false;
+  if(clear_paths)
+  {
+    gbwt.metadata.clearPaths();
+    modified = true;
+  }
+  if(clear_samples)
+  {
+    gbwt.metadata.clearSamples();
+    modified = true;
+  }
+  if(set_samples)
+  {
+    if(gbwt.metadata.get(Metadata::FLAG_SAMPLE_NAMES))
+    {
+      std::cerr << "metadata: Changing sample count without changing sample names" << std::endl;
+    }
+    gbwt.metadata.setSamples(new_samples);
+    modified = true;
+  }
   if(set_haplotypes)
   {
     gbwt.metadata.setHaplotypes(new_haplotypes);
     modified = true;
   }
-  if(set_samples)
+  if(clear_contigs)
   {
-    gbwt.metadata.setSamples(new_samples);
+    gbwt.metadata.clearContigs();
     modified = true;
   }
   if(set_contigs)
   {
+    if(gbwt.metadata.get(Metadata::FLAG_SAMPLE_NAMES))
+    {
+      std::cerr << "metadata: Changing contig count without changing contig names" << std::endl;
+    }
     gbwt.metadata.setContigs(new_contigs);
     modified = true;
   }
@@ -124,10 +157,13 @@ printUsage(int exit_code)
   Version::print(std::cerr, tool_name);
 
   std::cerr << "Usage: metadata [options] basename" << std::endl;
-  std::cerr << "  -c N  Set the number of contigs to N" << std::endl;
-  std::cerr << "  -h N  Set the number of haplotypes to N" << std::endl;
-  std::cerr << "  -r    Remove all metadata" << std::endl;
   std::cerr << "  -s N  Set the number of samples to N" << std::endl;
+  std::cerr << "  -h N  Set the number of haplotypes to N" << std::endl;
+  std::cerr << "  -c N  Set the number of contigs to N" << std::endl;
+  std::cerr << "  -P    Remove path names" << std::endl;
+  std::cerr << "  -S    Remove sample names" << std::endl;
+  std::cerr << "  -C    Remove contig names" << std::endl;
+  std::cerr << "  -r    Remove all metadata" << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);

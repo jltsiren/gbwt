@@ -470,20 +470,38 @@ struct MergeParameters
   GBWT metadata. Merging assumes that all metadata records cover the same samples
   and haplotypes.
 
+  Version 1:
+  - Sample names, contig names, path names.
+  - Compatible with version 0.
+
   Version 0:
   - Preliminary version with counts of samples, haplotypes, and contigs.
 
-  Next version:
+  Future versions:
   - Haplotype coverage over ranges of node ids (run-length encode with sd_vector).
   - Assign contig ids to ranges of node ids (as above).
-  - Contig and sample names.
-  - Sequence names as tuples (sample, phase, count) with implied orientation.
 */
+
+struct PathName
+{
+  size_type sample;
+  size_type contig;
+  size_type phase;
+  size_type count;
+
+  bool operator==(const PathName& another) const
+  {
+    return (this->sample == another.sample && this->contig == another.contig && this->phase == another.phase && this->count == another.count);
+  }
+
+  bool operator!=(const PathName& another) const { return !(this->operator==(another)); }
+};
 
 struct Metadata
 {
-  typedef gbwt::size_type size_type;  // Needed for SDSL serialization.
+  typedef gbwt::size_type size_type; // Needed for SDSL serialization.
 
+  // Header.
   std::uint32_t tag;
   std::uint32_t version;
   std::uint64_t sample_count;
@@ -491,19 +509,28 @@ struct Metadata
   std::uint64_t contig_count;
   std::uint64_t flags;
 
+  // Path names.
+  std::vector<PathName> path_names;
+
+  // FIXME add data structures for sample / contig names
+
   constexpr static std::uint32_t TAG = 0x6B375E7A;
   constexpr static std::uint32_t VERSION = Version::METADATA_VERSION;
 
-  // Flag masks for old compatible versions.
+  constexpr static std::uint64_t FLAG_MASK         = 0x0007;
+  constexpr static std::uint64_t FLAG_PATH_NAMES   = 0x0001;
+  constexpr static std::uint64_t FLAG_SAMPLE_NAMES = 0x0002;
+  constexpr static std::uint64_t FLAG_CONTIG_NAMES = 0x0004;
 
-  constexpr static std::uint64_t FLAG_MASK = 0x0000;
+  // Flag masks for old compatible versions.
+  constexpr static std::uint32_t INITIAL_VERSION   = 0;
+  constexpr static std::uint64_t INITIAL_FLAG_MASK = 0x0000;
 
   Metadata();
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
   bool check() const;
-  bool checkNew() const;
 
   void setVersion() { this->version = VERSION; }
 
@@ -516,19 +543,36 @@ struct Metadata
   bool operator==(const Metadata& another) const;
   bool operator!=(const Metadata& another) const { return !(this->operator==(another)); }
 
+  // Header operations.
   size_type samples() const { return this->sample_count; }
   size_type haplotypes() const { return this->haplotype_count; }
   size_type contigs() const { return this->contig_count; }
-
   void setSamples(size_type n) { this->sample_count = n; }
   void setHaplotypes(size_type n) { this->haplotype_count = n; }
   void setContigs(size_type n) { this->contig_count = n; }
 
+  // Path operations.
+  size_type paths() const { return this->path_names.size(); }
+  const PathName& path(size_type i) const { return this->path_names[i]; }
+  std::vector<size_type> findPaths(size_type sample_id, size_type contig_id) const;
+  std::vector<size_type> pathsForSample(size_type sample_id) const;
+  std::vector<size_type> pathsForContig(size_type contig_id) const;
+  void addPath(const PathName& path);
+  void clearPaths();
+
+  // FIXME Sample operations.
+  void clearSamples();
+
+  // FIXME Contig operations.
+  void clearContigs();
+
+  // FIXME handle merging
   void merge(const Metadata& source, bool same_samples, bool same_contigs);
   void merge(std::vector<const Metadata*> sources, bool same_samples, bool same_contigs);
   void clear();
 };
 
+// FIXME also path names
 std::ostream& operator<<(std::ostream& stream, const Metadata& metadata);
 
 //------------------------------------------------------------------------------

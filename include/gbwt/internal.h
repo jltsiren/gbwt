@@ -78,7 +78,7 @@ struct DiskIO
   }
 };
 
-// Serialize an std::vector of integers.
+// Serialize an std::vector of integers or simple structs.
 template<class Element>
 size_type
 serializeVector(const std::vector<Element>& data, std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "")

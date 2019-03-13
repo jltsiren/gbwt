@@ -1,5 +1,6 @@
 /*
-  Copyright (c) 2015, 2016, 2017, 2018 Genome Research Ltd.
+  Copyright (c) 2017, 2018, 2019 Jouni Sirén
+  Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -76,6 +77,8 @@ GBWTHeader::check() const
   {
   case VERSION:
     return ((this->flags & FLAG_MASK) == this->flags);
+  case META_VERSION:
+    return ((this->flags & META_FLAG_MASK) == this->flags);
   case BD_VERSION:
     return ((this->flags & BD_FLAG_MASK) == this->flags);
   case OLD_VERSION:
@@ -83,12 +86,6 @@ GBWTHeader::check() const
   default:
     return false;
   }
-}
-
-bool
-GBWTHeader::checkNew() const
-{
-  return (this->tag == TAG && this->version > VERSION);
 }
 
 void
