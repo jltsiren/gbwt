@@ -25,6 +25,8 @@
 
 #include <gbwt/internal.h>
 
+#include <functional>
+
 namespace gbwt
 {
 
@@ -1181,6 +1183,195 @@ MergeParameters::setMergeJobs(size_type n)
 
 //------------------------------------------------------------------------------
 
+Dictionary::Dictionary() :
+  offsets(1, 0), sorted_ids(), data()
+{
+}
+
+Dictionary::Dictionary(const Dictionary& source)
+{
+  this->copy(source);
+}
+
+Dictionary::Dictionary(Dictionary&& source)
+{
+  *this = std::move(source);
+}
+
+Dictionary::~Dictionary()
+{
+}
+
+Dictionary::Dictionary(const std::vector<std::string>& source)
+{
+  if(source.empty())
+  {
+    *this = Dictionary();
+    return;
+  }
+
+  size_type total_length = 0;
+  for(const std::string& s : source) { total_length += s.length(); }
+  this->offsets = sdsl::int_vector<0>(source.size() + 1, 0, bit_length(total_length));
+  this->sorted_ids = sdsl::int_vector<0>(source.size(), 0, bit_length(source.size() - 1));
+  this->data.reserve(total_length);
+
+  // Initialize the arrays.
+  size_type offset = 0;
+  for(size_type i = 0; i < source.size(); i++)
+  {
+    this->offsets[i] = offset;
+    this->sorted_ids[i] = i;
+    this->data.insert(this->data.end(), source[i].begin(), source[i].end());
+    offset += source[i].length();
+  }
+  this->offsets[source.size()] = total_length;
+
+  // Sort sorted_ids.
+  std::function<bool(size_type, size_type)> string_id_sorter = [this](size_type a, size_type b) -> bool
+  {
+    return this->smaller(a, b);
+  };
+  sequentialSort(this->sorted_ids.begin(), this->sorted_ids.end(), string_id_sorter);
+
+  // Check for duplicates.
+  for(size_type i = 0; i + 1 < this->size(); i++)
+  {
+    if(!(this->smaller(i, i + 1)))
+    {
+      std::cerr << "Dictionary::Dictionary(): Warning: The dictionary contains duplicate strings" << std::endl;
+      return;
+    }
+  }
+}
+
+void
+Dictionary::swap(Dictionary& another)
+{
+  if(this != &another)
+  {
+    this->offsets.swap(another.offsets);
+    this->sorted_ids.swap(another.sorted_ids);
+    this->data.swap(another.data);
+  }
+}
+
+Dictionary&
+Dictionary::operator=(const Dictionary& source)
+{
+  if(this != &source) { this->copy(source); }
+  return *this;
+}
+
+Dictionary&
+Dictionary::operator=(Dictionary&& source)
+{
+  if(this != &source)
+  {
+    this->offsets = std::move(source.offsets);
+    this->sorted_ids = std::move(source.sorted_ids);
+    this->data = std::move(source.data);
+  }
+  return *this;
+}
+
+size_type
+Dictionary::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
+{
+  sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
+  size_type written_bytes = 0;
+
+  written_bytes += this->offsets.serialize(out, child, "offsets");
+  written_bytes += this->sorted_ids.serialize(out, child, "sorted_ids");
+  written_bytes += serializeVector(this->data, out, child, "data");
+
+  sdsl::structure_tree::add_size(child, written_bytes);
+  return written_bytes;
+}
+
+void
+Dictionary::load(std::istream& in)
+{
+  this->offsets.load(in);
+  this->sorted_ids.load(in);
+  loadVector(this->data, in);
+}
+
+void
+Dictionary::copy(const Dictionary& source)
+{
+  this->offsets = source.offsets;
+  this->sorted_ids = source.sorted_ids;
+  this->data = source.data;
+}
+
+bool
+Dictionary::operator==(const Dictionary& another) const
+{
+  return (this->offsets == another.offsets && this->sorted_ids == another.sorted_ids && this->data == another.data);
+}
+
+void
+Dictionary::clear()
+{
+  *this = Dictionary();
+}
+
+size_type
+Dictionary::find(const std::string& s) const
+{
+  size_type start = 0, limit = this->size();
+  while(start < limit)
+  {
+    size_type mid = start + (limit - start) / 2;
+    if(this->smaller(s, mid)) { limit = mid; }
+    else if(this->smaller(mid, s)) { start = mid + 1; }
+    else { return this->sorted_ids[mid]; }
+  }
+  return this->size();
+}
+
+template<class AIter, class BIter>
+bool
+stringCompare(AIter a_pos, AIter a_lim, BIter b_pos, BIter b_lim)
+{
+  while(a_pos != a_lim && b_pos != b_lim)
+  {
+    if(*a_pos != *b_pos) { return (*a_pos < *b_pos); }
+    ++a_pos; ++b_pos;
+  }
+  return (a_pos == a_lim && b_pos != b_lim);
+}
+
+bool
+Dictionary::smaller(size_type a, size_type b) const
+{
+  return stringCompare(this->data.begin() + this->offsets[this->sorted_ids[a]],
+                       this->data.begin() + this->offsets[this->sorted_ids[a] + 1],
+                       this->data.begin() + this->offsets[this->sorted_ids[b]],
+                       this->data.begin() + this->offsets[this->sorted_ids[b] + 1]);
+}
+
+bool
+Dictionary::smaller(size_type a, const std::string& b) const
+{
+  return stringCompare(this->data.begin() + this->offsets[this->sorted_ids[a]],
+                       this->data.begin() + this->offsets[this->sorted_ids[a] + 1],
+                       b.begin(),
+                       b.end());
+}
+
+bool
+Dictionary::smaller(const std::string& a, size_type b) const
+{
+  return stringCompare(a.begin(),
+                       a.end(),
+                       this->data.begin() + this->offsets[this->sorted_ids[b]],
+                       this->data.begin() + this->offsets[this->sorted_ids[b] + 1]);
+}
+
+//------------------------------------------------------------------------------
+
 Metadata::Metadata() :
   tag(TAG), version(VERSION),
   sample_count(0), haplotype_count(0), contig_count(0),
@@ -1201,9 +1392,17 @@ Metadata::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string
   written_bytes += sdsl::write_member(this->contig_count, out, child, "contig_count");
   written_bytes += sdsl::write_member(this->flags, out, child, "flags");
 
-  if(this->get(FLAG_PATH_NAMES) && this->paths() > 0)
+  if(this->get(FLAG_PATH_NAMES))
   {
     written_bytes += serializeVector(this->path_names, out, child, "path_names");
+  }
+  if(this->get(FLAG_SAMPLE_NAMES))
+  {
+    written_bytes += this->sample_names.serialize(out, child, "sample_names");
+  }
+  if(this->get(FLAG_CONTIG_NAMES))
+  {
+    written_bytes += this->contig_names.serialize(out, child, "contig_names");
   }
 
   sdsl::structure_tree::add_size(child, written_bytes);
@@ -1223,6 +1422,14 @@ Metadata::load(std::istream& in)
   if(this->get(FLAG_PATH_NAMES))
   {
     loadVector(this->path_names, in);
+  }
+  if(this->get(FLAG_SAMPLE_NAMES))
+  {
+    this->sample_names.load(in);
+  }
+  if(this->get(FLAG_CONTIG_NAMES))
+  {
+    this->contig_names.load(in);
   }
 }
 
@@ -1254,6 +1461,8 @@ Metadata::swap(Metadata& another)
     std::swap(this->flags, another.flags);
 
     this->path_names.swap(another.path_names);
+    this->sample_names.swap(another.sample_names);
+    this->contig_names.swap(another.contig_names);
   }
 }
 
@@ -1266,7 +1475,35 @@ Metadata::operator==(const Metadata& another) const
           this->haplotype_count == another.haplotype_count &&
           this->contig_count == another.contig_count &&
           this->flags == another.flags &&
-          this->path_names == another.path_names);
+          this->path_names == another.path_names &&
+          this->sample_names == another.sample_names &&
+          this->contig_names == another.contig_names);
+}
+
+void
+Metadata::setSamples(size_type n)
+{
+  if(this->get(FLAG_SAMPLE_NAMES))
+  {
+    std::cerr << "Metadata::setSamples(): Warning: Changing sample count without changing sample names" << std::endl;
+  }
+  this->sample_count = n;
+}
+
+void
+Metadata::setHaplotypes(size_type n)
+{
+  this->haplotype_count = n;
+}
+
+void
+Metadata::setContigs(size_type n)
+{
+  if(this->get(FLAG_CONTIG_NAMES))
+  {
+    std::cerr << "Metadata::setContigs(): Warning: Changing contig count without changing contig names" << std::endl;
+  }
+  this->contig_count = n;
 }
 
 std::vector<size_type>
@@ -1327,15 +1564,45 @@ Metadata::clearPaths()
 }
 
 void
+Metadata::setSamples(const std::vector<std::string>& names)
+{
+  if(names.empty())
+  {
+    this->clearSamples();
+    return;
+  }
+
+  this->setSamples(names.size());
+  this->set(FLAG_SAMPLE_NAMES);
+  this->sample_names = Dictionary(names);
+}
+
+void
 Metadata::clearSamples()
 {
   this->unset(FLAG_SAMPLE_NAMES);
+  this->sample_names.clear();
+}
+
+void
+Metadata::setContigs(const std::vector<std::string>& names)
+{
+  if(names.empty())
+  {
+    this->clearContigs();
+    return;
+  }
+
+  this->setContigs(names.size());
+  this->set(FLAG_CONTIG_NAMES);
+  this->contig_names = Dictionary(names);
 }
 
 void
 Metadata::clearContigs()
 {
   this->unset(FLAG_CONTIG_NAMES);
+  this->contig_names.clear();
 }
 
 void
@@ -1360,8 +1627,6 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
   {
     this->contig_count += source.contig_count;
   }
-
-  this->path_names.insert(this->path_names.end(), source.path_names.begin(), source.path_names.end());
 }
 
 void

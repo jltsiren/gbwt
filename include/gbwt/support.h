@@ -466,6 +466,54 @@ struct MergeParameters
 
 //------------------------------------------------------------------------------
 
+struct Dictionary
+{
+  typedef gbwt::size_type size_type;
+  typedef std::pair<const char*, size_type> value_type;
+
+  sdsl::int_vector<0> offsets;    // Starting offsets for each string, including a sentinel at the end.
+  sdsl::int_vector<0> sorted_ids; // String ids in sorted order.
+  std::vector<char>   data;       // Concatenated strings.
+
+  Dictionary();
+  Dictionary(const Dictionary& source);
+  Dictionary(Dictionary&& source);
+  ~Dictionary();
+
+  explicit Dictionary(const std::vector<std::string>& source);
+
+  void swap(Dictionary& another);
+  Dictionary& operator=(const Dictionary& source);
+  Dictionary& operator=(Dictionary&& source);
+
+  size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
+  void load(std::istream& in);
+
+  bool operator==(const Dictionary& another) const;
+  bool operator!=(const Dictionary& another) const { return !(this->operator==(another)); }
+
+  void clear();
+
+  size_type size() const { return this->sorted_ids.size(); }
+  bool empty() const { return (this->size() == 0); }
+
+  std::string operator[](size_type i) const
+  {
+    return std::string(this->data.begin() + this->offsets[i], this->data.begin() + this->offsets[i + 1]);
+  }
+
+  size_type find(const std::string& s) const;
+
+private:
+  void copy(const Dictionary& source);
+
+  bool smaller(size_type left, size_type right) const;
+  bool smaller(size_type left, const std::string& right) const;
+  bool smaller(const std::string& left, size_type right) const;
+};
+
+//------------------------------------------------------------------------------
+
 /*
   GBWT metadata. Merging assumes that all metadata records cover the same samples
   and haplotypes.
@@ -475,7 +523,7 @@ struct MergeParameters
   - Compatible with version 0.
 
   Version 0:
-  - Preliminary version with counts of samples, haplotypes, and contigs.
+  - Preliminary version with sample/haplotype/contig counts.
 
   Future versions:
   - Haplotype coverage over ranges of node ids (run-length encode with sd_vector).
@@ -509,10 +557,10 @@ struct Metadata
   std::uint64_t contig_count;
   std::uint64_t flags;
 
-  // Path names.
+  // Path / sample / contig names.
   std::vector<PathName> path_names;
-
-  // FIXME add data structures for sample / contig names
+  Dictionary            sample_names;
+  Dictionary            contig_names;
 
   constexpr static std::uint32_t TAG = 0x6B375E7A;
   constexpr static std::uint32_t VERSION = Version::METADATA_VERSION;
@@ -547,9 +595,9 @@ struct Metadata
   size_type samples() const { return this->sample_count; }
   size_type haplotypes() const { return this->haplotype_count; }
   size_type contigs() const { return this->contig_count; }
-  void setSamples(size_type n) { this->sample_count = n; }
-  void setHaplotypes(size_type n) { this->haplotype_count = n; }
-  void setContigs(size_type n) { this->contig_count = n; }
+  void setSamples(size_type n);
+  void setHaplotypes(size_type n);
+  void setContigs(size_type n);
 
   // Path operations.
   size_type paths() const { return this->path_names.size(); }
@@ -560,19 +608,24 @@ struct Metadata
   void addPath(const PathName& path);
   void clearPaths();
 
-  // FIXME Sample operations.
+  // Sample operations.
+  std::string sample(size_type i) const { return this->sample_names[i]; }
+  size_type sample(const std::string& name) const { return this->sample_names.find(name); }
+  void setSamples(const std::vector<std::string>& names);
   void clearSamples();
 
-  // FIXME Contig operations.
+  // Contig operations.
+  std::string contig(size_type i) const { return this->contig_names[i]; }
+  size_type contig(const std::string& name) const { return this->contig_names.find(name); }
+  void setContigs(const std::vector<std::string>& names);
   void clearContigs();
 
-  // FIXME handle merging
+  // FIXME handle merging path/sample/contig names
   void merge(const Metadata& source, bool same_samples, bool same_contigs);
   void merge(std::vector<const Metadata*> sources, bool same_samples, bool same_contigs);
   void clear();
 };
 
-// FIXME also path names
 std::ostream& operator<<(std::ostream& stream, const Metadata& metadata);
 
 //------------------------------------------------------------------------------

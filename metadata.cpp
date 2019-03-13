@@ -103,10 +103,6 @@ main(int argc, char** argv)
   }
   if(set_samples)
   {
-    if(gbwt.metadata.get(Metadata::FLAG_SAMPLE_NAMES))
-    {
-      std::cerr << "metadata: Changing sample count without changing sample names" << std::endl;
-    }
     gbwt.metadata.setSamples(new_samples);
     modified = true;
   }
@@ -122,10 +118,6 @@ main(int argc, char** argv)
   }
   if(set_contigs)
   {
-    if(gbwt.metadata.get(Metadata::FLAG_SAMPLE_NAMES))
-    {
-      std::cerr << "metadata: Changing contig count without changing contig names" << std::endl;
-    }
     gbwt.metadata.setContigs(new_contigs);
     modified = true;
   }
