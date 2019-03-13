@@ -152,7 +152,7 @@ public:
 
   bool contains(node_type node) const
   {
-    return ((node < this->sigma() && node > this->header.offset) || node == 0);
+    return ((node < this->sigma() && node > this->header.offset) || node == ENDMARKER);
   }
 
   bool contains(edge_type position) const
