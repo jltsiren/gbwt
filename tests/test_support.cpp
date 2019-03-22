@@ -104,4 +104,70 @@ TEST(SDIteratorTest, Iterator)
 
 //------------------------------------------------------------------------------
 
+TEST(DictionaryTest, Empty)
+{
+  Dictionary empty;
+
+  EXPECT_EQ(empty.size(), static_cast<size_type>(0)) << "Empty dictionary contains " << empty.size() << " keys";
+  EXPECT_TRUE(empty.empty()) << "Empty dictionary is not empty";
+
+  size_t offset = empty.find("key");
+  EXPECT_EQ(offset, empty.size()) << "Missing keys are not reported as missing";
+}
+
+TEST(DictionaryTest, Keys)
+{
+  std::vector<std::string> keys
+  {
+    "first", "second", "third", "fourth", "fifth"
+  };
+  Dictionary dict(keys);
+
+  ASSERT_EQ(dict.size(),  keys.size()) << "Expected " << keys.size() << " keys, got " << dict.size();
+  EXPECT_FALSE(dict.empty()) << "The dictionary is empty";
+
+  bool ok = true;
+  for(size_type i = 0; i < keys.size(); i++)
+  {
+    ok &= (dict[i] == keys[i]);
+    ok &= (dict.find(keys[i]) == i);
+  }
+  ASSERT_TRUE(ok) << "The dictionary does not contain the correct keys";
+
+  size_t offset = dict.find("key");
+  EXPECT_EQ(offset, dict.size()) << "Missing keys are not reported as missing";
+}
+
+TEST(DictionaryTest, Comparisons)
+{
+  std::vector<std::string> keys
+  {
+    "first", "second", "third", "fourth", "fifth"
+  };
+  std::vector<std::string> first_keys
+  {
+    "first", "second", "third"
+  };
+  std::vector<std::string> second_keys
+  {
+    "fourth", "fifth"
+  };
+  Dictionary empty, all(keys), first(first_keys), second(second_keys);
+
+  EXPECT_FALSE(empty == all) << "Empty dictionary is equal to the full dictionary";
+  EXPECT_FALSE(empty == first) << "Empty dictionary is equal to the first dictionary";
+  EXPECT_FALSE(empty == second) << "Empty dictionary is equal to the second dictionary";
+  EXPECT_FALSE(all == first) << "Full dictionary is equal to the first dictionary";
+  EXPECT_FALSE(all == second) << "Full dictionary is equal to the second dictionary";
+  EXPECT_FALSE(first == second) << "The first and second dictionaries are equal";
+
+  empty.append(first);
+  EXPECT_TRUE(empty == first) << "Appending to an empty dictionary does not work";
+
+  first.append(second);
+  EXPECT_TRUE(first == all) << "Appending to a non-empty dictionary does not work";
+}
+
+//------------------------------------------------------------------------------
+
 } // namespace

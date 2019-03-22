@@ -502,6 +502,7 @@ struct Dictionary
     return std::string(this->data.begin() + this->offsets[i], this->data.begin() + this->offsets[i + 1]);
   }
 
+  // Returns size() if not found.
   size_type find(const std::string& s) const;
 
   void append(const Dictionary& source);
@@ -509,9 +510,15 @@ struct Dictionary
 private:
   void copy(const Dictionary& source);
 
-  bool smaller(size_type left, size_type right) const;
-  bool smaller(size_type left, const std::string& right) const;
-  bool smaller(const std::string& left, size_type right) const;
+  // Indexes in sorted_ids.
+  bool smaller_by_order(size_type left, size_type right) const;
+  bool smaller_by_order(size_type left, const std::string& right) const;
+  bool smaller_by_order(const std::string& left, size_type right) const;
+
+  // Indexes in offsets.
+  bool smaller_by_id(size_type left, size_type right) const;
+  bool smaller_by_id(size_type left, const std::string& right) const;
+  bool smaller_by_id(const std::string& left, size_type right) const;
 };
 
 //------------------------------------------------------------------------------

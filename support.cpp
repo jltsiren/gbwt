@@ -1230,13 +1230,13 @@ Dictionary::Dictionary(const std::vector<std::string>& source)
   // Sort sorted_ids.
   sequentialSort(this->sorted_ids.begin(), this->sorted_ids.end(), [this](size_type a, size_type b) -> bool
   {
-    return this->smaller(a, b);
+    return this->smaller_by_id(a, b);
   });
 
   // Check for duplicates.
   for(size_type i = 0; i + 1 < this->size(); i++)
   {
-    if(!(this->smaller(i, i + 1)))
+    if(!(this->smaller_by_order(i, i + 1)))
     {
       std::cerr << "Dictionary::Dictionary(): Warning: The dictionary contains duplicate strings" << std::endl;
       break;
@@ -1319,12 +1319,12 @@ Dictionary::clear()
 size_type
 Dictionary::find(const std::string& s) const
 {
-  size_type start = 0, limit = this->size();
-  while(start < limit)
+  size_type low = 0, high = this->size();
+  while(low < high)
   {
-    size_type mid = start + (limit - start) / 2;
-    if(this->smaller(s, mid)) { limit = mid; }
-    else if(this->smaller(mid, s)) { start = mid + 1; }
+    size_type mid = low + (high - low) / 2;
+    if(this->smaller_by_order(s, mid)) { high = mid; }
+    else if(this->smaller_by_order(mid, s)) { low = mid + 1; }
     else { return this->sorted_ids[mid]; }
   }
   return this->size();
@@ -1336,12 +1336,13 @@ Dictionary::append(const Dictionary& source)
   if(source.empty()) { return; }
 
   size_type old_data_size = this->data.size();
+  size_type new_data_size = this->data.size() + source.data.size();
   size_type old_size = this->size();
   size_type new_size = this->size() + source.size();
 
   // Concatenate the sequences.
   {
-    std::vector<char> new_data; new_data.reserve(this->data.size() + source.data.size());
+    std::vector<char> new_data; new_data.reserve(new_data_size);
     new_data.insert(new_data.end(), this->data.begin(), this->data.end());
     new_data.insert(new_data.end(), source.data.begin(), source.data.end());
     this->data.swap(new_data);
@@ -1349,9 +1350,10 @@ Dictionary::append(const Dictionary& source)
 
   // Concatenate the starting offsets
   {
-    sdsl::int_vector<0> new_offsets(old_size + source.size() + 1, 0, bit_length(this->data.size()));
+    sdsl::int_vector<0> new_offsets(new_size + 1, 0, bit_length(new_data_size));
     for(size_type i = 0; i < old_size; i++) { new_offsets[i] = this->offsets[i]; }
-    for(size_type i = 0; i <= source.size(); i++) { new_offsets[this->size() + 1] = old_data_size + source.offsets[i]; }
+    for(size_type i = 0; i < source.size(); i++) { new_offsets[old_size + i] = old_data_size + source.offsets[i]; }
+    new_offsets[new_size] = new_data_size;
     this->offsets.swap(new_offsets);
   }
 
@@ -1360,13 +1362,13 @@ Dictionary::append(const Dictionary& source)
   for(size_type i = 0; i < this->sorted_ids.size(); i++) { this->sorted_ids[i] = i; }
   sequentialSort(this->sorted_ids.begin(), this->sorted_ids.end(), [this](size_type a, size_type b) -> bool
   {
-    return this->smaller(a, b);
+    return this->smaller_by_id(a, b);
   });
 
   // Check for duplicates.
   for(size_type i = 0; i + 1 < this->size(); i++)
   {
-    if(!(this->smaller(i, i + 1)))
+    if(!(this->smaller_by_order(i, i + 1)))
     {
       std::cerr << "Dictionary::append(): Warning: The dictionary contains duplicate strings" << std::endl;
       break;
@@ -1387,7 +1389,7 @@ stringCompare(AIter a_pos, AIter a_lim, BIter b_pos, BIter b_lim)
 }
 
 bool
-Dictionary::smaller(size_type a, size_type b) const
+Dictionary::smaller_by_order(size_type a, size_type b) const
 {
   return stringCompare(this->data.begin() + this->offsets[this->sorted_ids[a]],
                        this->data.begin() + this->offsets[this->sorted_ids[a] + 1],
@@ -1396,7 +1398,7 @@ Dictionary::smaller(size_type a, size_type b) const
 }
 
 bool
-Dictionary::smaller(size_type a, const std::string& b) const
+Dictionary::smaller_by_order(size_type a, const std::string& b) const
 {
   return stringCompare(this->data.begin() + this->offsets[this->sorted_ids[a]],
                        this->data.begin() + this->offsets[this->sorted_ids[a] + 1],
@@ -1405,7 +1407,34 @@ Dictionary::smaller(size_type a, const std::string& b) const
 }
 
 bool
-Dictionary::smaller(const std::string& a, size_type b) const
+Dictionary::smaller_by_order(const std::string& a, size_type b) const
+{
+  return stringCompare(a.begin(),
+                       a.end(),
+                       this->data.begin() + this->offsets[this->sorted_ids[b]],
+                       this->data.begin() + this->offsets[this->sorted_ids[b] + 1]);
+}
+
+bool
+Dictionary::smaller_by_id(size_type a, size_type b) const
+{
+  return stringCompare(this->data.begin() + this->offsets[a],
+                       this->data.begin() + this->offsets[a + 1],
+                       this->data.begin() + this->offsets[b],
+                       this->data.begin() + this->offsets[b + 1]);
+}
+
+bool
+Dictionary::smaller_by_id(size_type a, const std::string& b) const
+{
+  return stringCompare(this->data.begin() + this->offsets[a],
+                       this->data.begin() + this->offsets[a + 1],
+                       b.begin(),
+                       b.end());
+}
+
+bool
+Dictionary::smaller_by_id(const std::string& a, size_type b) const
 {
   return stringCompare(a.begin(),
                        a.end(),
