@@ -504,6 +504,8 @@ struct Dictionary
 
   size_type find(const std::string& s) const;
 
+  void append(const Dictionary& source);
+
 private:
   void copy(const Dictionary& source);
 
@@ -600,27 +602,29 @@ struct Metadata
   void setContigs(size_type n);
 
   // Path operations.
+  bool hasPathNames() const { return this->get(FLAG_PATH_NAMES); }
   size_type paths() const { return this->path_names.size(); }
   const PathName& path(size_type i) const { return this->path_names[i]; }
   std::vector<size_type> findPaths(size_type sample_id, size_type contig_id) const;
   std::vector<size_type> pathsForSample(size_type sample_id) const;
   std::vector<size_type> pathsForContig(size_type contig_id) const;
   void addPath(const PathName& path);
-  void clearPaths();
+  void clearPathNames();
 
   // Sample operations.
+  bool hasSampleNames() const { return this->get(FLAG_SAMPLE_NAMES); }
   std::string sample(size_type i) const { return this->sample_names[i]; }
   size_type sample(const std::string& name) const { return this->sample_names.find(name); }
   void setSamples(const std::vector<std::string>& names);
-  void clearSamples();
+  void clearSampleNames();
 
   // Contig operations.
+  bool hasContigNames() const { return this->get(FLAG_CONTIG_NAMES); }
   std::string contig(size_type i) const { return this->contig_names[i]; }
   size_type contig(const std::string& name) const { return this->contig_names.find(name); }
   void setContigs(const std::vector<std::string>& names);
-  void clearContigs();
+  void clearContigNames();
 
-  // FIXME handle merging path/sample/contig names
   void merge(const Metadata& source, bool same_samples, bool same_contigs);
   void merge(std::vector<const Metadata*> sources, bool same_samples, bool same_contigs);
   void clear();

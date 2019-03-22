@@ -93,12 +93,12 @@ main(int argc, char** argv)
   bool modified = false;
   if(clear_paths)
   {
-    gbwt.metadata.clearPaths();
+    gbwt.metadata.clearPathNames();
     modified = true;
   }
   if(clear_samples)
   {
-    gbwt.metadata.clearSamples();
+    gbwt.metadata.clearSampleNames();
     modified = true;
   }
   if(set_samples)
@@ -113,7 +113,7 @@ main(int argc, char** argv)
   }
   if(clear_contigs)
   {
-    gbwt.metadata.clearContigs();
+    gbwt.metadata.clearContigNames();
     modified = true;
   }
   if(set_contigs)

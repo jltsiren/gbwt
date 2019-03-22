@@ -1228,11 +1228,10 @@ Dictionary::Dictionary(const std::vector<std::string>& source)
   this->offsets[source.size()] = total_length;
 
   // Sort sorted_ids.
-  std::function<bool(size_type, size_type)> string_id_sorter = [this](size_type a, size_type b) -> bool
+  sequentialSort(this->sorted_ids.begin(), this->sorted_ids.end(), [this](size_type a, size_type b) -> bool
   {
     return this->smaller(a, b);
-  };
-  sequentialSort(this->sorted_ids.begin(), this->sorted_ids.end(), string_id_sorter);
+  });
 
   // Check for duplicates.
   for(size_type i = 0; i + 1 < this->size(); i++)
@@ -1240,7 +1239,7 @@ Dictionary::Dictionary(const std::vector<std::string>& source)
     if(!(this->smaller(i, i + 1)))
     {
       std::cerr << "Dictionary::Dictionary(): Warning: The dictionary contains duplicate strings" << std::endl;
-      return;
+      break;
     }
   }
 }
@@ -1331,6 +1330,50 @@ Dictionary::find(const std::string& s) const
   return this->size();
 }
 
+void
+Dictionary::append(const Dictionary& source)
+{
+  if(source.empty()) { return; }
+
+  size_type old_data_size = this->data.size();
+  size_type old_size = this->size();
+  size_type new_size = this->size() + source.size();
+
+  // Concatenate the sequences.
+  {
+    std::vector<char> new_data; new_data.reserve(this->data.size() + source.data.size());
+    new_data.insert(new_data.end(), this->data.begin(), this->data.end());
+    new_data.insert(new_data.end(), source.data.begin(), source.data.end());
+    this->data.swap(new_data);
+  }
+
+  // Concatenate the starting offsets
+  {
+    sdsl::int_vector<0> new_offsets(old_size + source.size() + 1, 0, bit_length(this->data.size()));
+    for(size_type i = 0; i < old_size; i++) { new_offsets[i] = this->offsets[i]; }
+    for(size_type i = 0; i <= source.size(); i++) { new_offsets[this->size() + 1] = old_data_size + source.offsets[i]; }
+    this->offsets.swap(new_offsets);
+  }
+
+  // Rebuild sorted ids.
+  this->sorted_ids = sdsl::int_vector<0>(new_size, 0, bit_length(new_size - 1));
+  for(size_type i = 0; i < this->sorted_ids.size(); i++) { this->sorted_ids[i] = i; }
+  sequentialSort(this->sorted_ids.begin(), this->sorted_ids.end(), [this](size_type a, size_type b) -> bool
+  {
+    return this->smaller(a, b);
+  });
+
+  // Check for duplicates.
+  for(size_type i = 0; i + 1 < this->size(); i++)
+  {
+    if(!(this->smaller(i, i + 1)))
+    {
+      std::cerr << "Dictionary::append(): Warning: The dictionary contains duplicate strings" << std::endl;
+      break;
+    }
+  }
+}
+
 template<class AIter, class BIter>
 bool
 stringCompare(AIter a_pos, AIter a_lim, BIter b_pos, BIter b_lim)
@@ -1392,15 +1435,15 @@ Metadata::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string
   written_bytes += sdsl::write_member(this->contig_count, out, child, "contig_count");
   written_bytes += sdsl::write_member(this->flags, out, child, "flags");
 
-  if(this->get(FLAG_PATH_NAMES))
+  if(this->hasPathNames())
   {
     written_bytes += serializeVector(this->path_names, out, child, "path_names");
   }
-  if(this->get(FLAG_SAMPLE_NAMES))
+  if(this->hasSampleNames())
   {
     written_bytes += this->sample_names.serialize(out, child, "sample_names");
   }
-  if(this->get(FLAG_CONTIG_NAMES))
+  if(this->hasContigNames())
   {
     written_bytes += this->contig_names.serialize(out, child, "contig_names");
   }
@@ -1419,15 +1462,15 @@ Metadata::load(std::istream& in)
   sdsl::read_member(this->contig_count, in);
   sdsl::read_member(this->flags, in);
 
-  if(this->get(FLAG_PATH_NAMES))
+  if(this->hasPathNames())
   {
     loadVector(this->path_names, in);
   }
-  if(this->get(FLAG_SAMPLE_NAMES))
+  if(this->hasSampleNames())
   {
     this->sample_names.load(in);
   }
-  if(this->get(FLAG_CONTIG_NAMES))
+  if(this->hasContigNames())
   {
     this->contig_names.load(in);
   }
@@ -1483,7 +1526,7 @@ Metadata::operator==(const Metadata& another) const
 void
 Metadata::setSamples(size_type n)
 {
-  if(this->get(FLAG_SAMPLE_NAMES))
+  if(this->hasSampleNames())
   {
     std::cerr << "Metadata::setSamples(): Warning: Changing sample count without changing sample names" << std::endl;
   }
@@ -1499,7 +1542,7 @@ Metadata::setHaplotypes(size_type n)
 void
 Metadata::setContigs(size_type n)
 {
-  if(this->get(FLAG_CONTIG_NAMES))
+  if(this->hasContigNames())
   {
     std::cerr << "Metadata::setContigs(): Warning: Changing contig count without changing contig names" << std::endl;
   }
@@ -1557,7 +1600,7 @@ Metadata::addPath(const PathName& path)
 }
 
 void
-Metadata::clearPaths()
+Metadata::clearPathNames()
 {
   this->unset(FLAG_PATH_NAMES);
   this->path_names = std::vector<PathName>();
@@ -1568,7 +1611,7 @@ Metadata::setSamples(const std::vector<std::string>& names)
 {
   if(names.empty())
   {
-    this->clearSamples();
+    this->clearSampleNames();
     return;
   }
 
@@ -1578,7 +1621,7 @@ Metadata::setSamples(const std::vector<std::string>& names)
 }
 
 void
-Metadata::clearSamples()
+Metadata::clearSampleNames()
 {
   this->unset(FLAG_SAMPLE_NAMES);
   this->sample_names.clear();
@@ -1589,7 +1632,7 @@ Metadata::setContigs(const std::vector<std::string>& names)
 {
   if(names.empty())
   {
-    this->clearContigs();
+    this->clearContigNames();
     return;
   }
 
@@ -1599,7 +1642,7 @@ Metadata::setContigs(const std::vector<std::string>& names)
 }
 
 void
-Metadata::clearContigs()
+Metadata::clearContigNames()
 {
   this->unset(FLAG_CONTIG_NAMES);
   this->contig_names.clear();
@@ -1608,24 +1651,104 @@ Metadata::clearContigs()
 void
 Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
 {
+  size_type source_sample_offset = 0, source_contig_offset = 0;
+
+  // Merge samples and haplotypes.
   if(same_samples)
   {
-    this->sample_count = std::max(this->sample_count, source.sample_count);
-    this->haplotype_count = std::max(this->haplotype_count, source.haplotype_count);
+    if(this->samples() != source.samples() || this->haplotypes() != source.haplotypes())
+    {
+      std::cerr << "Metadata::merge(): Warning: Sample/haplotype counts do not match" << std::endl;
+    }
+    if(!(this->hasSampleNames()) && source.hasSampleNames())
+    {
+      if(Verbosity::level >= Verbosity::EXTENDED)
+      {
+        std::cerr << "Metadata::merge(): Taking sample names from the source" << std::endl;
+      }
+      this->sample_names = source.sample_names;
+    }
   }
   else
   {
-    this->sample_count += source.sample_count;
-    this->haplotype_count += source.haplotype_count;
+    source_sample_offset = this->samples();
+    this->sample_count += source.samples();
+    this->haplotype_count += source.haplotypes();
+    if(this->hasSampleNames())
+    {
+      if(source.hasSampleNames())
+      {
+        this->sample_names.append(source.sample_names);
+      }
+      else
+      {
+        if(Verbosity::level >= Verbosity::EXTENDED)
+        {
+          std::cerr << "Metadata::merge(): Clearing sample names: the source has no sample names" << std::endl;
+        }
+        this->clearSampleNames();
+      }
+    }
   }
 
+  // Merge contigs.
   if(same_contigs)
   {
-    this->contig_count = std::max(this->contig_count, source.contig_count);
+    if(this->contigs() != source.contigs())
+    {
+      std::cerr << "Metadata::merge(): Warning: Contig counts do not match" << std::endl;
+    }
+    if(!(this->hasContigNames()) && source.hasContigNames())
+    {
+      if(Verbosity::level >= Verbosity::EXTENDED)
+      {
+        std::cerr << "Metadata::merge(): Taking contig names from the source" << std::endl;
+      }
+      this->contig_names = source.contig_names;
+    }
   }
   else
   {
-    this->contig_count += source.contig_count;
+    source_contig_offset = this->contigs();
+    this->contig_count += source.contigs();
+    if(this->hasContigNames())
+    {
+      if(source.hasContigNames())
+      {
+        this->contig_names.append(source.contig_names);
+      }
+      else
+      {
+        if(Verbosity::level >= Verbosity::EXTENDED)
+        {
+          std::cerr << "Metadata::merge(): Clearing contig names: the source has no contig names" << std::endl;
+        }
+        this->clearContigNames();
+      }
+    }
+  }
+
+  // Merge paths.
+  if(this->hasPathNames())
+  {
+    if(source.hasPathNames())
+    {
+      size_type source_path_offset = this->paths();
+      this->path_names.insert(this->path_names.end(), source.path_names.begin(), source.path_names.end());
+      for(size_type i = source_path_offset; i < this->path_names.size(); i++)
+      {
+        this->path_names[i].sample += source_sample_offset;
+        this->path_names[i].contig += source_contig_offset;
+      }
+    }
+    else
+    {
+      if(Verbosity::level >= Verbosity::EXTENDED)
+      {
+        std::cerr << "Metadata::merge(): Clearing path names: the source has no path names" << std::endl;
+      }
+      this->clearPathNames();
+    }
   }
 }
 
