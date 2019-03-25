@@ -168,6 +168,31 @@ TEST(DictionaryTest, Comparisons)
   EXPECT_TRUE(first == all) << "Appending to a non-empty dictionary does not work";
 }
 
+TEST(DictionaryTest, Merging)
+{
+  std::vector<std::string> keys
+  {
+    "first", "second", "third", "fourth", "fifth"
+  };
+  std::vector<std::string> first_keys
+  {
+    "first", "second", "third"
+  };
+  std::vector<std::string> second_keys
+  {
+    "fifth", "first", "fourth"
+  };
+
+  Dictionary first(first_keys), second(second_keys);
+  Dictionary merged(first, second);
+
+  EXPECT_EQ(merged.size(), keys.size()) << "Expected " << keys.size() << " keys, got " << merged.size();
+  for(const std::string& key : keys)
+  {
+    EXPECT_LT(merged.find(key), merged.size()) << "The dictionary does not contain " << key;
+  }
+}
+
 //------------------------------------------------------------------------------
 
 } // namespace

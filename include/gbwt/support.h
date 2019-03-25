@@ -469,7 +469,6 @@ struct MergeParameters
 struct Dictionary
 {
   typedef gbwt::size_type size_type;
-  typedef std::pair<const char*, size_type> value_type;
 
   sdsl::int_vector<0> offsets;    // Starting offsets for each string, including a sentinel at the end.
   sdsl::int_vector<0> sorted_ids; // String ids in sorted order.
@@ -481,6 +480,7 @@ struct Dictionary
   ~Dictionary();
 
   explicit Dictionary(const std::vector<std::string>& source);
+  Dictionary(const Dictionary& first, const Dictionary& second);
 
   void swap(Dictionary& another);
   Dictionary& operator=(const Dictionary& source);
@@ -496,9 +496,12 @@ struct Dictionary
 
   size_type size() const { return this->sorted_ids.size(); }
   bool empty() const { return (this->size() == 0); }
+  size_type length() const { return this->data.size(); }
 
+  // Return key i or an empty string if there is no such key.
   std::string operator[](size_type i) const
   {
+    if(i >= this->size()) { return ""; }
     return std::string(this->data.begin() + this->offsets[i], this->data.begin() + this->offsets[i + 1]);
   }
 
@@ -507,8 +510,12 @@ struct Dictionary
 
   void append(const Dictionary& source);
 
+  bool hasDuplicates() const;
+
 private:
   void copy(const Dictionary& source);
+
+  void sortKeys();
 
   // Indexes in sorted_ids.
   bool smaller_by_order(size_type left, size_type right) const;
@@ -632,8 +639,12 @@ struct Metadata
   void setContigs(const std::vector<std::string>& names);
   void clearContigNames();
 
+  // Merge the metadata from the sources into this object.
+  // If the objects to be merged both contain sample / contig names, this overides the
+  // same_samples / same_contigs flags.
   void merge(const Metadata& source, bool same_samples, bool same_contigs);
   void merge(std::vector<const Metadata*> sources, bool same_samples, bool same_contigs);
+
   void clear();
 };
 

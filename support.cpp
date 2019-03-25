@@ -25,7 +25,7 @@
 
 #include <gbwt/internal.h>
 
-#include <functional>
+#include <set>
 
 namespace gbwt
 {
@@ -1213,34 +1213,70 @@ Dictionary::Dictionary(const std::vector<std::string>& source)
   size_type total_length = 0;
   for(const std::string& s : source) { total_length += s.length(); }
   this->offsets = sdsl::int_vector<0>(source.size() + 1, 0, bit_length(total_length));
-  this->sorted_ids = sdsl::int_vector<0>(source.size(), 0, bit_length(source.size() - 1));
   this->data.reserve(total_length);
 
   // Initialize the arrays.
-  size_type offset = 0;
   for(size_type i = 0; i < source.size(); i++)
   {
-    this->offsets[i] = offset;
-    this->sorted_ids[i] = i;
+    this->offsets[i] = this->data.size();
     this->data.insert(this->data.end(), source[i].begin(), source[i].end());
-    offset += source[i].length();
   }
-  this->offsets[source.size()] = total_length;
+  this->offsets[source.size()] = this->data.size();
 
-  // Sort sorted_ids.
-  sequentialSort(this->sorted_ids.begin(), this->sorted_ids.end(), [this](size_type a, size_type b) -> bool
+  // Build sorted_ids and check for duplicates.
+  this->sortKeys();
+  if(this->hasDuplicates())
   {
-    return this->smaller_by_id(a, b);
-  });
+    std::cerr << "Dictionary::Dictionary(): Warning: The dictionary contains duplicate strings" << std::endl;
+  }
+}
 
-  // Check for duplicates.
-  for(size_type i = 0; i + 1 < this->size(); i++)
+Dictionary::Dictionary(const Dictionary& first, const Dictionary& second)
+{
+  if(first.empty())
   {
-    if(!(this->smaller_by_order(i, i + 1)))
+    *this = second;
+    return;
+  }
+  else if(second.empty())
+  {
+    *this = first;
+    return;
+  }
+
+  // Determine the total number of keys and their total length.
+  size_type total_size = first.size();
+  size_type total_length = first.length();
+  for(size_type i = 0; i < second.size(); i++)
+  {
+    std::string key = second[i];
+    if(first.find(key) >= first.size()) { total_size++; total_length += key.size(); }
+  }
+  this->offsets = sdsl::int_vector<0>(total_size + 1, 0, bit_length(total_length));
+  this->data.reserve(total_length);
+
+  // Copy keys from the first source.
+  this->data.insert(this->data.end(), first.data.begin(), first.data.end());
+  for(size_type i = 0; i < first.size(); i++) { this->offsets[i] = first.offsets[i]; }
+
+  // Add missing keys from the second source.
+  for(size_type i = 0, id = first.size(); i < second.size(); i++)
+  {
+    std::string key = second[i];
+    if(first.find(key) >= first.size())
     {
-      std::cerr << "Dictionary::Dictionary(): Warning: The dictionary contains duplicate strings" << std::endl;
-      break;
+      this->offsets[id] = this->data.size();
+      this->data.insert(this->data.end(), key.begin(), key.end());
+      id++;
     }
+  }
+  this->offsets[total_size] = this->data.size();
+
+  // Build sorted_ids and check for duplicates.
+  this->sortKeys();
+  if(this->hasDuplicates())
+  {
+    std::cerr << "Dictionary::Dictionary(): Warning: The dictionary contains duplicate strings" << std::endl;
   }
 }
 
@@ -1304,6 +1340,22 @@ Dictionary::copy(const Dictionary& source)
   this->data = source.data;
 }
 
+void Dictionary::sortKeys()
+{
+  if(this->offsets.size() <= 1)
+  {
+    this->sorted_ids = sdsl::int_vector<0>();
+    return;
+  }
+
+  this->sorted_ids = sdsl::int_vector<0>(this->offsets.size() - 1, 0, bit_length(this->offsets.size() - 2));
+  for(size_type i = 0; i < this->sorted_ids.size(); i++) { this->sorted_ids[i] = i; }
+  sequentialSort(this->sorted_ids.begin(), this->sorted_ids.end(), [this](size_type a, size_type b) -> bool
+  {
+    return this->smaller_by_id(a, b);
+  });
+}
+
 bool
 Dictionary::operator==(const Dictionary& another) const
 {
@@ -1335,8 +1387,8 @@ Dictionary::append(const Dictionary& source)
 {
   if(source.empty()) { return; }
 
-  size_type old_data_size = this->data.size();
-  size_type new_data_size = this->data.size() + source.data.size();
+  size_type old_data_size = this->length();
+  size_type new_data_size = this->length() + source.length();
   size_type old_size = this->size();
   size_type new_size = this->size() + source.size();
 
@@ -1357,23 +1409,22 @@ Dictionary::append(const Dictionary& source)
     this->offsets.swap(new_offsets);
   }
 
-  // Rebuild sorted ids.
-  this->sorted_ids = sdsl::int_vector<0>(new_size, 0, bit_length(new_size - 1));
-  for(size_type i = 0; i < this->sorted_ids.size(); i++) { this->sorted_ids[i] = i; }
-  sequentialSort(this->sorted_ids.begin(), this->sorted_ids.end(), [this](size_type a, size_type b) -> bool
+  // Build sorted_ids and check for duplicates.
+  this->sortKeys();
+  if(this->hasDuplicates())
   {
-    return this->smaller_by_id(a, b);
-  });
+    std::cerr << "Dictionary::append(): Warning: The dictionary contains duplicate strings" << std::endl;
+  }
+}
 
-  // Check for duplicates.
+bool
+Dictionary::hasDuplicates() const
+{
   for(size_type i = 0; i + 1 < this->size(); i++)
   {
-    if(!(this->smaller_by_order(i, i + 1)))
-    {
-      std::cerr << "Dictionary::append(): Warning: The dictionary contains duplicate strings" << std::endl;
-      break;
-    }
+    if(!(this->smaller_by_order(i, i + 1))) { return true; }
   }
+  return false;
 }
 
 template<class AIter, class BIter>
@@ -1681,9 +1732,23 @@ void
 Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
 {
   size_type source_sample_offset = 0, source_contig_offset = 0;
+  bool merge_sample_names = (this->hasSampleNames() & source.hasSampleNames());
+  bool merge_contig_names = (this->hasContigNames() & source.hasContigNames());
+  bool merge_path_names = (this->hasPathNames() & source.hasPathNames());
 
   // Merge samples and haplotypes.
-  if(same_samples)
+  if(merge_sample_names)
+  {
+    this->sample_names = Dictionary(this->sample_names, source.sample_names);
+    if(!merge_path_names)
+    {
+      std::cerr << "Metadata::merge(): Warning: Estimating new haplotype count" << std::endl;
+      double added_samples = this->sample_names.size() - this->sample_count;
+      this->haplotype_count += (added_samples * source.haplotypes()) / source.samples();
+    }
+    this->sample_count = this->sample_names.size();
+  }
+  else if(same_samples)
   {
     if(this->samples() != source.samples() || this->haplotypes() != source.haplotypes())
     {
@@ -1691,10 +1756,7 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
     }
     if(!(this->hasSampleNames()) && source.hasSampleNames())
     {
-      if(Verbosity::level >= Verbosity::EXTENDED)
-      {
-        std::cerr << "Metadata::merge(): Taking sample names from the source" << std::endl;
-      }
+      std::cerr << "Metadata::merge(): Warning: Taking sample names from the source" << std::endl;
       this->sample_names = source.sample_names;
     }
   }
@@ -1705,23 +1767,18 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
     this->haplotype_count += source.haplotypes();
     if(this->hasSampleNames())
     {
-      if(source.hasSampleNames())
-      {
-        this->sample_names.append(source.sample_names);
-      }
-      else
-      {
-        if(Verbosity::level >= Verbosity::EXTENDED)
-        {
-          std::cerr << "Metadata::merge(): Clearing sample names: the source has no sample names" << std::endl;
-        }
-        this->clearSampleNames();
-      }
+      std::cerr << "Metadata::merge(): Warning: Clearing sample names; the source has no sample names" << std::endl;
+      this->clearSampleNames();
     }
   }
 
   // Merge contigs.
-  if(same_contigs)
+  if(merge_contig_names)
+  {
+    this->contig_names = Dictionary(this->contig_names, source.contig_names);
+    this->contig_count = this->contig_names.size();
+  }
+  else if(same_contigs)
   {
     if(this->contigs() != source.contigs())
     {
@@ -1729,10 +1786,7 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
     }
     if(!(this->hasContigNames()) && source.hasContigNames())
     {
-      if(Verbosity::level >= Verbosity::EXTENDED)
-      {
-        std::cerr << "Metadata::merge(): Taking contig names from the source" << std::endl;
-      }
+      std::cerr << "Metadata::merge(): Warning: Taking contig names from the source" << std::endl;
       this->contig_names = source.contig_names;
     }
   }
@@ -1742,42 +1796,44 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
     this->contig_count += source.contigs();
     if(this->hasContigNames())
     {
-      if(source.hasContigNames())
-      {
-        this->contig_names.append(source.contig_names);
-      }
-      else
-      {
-        if(Verbosity::level >= Verbosity::EXTENDED)
-        {
-          std::cerr << "Metadata::merge(): Clearing contig names: the source has no contig names" << std::endl;
-        }
-        this->clearContigNames();
-      }
+      std::cerr << "Metadata::merge(): Warning: Clearing contig names; the source has no contig names" << std::endl;
+      this->clearContigNames();
     }
   }
 
   // Merge paths.
-  if(this->hasPathNames())
+  if(merge_path_names)
   {
-    if(source.hasPathNames())
+    size_type source_path_offset = this->paths();
+    this->path_names.insert(this->path_names.end(), source.path_names.begin(), source.path_names.end());
+    for(size_type i = source_path_offset; i < this->path_names.size(); i++)
     {
-      size_type source_path_offset = this->paths();
-      this->path_names.insert(this->path_names.end(), source.path_names.begin(), source.path_names.end());
-      for(size_type i = source_path_offset; i < this->path_names.size(); i++)
+      if(merge_sample_names)
       {
-        this->path_names[i].sample += source_sample_offset;
-        this->path_names[i].contig += source_contig_offset;
+        this->path_names[i].sample = this->sample(source.sample(this->path_names[i].sample));
       }
+      else { this->path_names[i].sample += source_sample_offset; }
+      if(merge_contig_names)
+      {
+        this->path_names[i].contig = this->contig(source.contig(this->path_names[i].contig));
+      }
+      else { this->path_names[i].contig += source_contig_offset; }
     }
-    else
+    // Determine the new haplotype count.
+    if(merge_sample_names)
     {
-      if(Verbosity::level >= Verbosity::EXTENDED)
+      std::set<std::pair<size_type, size_type>> found_haplotypes;
+      for(const PathName& path : this->path_names)
       {
-        std::cerr << "Metadata::merge(): Clearing path names: the source has no path names" << std::endl;
+        found_haplotypes.emplace(path.sample, path.phase);
       }
-      this->clearPathNames();
+      this->haplotype_count = found_haplotypes.size();
     }
+  }
+  else if(this->hasPathNames())
+  {
+    std::cerr << "Metadata::merge(): Warning: Clearing path names; the source has no path names" << std::endl;
+    this->clearPathNames();
   }
 }
 
