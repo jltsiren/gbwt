@@ -1225,7 +1225,7 @@ Dictionary::Dictionary(const std::vector<std::string>& source)
 
   // Build sorted_ids and check for duplicates.
   this->sortKeys();
-  if(this->hasDuplicates())
+  if(this->hasDuplicates() && Verbosity::level >= Verbosity::FULL)
   {
     std::cerr << "Dictionary::Dictionary(): Warning: The dictionary contains duplicate strings" << std::endl;
   }
@@ -1274,7 +1274,7 @@ Dictionary::Dictionary(const Dictionary& first, const Dictionary& second)
 
   // Build sorted_ids and check for duplicates.
   this->sortKeys();
-  if(this->hasDuplicates())
+  if(this->hasDuplicates() && Verbosity::level >= Verbosity::FULL)
   {
     std::cerr << "Dictionary::Dictionary(): Warning: The dictionary contains duplicate strings" << std::endl;
   }
@@ -1411,7 +1411,7 @@ Dictionary::append(const Dictionary& source)
 
   // Build sorted_ids and check for duplicates.
   this->sortKeys();
-  if(this->hasDuplicates())
+  if(this->hasDuplicates() && Verbosity::level >= Verbosity::FULL)
   {
     std::cerr << "Dictionary::append(): Warning: The dictionary contains duplicate strings" << std::endl;
   }
@@ -1606,7 +1606,7 @@ Metadata::operator==(const Metadata& another) const
 void
 Metadata::setSamples(size_type n)
 {
-  if(this->hasSampleNames())
+  if(this->hasSampleNames() && Verbosity::level >= Verbosity::FULL)
   {
     std::cerr << "Metadata::setSamples(): Warning: Changing sample count without changing sample names" << std::endl;
   }
@@ -1622,7 +1622,7 @@ Metadata::setHaplotypes(size_type n)
 void
 Metadata::setContigs(size_type n)
 {
-  if(this->hasContigNames())
+  if(this->hasContigNames() && Verbosity::level >= Verbosity::FULL)
   {
     std::cerr << "Metadata::setContigs(): Warning: Changing contig count without changing contig names" << std::endl;
   }
@@ -1742,7 +1742,10 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
     this->sample_names = Dictionary(this->sample_names, source.sample_names);
     if(!merge_path_names)
     {
-      std::cerr << "Metadata::merge(): Warning: Estimating new haplotype count" << std::endl;
+      if(Verbosity::level >= Verbosity::FULL)
+      {
+        std::cerr << "Metadata::merge(): Warning: Estimating new haplotype count" << std::endl;
+      }
       double added_samples = this->sample_names.size() - this->sample_count;
       this->haplotype_count += (added_samples * source.haplotypes()) / source.samples();
     }
@@ -1752,12 +1755,19 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
   {
     if(this->samples() != source.samples() || this->haplotypes() != source.haplotypes())
     {
-      std::cerr << "Metadata::merge(): Warning: Sample/haplotype counts do not match" << std::endl;
+      if(Verbosity::level >= Verbosity::FULL)
+      {
+        std::cerr << "Metadata::merge(): Warning: Sample/haplotype counts do not match" << std::endl;
+      }
     }
     if(!(this->hasSampleNames()) && source.hasSampleNames())
     {
-      std::cerr << "Metadata::merge(): Warning: Taking sample names from the source" << std::endl;
+      if(Verbosity::level >= Verbosity::FULL)
+      {
+        std::cerr << "Metadata::merge(): Warning: Taking sample names from the source" << std::endl;
+      }
       this->sample_names = source.sample_names;
+      this->set(FLAG_SAMPLE_NAMES);
     }
   }
   else
@@ -1767,7 +1777,10 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
     this->haplotype_count += source.haplotypes();
     if(this->hasSampleNames())
     {
-      std::cerr << "Metadata::merge(): Warning: Clearing sample names; the source has no sample names" << std::endl;
+      if(Verbosity::level >= Verbosity::FULL)
+      {
+        std::cerr << "Metadata::merge(): Warning: Clearing sample names; the source has no sample names" << std::endl;
+      }
       this->clearSampleNames();
     }
   }
@@ -1780,14 +1793,18 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
   }
   else if(same_contigs)
   {
-    if(this->contigs() != source.contigs())
+    if(this->contigs() != source.contigs() && Verbosity::level >= Verbosity::FULL)
     {
       std::cerr << "Metadata::merge(): Warning: Contig counts do not match" << std::endl;
     }
     if(!(this->hasContigNames()) && source.hasContigNames())
     {
-      std::cerr << "Metadata::merge(): Warning: Taking contig names from the source" << std::endl;
+      if(Verbosity::level >= Verbosity::FULL)
+      {
+        std::cerr << "Metadata::merge(): Warning: Taking contig names from the source" << std::endl;
+      }
       this->contig_names = source.contig_names;
+      this->set(FLAG_CONTIG_NAMES);
     }
   }
   else
@@ -1796,7 +1813,10 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
     this->contig_count += source.contigs();
     if(this->hasContigNames())
     {
-      std::cerr << "Metadata::merge(): Warning: Clearing contig names; the source has no contig names" << std::endl;
+      if(Verbosity::level >= Verbosity::FULL)
+      {
+        std::cerr << "Metadata::merge(): Warning: Clearing contig names; the source has no contig names" << std::endl;
+      }
       this->clearContigNames();
     }
   }
@@ -1832,7 +1852,10 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
   }
   else if(this->hasPathNames())
   {
-    std::cerr << "Metadata::merge(): Warning: Clearing path names; the source has no path names" << std::endl;
+    if(Verbosity::level >= Verbosity::FULL)
+    {
+      std::cerr << "Metadata::merge(): Warning: Clearing path names; the source has no path names" << std::endl;
+    }
     this->clearPathNames();
   }
 }
