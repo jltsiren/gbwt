@@ -31,7 +31,7 @@ using namespace gbwt;
 
 //------------------------------------------------------------------------------
 
-const std::string tool_name = "GBWT sequence remove";
+const std::string tool_name = "GBWT sequence removal";
 
 void printUsage(int exit_code = EXIT_SUCCESS);
 
@@ -42,11 +42,12 @@ main(int argc, char** argv)
 {
   if(argc < 3) { printUsage(); }
 
+  // Parse command line options.
   int c = 0;
   std::string output;
   size_type chunk_size = DynamicGBWT::REMOVE_CHUNK_SIZE;
-  bool range = false;
-  while((c = getopt(argc, argv, "c:o:r")) != -1)
+  bool range = false, sample = false, contig = false;
+  while((c = getopt(argc, argv, "c:o:rSC")) != -1)
   {
     switch(c)
     {
@@ -57,6 +58,10 @@ main(int argc, char** argv)
       output = optarg; break;
     case 'r':
       range = true; break;
+    case 'S':
+      sample = true; break;
+    case 'C':
+      contig = true; break;
     case '?':
       std::exit(EXIT_FAILURE);
     default:
@@ -64,8 +69,15 @@ main(int argc, char** argv)
     }
   }
 
+  // Check command line options.
   if(optind + 1 >= argc) { printUsage(EXIT_FAILURE); }
+  if((range & sample) || (range & contig) || (sample & contig))
+  {
+    std::cerr << "remove_seq: Options -r, -S, and -C are mutually exclusive" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   std::string base_name = argv[optind]; optind++;
+  std::string key;
   if(output.empty()) { output = base_name; }
   std::vector<size_type> seq_ids;
   if(range)
@@ -79,6 +91,11 @@ main(int argc, char** argv)
       seq_ids.push_back(seq_id);
     }
   }
+  else if(sample || contig)
+  {
+    if(argc != optind + 1) { printUsage(EXIT_FAILURE); }
+    key = argv[optind];
+  }
   else
   {
     while(optind < argc)
@@ -88,16 +105,32 @@ main(int argc, char** argv)
     }
   }
 
+  // Initial output.
   Version::print(std::cout, tool_name);
-
   printHeader("Input"); std::cout << base_name << std::endl;
   printHeader("Output"); std::cout << output << std::endl;
-  printHeader("Sequences"); std::cout << seq_ids.size() << std::endl;
+  if(range)
+  {
+    printHeader("Range"); std::cout << range_type(seq_ids.front(), seq_ids.back()) << std::endl;
+  }
+  else if(sample)
+  {
+    printHeader("Sample"); std::cout << key << std::endl;
+  }
+  else if(contig)
+  {
+    printHeader("Contig"); std::cout << key << std::endl;
+  }
+  else
+  {
+    printHeader("Sequences"); std::cout << seq_ids.size() << std::endl;
+  }
   printHeader("Chunk size"); std::cout << chunk_size << std::endl;
   std::cout << std::endl;
 
   double start = readTimer();
 
+  // Load index.
   DynamicGBWT index;
   if(!sdsl::load_from_file(index, base_name + DynamicGBWT::EXTENSION))
   {
@@ -106,6 +139,47 @@ main(int argc, char** argv)
   }
   printStatistics(index, base_name);
 
+  // Handle metadata.
+  if(sample)
+  {
+    if(!(index.hasMetadata()) || !(index.metadata.hasSampleNames()) || !(index.metadata.hasPathNames()))
+    {
+      std::cerr << "remove_seq: Option -S requires sample and path names" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    size_type sample_id = index.metadata.sample(key);
+    seq_ids = index.metadata.removeSample(sample_id);
+    if(seq_ids.empty())
+    {
+      std::cerr << "remove_seq: No sequences for sample " << key << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+  else if(contig)
+  {
+    if(!(index.hasMetadata()) || !(index.metadata.hasContigNames()) || !(index.metadata.hasPathNames()))
+    {
+      std::cerr << "remove_seq: Option -C requires contig and path names" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    size_type contig_id = index.metadata.contig(key);
+    seq_ids = index.metadata.removeContig(contig_id);
+    if(seq_ids.empty())
+    {
+      std::cerr << "remove_seq: No sequences for contig " << key << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+  else
+  {
+    if(index.hasMetadata() && index.metadata.hasPathNames())
+    {
+      std::cerr << "remove_seq: Removing arbitrary sequences would leave the metadata inconsistent" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
+  // Remove the sequences.
   size_type total_length = index.remove(seq_ids, chunk_size);
   if(total_length > 0)
   {
@@ -139,6 +213,8 @@ printUsage(int exit_code)
   std::cerr << "  -c N  Build the RA in chunks of N sequences per thread (default: " << DynamicGBWT::REMOVE_CHUNK_SIZE << ")" << std::endl;
   std::cerr << "  -o X  Use X as the base name for output" << std::endl;
   std::cerr << "  -r    Remove a range of sequences (inclusive; requires 2 sequence ids)" << std::endl;
+  std::cerr << "  -S    Remove all sequences for the sample with name seq1 (cannot have seq2)" << std::endl;
+  std::cerr << "  -C    Remove all sequences for the contig with name seq1 (cannot have seq2)" << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);
