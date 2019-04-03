@@ -1383,6 +1383,39 @@ Dictionary::find(const std::string& s) const
 }
 
 void
+Dictionary::remove(size_type i)
+{
+  if(i >= this->size()) { return; }
+
+  // Update data.
+  size_type tail = this->offsets[i];
+  size_type diff = this->offsets[i + 1] - tail;
+  while(tail + diff < this->data.size())
+  {
+    this->data[tail] = this->data[tail + diff];
+    tail++;
+  }
+  this->data.resize(tail);
+
+  // Update offsets.
+  for(size_type j = i; j + 1 < this->offsets.size(); j++)
+  {
+    this->offsets[j] = this->offsets[j + 1] - diff;
+  }
+  this->offsets.resize(this->offsets.size() - 1);
+
+  // Update sorted_ids.
+  diff = 0;
+  for(size_type j = 0; j + 1 < this->sorted_ids.size(); j++)
+  {
+    if(this->sorted_ids[j] == i) { diff = 1; }
+    this->sorted_ids[j] = this->sorted_ids[j + diff];
+    if(this->sorted_ids[j] > i) { this->sorted_ids[j]--; }
+  }
+  this->sorted_ids.resize(this->sorted_ids.size() - 1);
+}
+
+void
 Dictionary::append(const Dictionary& source)
 {
   if(source.empty()) { return; }
@@ -1677,6 +1710,100 @@ Metadata::addPath(const PathName& path)
 {
   this->set(FLAG_PATH_NAMES);
   this->path_names.push_back(path);
+}
+
+// Remove the path when callee() returns true.
+// Returns the set of removed path identifiers.
+// Also gives an opportunity to update the remaining paths.
+std::vector<size_type>
+removePaths(Metadata& metadata, std::function<bool(PathName&)> callee)
+{
+  std::vector<size_type> result;
+  size_type tail = 0;
+  for(size_type i = 0; i < metadata.path_names.size(); i++)
+  {
+    if(!callee(metadata.path_names[i]))
+    {
+      metadata.path_names[tail] = metadata.path_names[i];
+      tail++;
+    }
+    else
+    {
+      result.push_back(i);
+    }
+  }
+
+  if(tail > 0) { metadata.path_names.resize(tail); }
+  else { metadata.clearPathNames(); }
+  return result;
+}
+
+std::vector<size_type>
+Metadata::removeSample(size_type sample_id)
+{
+  std::vector<size_type> result;
+  if(sample_id >= this->samples()) { return result; }
+
+  // Update paths, determine the number of removed haplotypes.
+  size_type haplotypes_to_remove = 0;
+  if(this->hasPathNames())
+  {
+    std::set<size_type> phases;
+    result = gbwt::removePaths(*this, [sample_id, &phases, &result](PathName& path) -> bool {
+      if(path.sample == sample_id)
+      {
+        phases.insert(path.phase);
+        return true;
+      }
+      else
+      {
+        if(path.sample > sample_id) { path.sample--; }
+        return false;
+      }
+    });
+    haplotypes_to_remove = phases.size();
+  }
+  else
+  {
+    if(Verbosity::level >= Verbosity::FULL)
+    {
+      std::cerr << "Metadata::removeSample(): Warning: Estimating new haplotype count" << std::endl;
+    }
+    haplotypes_to_remove = static_cast<double>(this->haplotypes()) / this->samples();
+  }
+
+  // Update samples and haplotypes.
+  if(this->hasSampleNames()) { this->sample_names.remove(sample_id); }
+  this->sample_count--;
+  this->haplotype_count -= haplotypes_to_remove;
+
+  return result;
+}
+
+std::vector<size_type>
+Metadata::removeContig(size_type contig_id)
+{
+  std::vector<size_type> result;
+  if(contig_id >= this->contigs()) { return result; }
+
+  // Update paths.
+  if(this->hasPathNames())
+  {
+    result = gbwt::removePaths(*this, [contig_id, &result](PathName& path) -> bool {
+      if(path.contig == contig_id) { return true; }
+      else
+      {
+        if(path.contig > contig_id) { path.contig--; }
+        return false;
+      }
+    });
+  }
+
+  // Update contigs.
+  if(this->hasContigNames()) { this->contig_names.remove(contig_id); }
+  this->contig_count--;
+
+  return result;
 }
 
 void

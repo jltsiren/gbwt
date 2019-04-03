@@ -508,6 +508,9 @@ struct Dictionary
   // Returns size() if not found.
   size_type find(const std::string& s) const;
 
+  // Removes key i.
+  void remove(size_type i);
+
   void append(const Dictionary& source);
 
   bool hasDuplicates() const;
@@ -638,6 +641,11 @@ struct Metadata
   size_type contig(const std::string& name) const { return this->contig_names.find(name); }
   void setContigs(const std::vector<std::string>& names);
   void clearContigNames();
+
+  // Remove metadata corresponding to the sample/contig and return the set of removed
+  // path identifiers.
+  std::vector<size_type> removeSample(size_type sample_id);
+  std::vector<size_type> removeContig(size_type contig_id);
 
   // Merge the metadata from the sources into this object.
   // If the objects to be merged both contain sample / contig names, this overides the

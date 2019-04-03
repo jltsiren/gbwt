@@ -122,9 +122,9 @@ TEST(DictionaryTest, Keys)
   {
     "first", "second", "third", "fourth", "fifth"
   };
-  Dictionary dict(keys);
 
-  ASSERT_EQ(dict.size(),  keys.size()) << "Expected " << keys.size() << " keys, got " << dict.size();
+  Dictionary dict(keys);
+  ASSERT_EQ(dict.size(), keys.size()) << "Expected " << keys.size() << " keys, got " << dict.size();
   EXPECT_FALSE(dict.empty()) << "The dictionary is empty";
 
   bool ok = true;
@@ -137,6 +137,33 @@ TEST(DictionaryTest, Keys)
 
   size_t offset = dict.find("key");
   EXPECT_EQ(offset, dict.size()) << "Missing keys are not reported as missing";
+
+  dict.remove(keys.size());
+  ASSERT_EQ(dict.size(), keys.size()) << "Removing an invalid key changed Dictionary size";
+
+  constexpr size_type REMOVED_KEY = 2;
+  dict.remove(REMOVED_KEY);
+  ASSERT_EQ(dict.size(), keys.size() - 1) << "Expected " << (keys.size() - 1) << " keys after removal, got " << dict.size();
+
+  ok = true;
+  for(size_type i = 0; i < keys.size(); i++)
+  {
+    if(i < REMOVED_KEY)
+    {
+      ok &= (dict[i] == keys[i]);
+      ok &= (dict.find(keys[i]) == i);
+    }
+    else if(i == REMOVED_KEY)
+    {
+      ok &= (dict.find(keys[i]) == dict.size());
+    }
+    else
+    {
+      ok &= (dict[i - 1] == keys[i]);
+      ok &= (dict.find(keys[i]) == i - 1);
+    }
+  }
+  EXPECT_TRUE(ok) << "The dictionary does not contain the correct keys after removal";
 }
 
 TEST(DictionaryTest, Comparisons)
@@ -201,6 +228,7 @@ class MetadataTest : public ::testing::Test
 public:
   std::vector<std::string> keys, first_keys, second_keys, third_keys;
   std::vector<PathName> paths;
+  size_type path_samples, path_haplotypes, path_contigs;
 
   MetadataTest()
   {
@@ -238,6 +266,9 @@ public:
       { static_cast<size_type>(2), static_cast<size_type>(0), static_cast<size_type>(1), static_cast<size_type>(0) },
       { static_cast<size_type>(2), static_cast<size_type>(0), static_cast<size_type>(1), static_cast<size_type>(1) }
     };
+    this->path_samples = 3;
+    this->path_haplotypes = 6;
+    this->path_contigs = 2;
   }
 
   // first[start, limit) should be equal to second.
@@ -484,6 +515,39 @@ TEST_F(MetadataTest, Samples)
   EXPECT_EQ(metadata.samples(), static_cast<size_type>(keys.size())) << "Clearing sample names also cleared sample count";
 }
 
+TEST_F(MetadataTest, RemoveSample)
+{
+  for(size_type removed_key = 0; removed_key <= keys.size(); removed_key++)
+  {
+    Metadata metadata;
+    metadata.setSamples(keys);
+
+    std::vector<size_type> removed = metadata.removeSample(removed_key);
+    size_type correct_size = (removed_key >= keys.size() ? keys.size() : keys.size() - 1);
+    EXPECT_TRUE(removed.empty()) << "Path names were removed from an object without path names";
+    ASSERT_EQ(metadata.samples(), correct_size) << "Expected " << correct_size << " samples after removing key " << removed_key << ", got " << metadata.samples();
+    bool ok = true;
+    for(size_type i = 0; i < keys.size(); i++)
+    {
+      if(i < removed_key)
+      {
+        ok &= (metadata.sample(i) == keys[i]);
+        ok &= (metadata.sample(keys[i]) == i);
+      }
+      else if(i == removed_key)
+      {
+        ok &= (metadata.sample(keys[i]) == metadata.samples());
+      }
+      else
+      {
+        ok &= (metadata.sample(i - 1) == keys[i]);
+        ok &= (metadata.sample(keys[i]) == i - 1);
+      }
+    }
+    EXPECT_TRUE(ok) << "Metadata object does not contain the correct samples after removing sample " << removed_key;
+  }
+}
+
 TEST_F(MetadataTest, SampleMerging)
 {
   Metadata first_names, first_nonames, second_names, second_nonames;
@@ -524,6 +588,40 @@ TEST_F(MetadataTest, Contigs)
   ASSERT_TRUE(metadata.check()) << "Metadata object is not in a valid state after clearing contig names";
   EXPECT_FALSE(metadata.hasContigNames()) << "Metadata object contains contig names";
   EXPECT_EQ(metadata.contigs(), static_cast<size_type>(keys.size())) << "Clearing contig names also cleared contig count";
+}
+
+TEST_F(MetadataTest, RemoveContig)
+{
+  for(size_type removed_key = 0; removed_key <= keys.size(); removed_key++)
+  {
+    Metadata metadata;
+    metadata.setContigs(keys);
+
+    std::vector<size_type> removed = metadata.removeContig(removed_key);
+    size_type correct_size = (removed_key >= keys.size() ? keys.size() : keys.size() - 1);
+    EXPECT_TRUE(removed.empty()) << "Path names were removed from an object without path names";
+    ASSERT_EQ(metadata.contigs(), correct_size) << "Expected " << correct_size << " contigs after removing key " << removed_key << ", got " << metadata.contigs();
+
+    bool ok = true;
+    for(size_type i = 0; i < keys.size(); i++)
+    {
+      if(i < removed_key)
+      {
+        ok &= (metadata.contig(i) == keys[i]);
+        ok &= (metadata.contig(keys[i]) == i);
+      }
+      else if(i == removed_key)
+      {
+        ok &= (metadata.contig(keys[i]) == metadata.contigs());
+      }
+      else
+      {
+        ok &= (metadata.contig(i - 1) == keys[i]);
+        ok &= (metadata.contig(keys[i]) == i - 1);
+      }
+    }
+    EXPECT_TRUE(ok) << "Metadata object does not contain the correct contigs after removing contig " << removed_key;
+  }
 }
 
 TEST_F(MetadataTest, ContigMerging)
@@ -599,6 +697,74 @@ TEST_F(MetadataTest, Paths)
   EXPECT_FALSE(metadata.hasPathNames()) << "Metadata object contains path names";
 }
 
+TEST_F(MetadataTest, RemovePaths)
+{
+  Metadata metadata;
+  metadata.setSamples(path_samples);
+  metadata.setHaplotypes(path_haplotypes);
+  metadata.setContigs(path_contigs);
+  for(const PathName& path : paths) { metadata.addPath(path); }
+
+  for(size_type sample = 0; sample <= metadata.samples(); sample++)
+  {
+    Metadata curr = metadata;
+
+    size_type correct_samples = (sample >= metadata.samples() ? path_samples : path_samples - 1);
+    std::vector<size_type> removed = curr.removeSample(sample);
+    ASSERT_EQ(curr.samples(), correct_samples) << "Expected " << correct_samples << " samples after removing sample " << sample << ", got " << curr.samples();
+
+    bool ok = true;
+    size_type path_tail = 0, removed_tail = 0;
+    for(size_type i = 0; i < paths.size(); i++)
+    {
+      if(paths[i].sample == sample)
+      {
+        if(removed_tail >= removed.size() || removed[removed_tail] != i) { ok = false; break; }
+        removed_tail++;
+      }
+      else
+      {
+        PathName expected = paths[i];
+        if(expected.sample > sample) { expected.sample--; }
+        if(path_tail >= curr.paths() || curr.path(path_tail) != expected) { ok = false; break; }
+        path_tail++;
+      }
+    }
+    ASSERT_TRUE(ok) << "Metadata object does not contain the correct contigs after removing sample " << sample;
+    EXPECT_EQ(path_tail, curr.paths()) << "Expected " << path_tail << " paths after removing sample " << sample << ", got " << curr.paths();
+    EXPECT_EQ(removed_tail, removed.size()) << "Expected " << removed_tail << " removed paths after removing sample " << sample << ", got " << removed.size();
+  }
+
+  for(size_type contig = 0; contig <= metadata.contigs(); contig++)
+  {
+    Metadata curr = metadata;
+
+    size_type correct_contigs = (contig >= metadata.contigs() ? path_contigs : path_contigs - 1);
+    std::vector<size_type> removed = curr.removeContig(contig);
+    ASSERT_EQ(curr.contigs(), correct_contigs) << "Expected " << correct_contigs << " contigs after removing contig " << contig << ", got " << curr.contigs();
+
+    bool ok = true;
+    size_type path_tail = 0, removed_tail = 0;
+    for(size_type i = 0; i < paths.size(); i++)
+    {
+      if(paths[i].contig == contig)
+      {
+        if(removed_tail >= removed.size() || removed[removed_tail] != i) { ok = false; break; }
+        removed_tail++;
+      }
+      else
+      {
+        PathName expected = paths[i];
+        if(expected.contig > contig) { expected.contig--; }
+        if(path_tail >= curr.paths() || curr.path(path_tail) != expected) { ok = false; break; }
+        path_tail++;
+      }
+    }
+    ASSERT_TRUE(ok) << "Metadata object does not contain the correct contigs after removing contig " << contig;
+    EXPECT_EQ(path_tail, curr.paths()) << "Expected " << path_tail << " paths after removing contig " << contig << ", got " << curr.paths();
+    EXPECT_EQ(removed_tail, removed.size()) << "Expected " << removed_tail << " removed paths after removing contig " << contig << ", got " << removed.size();
+  }
+}
 
 TEST_F(MetadataTest, PathMerging)
 {

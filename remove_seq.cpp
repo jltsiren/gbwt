@@ -136,7 +136,7 @@ printUsage(int exit_code)
 
   std::cerr << "Usage: remove_seq [options] base_name seq1 [seq2 ...]" << std::endl;
   std::cerr << std::endl;
-  std::cerr << "  -c N  Build the R in chunks of N sequences per thread (default: " << DynamicGBWT::REMOVE_CHUNK_SIZE << ")" << std::endl;
+  std::cerr << "  -c N  Build the RA in chunks of N sequences per thread (default: " << DynamicGBWT::REMOVE_CHUNK_SIZE << ")" << std::endl;
   std::cerr << "  -o X  Use X as the base name for output" << std::endl;
   std::cerr << "  -r    Remove a range of sequences (inclusive; requires 2 sequence ids)" << std::endl;
   std::cerr << std::endl;
