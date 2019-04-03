@@ -6,16 +6,18 @@
 build_gbwt
 merge_gbwt
 benchmark
-metadata
+metadata_tool
 remove_seq
 
 # Tests
 test_bwtmerge
+test_metadata
 test_support
 test_variants
 
 # Legacy tools
 prepare_text
+metadata
 
 # Mac
 .DS_Store

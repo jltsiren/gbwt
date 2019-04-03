@@ -28,7 +28,7 @@
 
 #include <gbwt/algorithms.h>
 #include <gbwt/files.h>
-#include <gbwt/support.h>
+#include <gbwt/metadata.h>
 
 namespace gbwt
 {
