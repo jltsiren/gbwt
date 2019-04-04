@@ -96,6 +96,7 @@ struct Metadata
   constexpr static std::uint64_t INITIAL_FLAG_MASK = 0x0000;
 
   Metadata();
+  Metadata(std::vector<const Metadata*> sources, bool same_samples, bool same_contigs);
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
@@ -149,11 +150,10 @@ struct Metadata
   std::vector<size_type> removeSample(size_type sample_id);
   std::vector<size_type> removeContig(size_type contig_id);
 
-  // Merge the metadata from the sources into this object.
+  // Merge the metadata from the source into this object.
   // If the objects to be merged both contain sample / contig names, this overides the
   // same_samples / same_contigs flags.
   void merge(const Metadata& source, bool same_samples, bool same_contigs);
-  void merge(std::vector<const Metadata*> sources, bool same_samples, bool same_contigs);
 
   void clear();
 };

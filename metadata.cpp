@@ -39,6 +39,20 @@ Metadata::Metadata() :
 {
 }
 
+Metadata::Metadata(std::vector<const Metadata*> sources, bool same_samples, bool same_contigs)  :
+  tag(TAG), version(VERSION),
+  sample_count(0), haplotype_count(0), contig_count(0),
+  flags(0)
+{
+  if(sources.empty()) { return; }
+
+  *this = *(sources.front());
+  for(size_type i = 1; i < sources.size(); i++)
+  {
+    this->merge(*(sources[i]), same_samples, same_contigs);
+  }
+}
+
 size_type
 Metadata::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
 {
@@ -501,12 +515,6 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
     }
     this->clearPathNames();
   }
-}
-
-void
-Metadata::merge(std::vector<const Metadata*> sources, bool same_samples, bool same_contigs)
-{
-  for(const Metadata* source : sources) { this->merge(*source, same_samples, same_contigs); }
 }
 
 void

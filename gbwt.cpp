@@ -232,7 +232,7 @@ GBWT::GBWT(const std::vector<GBWT>& sources)
       {
         std::vector<const Metadata*> source_metadata(sources.size());
         for(size_type i = 0; i < sources.size(); i++) { source_metadata[i] = &(sources[i].metadata); }
-        this->metadata.merge(source_metadata, true, false); // Same samples, different contigs.
+        this->metadata = Metadata(source_metadata, true, false); // Same samples, different contigs.
         this->addMetadata();
       }
       else if(Verbosity::level >= Verbosity::BASIC)
