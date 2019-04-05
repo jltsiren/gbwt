@@ -220,6 +220,23 @@ TEST(DictionaryTest, Merging)
   }
 }
 
+TEST(DictionaryTest, Serialization)
+{
+  std::vector<std::string> keys
+  {
+    "first", "second", "third", "fourth", "fifth"
+  };
+  Dictionary original(keys);
+
+  std::string filename = TempFile::getName("Dictionary");
+  sdsl::store_to_file(original, filename);
+  Dictionary copy;
+  sdsl::load_from_file(copy, filename);
+  TempFile::remove(filename);
+
+  EXPECT_EQ(original, copy) << "Dictionary serialization failed";
+}
+
 //------------------------------------------------------------------------------
 
 } // namespace

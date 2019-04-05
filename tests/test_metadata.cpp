@@ -610,6 +610,23 @@ TEST_F(MetadataTest, PathMerging)
   comparePaths(first_nonames, third_nonames, false);
 }
 
+TEST_F(MetadataTest, Serialization)
+{
+  Metadata original;
+  original.setSamples(std::vector<std::string>(keys.begin(), keys.begin() + path_samples));
+  original.setHaplotypes(path_haplotypes);
+  original.setContigs(std::vector<std::string>(keys.begin(), keys.begin() + path_contigs));
+  for(const PathName& path : paths) { original.addPath(path); }
+
+  std::string filename = TempFile::getName("Metadata");
+  sdsl::store_to_file(original, filename);
+  Metadata copy;
+  sdsl::load_from_file(copy, filename);
+  TempFile::remove(filename);
+
+  EXPECT_EQ(original, copy) << "Metadata serialization failed";
+}
+
 //------------------------------------------------------------------------------
 
 } // namespace
