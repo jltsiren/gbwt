@@ -44,7 +44,7 @@ main(int argc, char** argv)
   size_type new_samples = 0, new_haplotypes = 0, new_contigs = 0;
   bool clear_paths = false, clear_samples = false, clear_contigs = false;
   bool remove_metadata = false;
-  while((c = getopt(argc, argv, "s:h:c:PSRr")) != -1)
+  while((c = getopt(argc, argv, "s:h:c:PSCr")) != -1)
   {
     switch(c)
     {
