@@ -299,9 +299,9 @@ DynamicGBWT::forceResize(size_type new_offset, size_type new_sigma)
   }
 
   std::vector<DynamicRecord> new_bwt(new_sigma - new_offset);
-  if(this->effective() > 0) { new_bwt.front().swap(this->bwt.front()); }
+  if(this->effective() > 0 && new_bwt.size() > 0) { new_bwt.front().swap(this->bwt.front()); }
   comp_type first_comp = 1 + (new_offset > this->header.offset ? new_offset - this->header.offset : 0);
-  comp_type comp_tail = this->effective() - (new_sigma < this->sigma() ? this->sigma() - new_sigma : 0);
+  comp_type comp_tail = std::min(first_comp + new_bwt.size() - 1, this->effective());
   for(comp_type comp = first_comp; comp < comp_tail; comp++)
   {
     new_bwt[comp + this->header.offset - new_offset].swap(this->bwt[comp]);
