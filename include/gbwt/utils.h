@@ -52,8 +52,8 @@ namespace gbwt
 
 /*
   We can save a lot of memory during construction by using 32-bit integers instead of
-  64-bit integers in the dynamic records. This limits the number of nodes and the
-  number of occurrences of each node to less than 2^32.
+  64-bit integers in the dynamic records. This limits the number of nodes, the number
+  of paths, and the number of occurrences of each node to less than 2^32.
 */
 
 #define GBWT_SAVE_MEMORY

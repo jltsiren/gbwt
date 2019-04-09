@@ -38,10 +38,17 @@ namespace gbwt
 
 struct PathName
 {
+#ifdef GBWT_SAVE_MEMORY
+  short_type sample;
+  short_type contig;
+  short_type phase;
+  short_type count;
+#else
   size_type sample;
   size_type contig;
   size_type phase;
   size_type count;
+#endif
 
   bool operator==(const PathName& another) const
   {
