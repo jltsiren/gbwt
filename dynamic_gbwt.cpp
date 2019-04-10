@@ -172,15 +172,7 @@ DynamicGBWT::load(std::istream& in)
   }
 
   // Read the metadata.
-  if(this->hasMetadata())
-  {
-    this->metadata.load(in);
-    if(!(this->metadata.check()))
-    {
-      std::cerr << "DynamicGBWT::load(): Invalid metadata: " << this->metadata << std::endl;
-    }
-    this->metadata.setVersion();  // Update to the current version.
-  }
+  if(this->hasMetadata()) { this->metadata.load(in); }
 
   // Rebuild the incoming edges.
   this->rebuildIncoming();

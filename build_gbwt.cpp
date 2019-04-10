@@ -150,7 +150,13 @@ main(int argc, char** argv)
   {
     double start = readTimer();
 
+    // Load the index and determine whether we should use sample/contig/path names.
+    // We assume that each VCF parse adds new contigs for the same samples.
+    // We take the sample names either from the index we load or from the first parse.
     DynamicGBWT dynamic_index;
+    bool need_sample_names = true, have_sample_names = false;
+    bool use_contig_names = true, use_path_names = true;
+    size_type contig_id = 0;
     if(!(index_base.empty()))
     {
       if(!sdsl::load_from_file(dynamic_index, index_base + DynamicGBWT::EXTENSION))
@@ -159,22 +165,41 @@ main(int argc, char** argv)
         std::exit(EXIT_FAILURE);
       }
       printStatistics(dynamic_index, index_base);
+      need_sample_names = false;
+      use_contig_names = (dynamic_index.hasMetadata() && dynamic_index.metadata.hasContigNames());
+      if(dynamic_index.hasMetadata()) { contig_id = dynamic_index.metadata.contigs(); }
+      use_path_names = (dynamic_index.hasMetadata() && dynamic_index.metadata.hasPathNames());
     }
 
     size_type input_size = 0;
     std::set<size_type> samples;
     std::set<range_type> haplotypes;
+    std::vector<std::string> sample_names, contig_names;
     for(const std::string& input_base : input_files)
     {
       printHeader("Input name"); std::cout << input_base << std::endl;
       if(build_from_parse)
       {
+        // Load the parse and determine if we still want to use sample/contig names.
         VariantPaths variants;
         if(!sdsl::load_from_file(variants, input_base))
         {
           std::cerr << "build_gbwt: Cannot load variants from " << input_base << std::endl;
           std::exit(EXIT_FAILURE);
         }
+        need_sample_names &= variants.hasSampleNames();
+        if(need_sample_names && !have_sample_names)
+        {
+          sample_names = variants.getSampleNames();
+          have_sample_names = true;
+        }
+        use_contig_names &= variants.hasContigName();
+        if(use_contig_names)
+        {
+          contig_names.emplace_back(variants.getContigName());
+        }
+
+        // Build GBWT from the parse.
         if(check_overlaps) { checkOverlaps(variants, std::cerr, true); }
         std::set<range_type> overlaps;
         size_type node_width = variants.nodeWidth(both_orientations);
@@ -183,13 +208,22 @@ main(int argc, char** argv)
         builder.swapIndex(dynamic_index);
         generateHaplotypes(variants, phasing_files,
           [](size_type) -> bool { return true; },
-          [&builder, &both_orientations, &samples, &haplotypes](const Haplotype& haplotype)
+          [&](const Haplotype& haplotype)
           {
             builder.insert(haplotype.path, both_orientations);
             samples.insert(haplotype.sample);
             haplotypes.insert(range_type(haplotype.sample, haplotype.phase));
+            if(use_path_names)
+            {
+              builder.index.metadata.addPath({
+                static_cast<PathName::path_name_type>(haplotype.sample),
+                static_cast<PathName::path_name_type>(contig_id),
+                static_cast<PathName::path_name_type>(haplotype.phase),
+                static_cast<PathName::path_name_type>(haplotype.count)
+              });
+            }
           },
-          [&skip_overlaps, &check_overlaps, &overlaps](size_type site, size_type allele) -> bool
+          [&](size_type site, size_type allele) -> bool
           {
             if(check_overlaps) { overlaps.insert(range_type(site, allele)); }
             return skip_overlaps;
@@ -212,6 +246,7 @@ main(int argc, char** argv)
         input_size += input.size() * (both_orientations ? 2 : 1);
         dynamic_index.insert(input, batch_size * MILLION, both_orientations, sample_interval);
       }
+      contig_id++;
       optind++;
     }
     std::cout << std::endl;
@@ -221,19 +256,26 @@ main(int argc, char** argv)
     {
       if(index_base.empty())
       {
-        // We built a new index, so we can just write the metadata.
+        // New index with new samples and contigs.
         dynamic_index.addMetadata();
-        dynamic_index.metadata.setSamples(samples.size());
+        if(have_sample_names) { dynamic_index.metadata.setSamples(sample_names); }
+        else { dynamic_index.metadata.setSamples(samples.size()); }
         dynamic_index.metadata.setHaplotypes(haplotypes.size());
-        dynamic_index.metadata.setContigs(input_files.size());
+        if(use_contig_names) { dynamic_index.metadata.setContigs(contig_names); }
+        else { dynamic_index.metadata.setContigs(contig_id); }
       }
       else if(dynamic_index.hasMetadata())
       {
-        // If there was existing metadata, we assume that we inserted new samples
-        // over the same contigs.
-        dynamic_index.metadata.setSamples(dynamic_index.metadata.samples() + samples.size());
-        dynamic_index.metadata.setHaplotypes(dynamic_index.metadata.haplotypes() + haplotypes.size());
-        dynamic_index.metadata.setContigs(std::max(dynamic_index.metadata.contigs(), static_cast<size_type>(input_files.size())));
+        // Same samples, possibly new contigs.
+        if(use_contig_names)
+        {
+          dynamic_index.metadata.addContigs(contig_names);
+        }
+        else
+        {
+          dynamic_index.metadata.clearContigNames();
+          dynamic_index.metadata.setContigs(contig_id);
+        }
       }
     }
 

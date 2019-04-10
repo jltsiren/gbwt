@@ -39,16 +39,15 @@ namespace gbwt
 struct PathName
 {
 #ifdef GBWT_SAVE_MEMORY
-  short_type sample;
-  short_type contig;
-  short_type phase;
-  short_type count;
+  typedef short_type path_name_type;
 #else
-  size_type sample;
-  size_type contig;
-  size_type phase;
-  size_type count;
+  typedef size_type path_name_type;
 #endif
+
+  path_name_type sample;
+  path_name_type contig;
+  path_name_type phase;
+  path_name_type count;
 
   bool operator==(const PathName& another) const
   {
@@ -144,6 +143,7 @@ public:
   std::string sample(size_type i) const { return this->sample_names[i]; }
   size_type sample(const std::string& name) const { return this->sample_names.find(name); }
   void setSamples(const std::vector<std::string>& names);
+  void addSamples(const std::vector<std::string>& names);
   void clearSampleNames();
 
   // Contig operations.
@@ -151,6 +151,7 @@ public:
   std::string contig(size_type i) const { return this->contig_names[i]; }
   size_type contig(const std::string& name) const { return this->contig_names.find(name); }
   void setContigs(const std::vector<std::string>& names);
+  void addContigs(const std::vector<std::string>& names);
   void clearContigNames();
 
   // Remove metadata corresponding to the sample/contig and return the set of removed

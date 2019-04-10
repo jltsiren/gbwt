@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018 Jouni Siren
+  Copyright (c) 2018, 2019 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -79,6 +79,15 @@ struct Haplotype
     the overlapping variant.
 
   - Otherwise we have a phase break.
+
+  FILE FORMAT
+
+  Version 1:
+  - Proper header.
+  - Sample and contig names.
+
+  Version 0:
+  - Original version without a header.
 */
 
 class VariantPaths
@@ -103,6 +112,26 @@ public:
 
 //------------------------------------------------------------------------------
 
+  // Header.
+  std::uint32_t tag;
+  std::uint32_t version;
+  std::uint64_t flags;
+
+  bool check() const;
+  void setVersion() { this->version = VERSION; }
+  void set(std::uint64_t flag) { this->flags |= flag; }
+  void unset(std::uint64_t flag) { this->flags &= ~flag; }
+  bool get(std::uint64_t flag) const { return (this->flags & flag); }
+
+  constexpr static std::uint32_t TAG = 0x6B37AA81;
+  constexpr static std::uint32_t VERSION = Version::VARIANT_VERSION;
+
+  constexpr static std::uint64_t FLAG_MASK         = 0x0003;
+  constexpr static std::uint64_t FLAG_SAMPLE_NAMES = 0x0001;
+  constexpr static std::uint64_t FLAG_CONTIG_NAME  = 0x0002;
+
+//------------------------------------------------------------------------------
+
   /*
     reference      reference path
     ref_starts     starting positions of each site in the reference
@@ -116,6 +145,9 @@ public:
     file_offsets   the identifier of the first sample in each file
     file_counts    the number of samples in each file
 
+    sample_names   names of the samples
+    contig_name    name of the contig
+
     ref_index      the first occurrence of each node in the reference (not serialized)
   */
   vector_type              reference;
@@ -125,6 +157,9 @@ public:
 
   std::vector<std::string> phasing_files;
   std::vector<size_type>   file_offsets, file_counts;
+
+  std::vector<std::string> sample_names;
+  std::string              contig_name;
 
   std::unordered_map<node_type, node_type, size_type(*)(size_type)> ref_index;
 
@@ -165,6 +200,17 @@ public:
   void addAllele(const vector_type& path);
 
   void addFile(const std::string& filename, size_type sample_offset, size_type sample_count);
+
+//------------------------------------------------------------------------------
+
+  // Sample/contig names.
+  bool hasSampleNames() const { return this->get(FLAG_SAMPLE_NAMES); }
+  const std::vector<std::string>& getSampleNames() const { return this->sample_names; }
+  void setSampleNames(const std::vector<std::string>& new_names);
+
+  bool hasContigName() const { return this->get(FLAG_CONTIG_NAME); }
+  const std::string& getContigName() const { return this->contig_name; }
+  void setContigName(const std::string& new_name);
 
 //------------------------------------------------------------------------------
 

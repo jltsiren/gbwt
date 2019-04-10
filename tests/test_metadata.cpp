@@ -335,6 +335,15 @@ TEST_F(MetadataTest, Samples)
   }
   EXPECT_TRUE(ok) << "Sample names are incorrect";
 
+  {
+    std::vector<std::string> first_half(keys.begin(), keys.begin() + keys.size() / 2);
+    std::vector<std::string> second_half(keys.begin() + keys.size() / 2, keys.end());
+    Metadata partial;
+    partial.setSamples(first_half);
+    partial.addSamples(second_half);
+    EXPECT_EQ(metadata, partial) << "addSamples() does not work correctly";
+  }
+
   metadata.clearSampleNames();
   ASSERT_TRUE(metadata.check()) << "Metadata object is not in a valid state after clearing sample names";
   EXPECT_FALSE(metadata.hasSampleNames()) << "Metadata object contains sample names";
@@ -411,6 +420,15 @@ TEST_F(MetadataTest, Contigs)
     ok &= (metadata.contig(keys[i]) == i);
   }
   EXPECT_TRUE(ok) << "Contig names are incorrect";
+
+  {
+    std::vector<std::string> first_half(keys.begin(), keys.begin() + keys.size() / 2);
+    std::vector<std::string> second_half(keys.begin() + keys.size() / 2, keys.end());
+    Metadata partial;
+    partial.setContigs(first_half);
+    partial.addContigs(second_half);
+    EXPECT_EQ(metadata, partial) << "addContigs() does not work correctly";
+  }
 
   metadata.clearContigNames();
   ASSERT_TRUE(metadata.check()) << "Metadata object is not in a valid state after clearing contig names";

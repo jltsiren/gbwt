@@ -93,6 +93,13 @@ Metadata::load(std::istream& in)
   sdsl::read_member(this->contig_count, in);
   sdsl::read_member(this->flags, in);
 
+  // Check the header.
+  if(!(this->check()))
+  {
+    std::cerr << "Metadata::load(): Invalid metadata: " << *this << std::endl;
+  }
+  this->setVersion(); // Update to the current version.
+
   if(this->hasPathNames())
   {
     loadVector(this->path_names, in);
@@ -231,7 +238,7 @@ void
 Metadata::addPath(const PathName& path)
 {
   this->set(FLAG_PATH_NAMES);
-  this->path_names.push_back(path);
+  this->path_names.emplace_back(path);
 }
 
 void
@@ -258,6 +265,17 @@ Metadata::setSamples(const std::vector<std::string>& names)
 }
 
 void
+Metadata::addSamples(const std::vector<std::string>& names)
+{
+  if(names.empty()) { return; }
+
+  Dictionary additional_names(names);
+  this->sample_names.append(additional_names);
+  this->setSamples(this->sample_names.size());
+  this->set(FLAG_SAMPLE_NAMES);
+}
+
+void
 Metadata::clearSampleNames()
 {
   this->unset(FLAG_SAMPLE_NAMES);
@@ -278,6 +296,17 @@ Metadata::setContigs(const std::vector<std::string>& names)
   this->setContigs(names.size());
   this->set(FLAG_CONTIG_NAMES);
   this->contig_names = Dictionary(names);
+}
+
+void
+Metadata::addContigs(const std::vector<std::string>& names)
+{
+  if(names.empty()) { return; }
+
+  Dictionary additional_names(names);
+  this->contig_names.append(additional_names);
+  this->setContigs(this->contig_names.size());
+  this->set(FLAG_CONTIG_NAMES);
 }
 
 void

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018 Jouni Siren
+  Copyright (c) 2018, 2019 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -33,6 +33,7 @@ namespace gbwt
 //------------------------------------------------------------------------------
 
 VariantPaths::VariantPaths() :
+  tag(TAG), version(VERSION), flags(0),
   ref_index(16, wang_hash_64)
 {
   this->path_starts.push_back(0);
@@ -40,6 +41,7 @@ VariantPaths::VariantPaths() :
 }
 
 VariantPaths::VariantPaths(size_type reference_size) :
+  tag(TAG), version(VERSION), flags(0),
   ref_index(16, wang_hash_64)
 {
   this->reference.reserve(reference_size);
@@ -66,6 +68,10 @@ VariantPaths::swap(VariantPaths& another)
 {
   if(this != &another)
   {
+    std::swap(this->tag, another.tag);
+    std::swap(this->version, another.version);
+    std::swap(this->flags, another.flags);
+
     this->reference.swap(another.reference);
     this->ref_starts.swap(another.ref_starts);
     this->ref_ends.swap(another.ref_ends);
@@ -93,6 +99,10 @@ VariantPaths::operator=(VariantPaths&& source)
 {
   if(this != &source)
   {
+    this->tag = std::move(source.tag);
+    this->version = std::move(source.version);
+    this->flags = std::move(source.flags);
+
     this->reference = std::move(source.reference);
     this->ref_starts = std::move(source.ref_starts);
     this->ref_ends = std::move(source.ref_ends);
@@ -115,6 +125,10 @@ VariantPaths::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::st
   sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
   size_type written_bytes = 0;
 
+  written_bytes += sdsl::write_member(this->tag, out, child, "tag");
+  written_bytes += sdsl::write_member(this->version, out, child, "version");
+  written_bytes += sdsl::write_member(this->flags, out, child, "flags");
+
   written_bytes += serializeVector(this->reference, out, child, "reference");
   written_bytes += serializeVector(this->ref_starts, out, child, "ref_starts");
   written_bytes += serializeVector(this->ref_ends, out, child, "ref_ends");
@@ -126,6 +140,15 @@ VariantPaths::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::st
   written_bytes += serializeVector(this->file_offsets, out, child, "file_offsets");
   written_bytes += serializeVector(this->file_counts, out, child, "file_counts");
 
+  if(this->hasSampleNames())
+  {
+    written_bytes += serializeVector(this->sample_names, out, child, "sample_names");
+  }
+  if(this->hasContigName())
+  {
+    written_bytes += sdsl::write_member(this->contig_name, out, child, "contig_name");
+  }
+
   sdsl::structure_tree::add_size(child, written_bytes);
   return written_bytes;
 }
@@ -133,6 +156,18 @@ VariantPaths::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::st
 void
 VariantPaths::load(std::istream& in)
 {
+  sdsl::read_member(this->tag, in);
+  sdsl::read_member(this->version, in);
+  sdsl::read_member(this->flags, in);
+
+  // Check header.
+  if(!(this->check()))
+  {
+    std::cerr << "VariantPaths::load(): Invalid header: ("
+              << this->tag << ", " << this->version << ", " << this->flags << ")" << std::endl;
+  }
+  this->setVersion(); // Update to the current version.
+
   loadVector(this->reference, in);
   loadVector(this->ref_starts, in);
   loadVector(this->ref_ends, in);
@@ -143,11 +178,31 @@ VariantPaths::load(std::istream& in)
   loadVector(this->phasing_files, in);
   loadVector(this->file_offsets, in);
   loadVector(this->file_counts, in);
+
+  if(this->hasSampleNames()) { loadVector(this->sample_names, in); }
+  if(this->hasContigName()) { sdsl::read_member(this->contig_name, in); }
+}
+
+bool
+VariantPaths::check() const
+{
+  if(this->tag != TAG) { return false; }
+  switch(this->version)
+  {
+  case VERSION:
+    return ((this->flags & FLAG_MASK) == this->flags);
+  default:
+    return false;
+  }
 }
 
 void
 VariantPaths::copy(const VariantPaths& source)
 {
+  this->tag = source.tag;
+  this->version = source.version;
+  this->flags = source.flags;
+
   this->reference = source.reference;
   this->ref_starts = source.ref_starts;
   this->ref_ends = source.ref_ends;
@@ -338,6 +393,22 @@ VariantPaths::getAllele(size_type site, size_type allele) const
     size_type stop = this->path_starts[this->site_starts[site] + allele];
     return vector_type(this->alt_paths.begin() + start, this->alt_paths.begin() + stop);
   }
+}
+
+//------------------------------------------------------------------------------
+
+void
+VariantPaths::setSampleNames(const std::vector<std::string>& new_names)
+{
+  this->set(FLAG_SAMPLE_NAMES);
+  this->sample_names = new_names;
+}
+
+void
+VariantPaths::setContigName(const std::string& new_name)
+{
+  this->set(FLAG_CONTIG_NAME);
+  this->contig_name = new_name;
 }
 
 //------------------------------------------------------------------------------

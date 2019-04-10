@@ -117,16 +117,7 @@ GBWT::load(std::istream& in)
   this->bwt.load(in);
   this->da_samples.load(in);
 
-  // Read the metadata.
-  if(this->hasMetadata())
-  {
-    this->metadata.load(in);
-    if(!(this->metadata.check()))
-    {
-      std::cerr << "GBWT::load(): Invalid metadata: " << this->metadata << std::endl;
-    }
-    this->metadata.setVersion();  // Update to the current version.
-  }
+  if(this->hasMetadata()) { this->metadata.load(in); }
 
   this->cacheEndmarker();
 }
