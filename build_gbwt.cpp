@@ -157,7 +157,11 @@ main(int argc, char** argv)
     bool need_sample_names = true, have_sample_names = false;
     bool use_contig_names = true, use_path_names = true;
     size_type contig_id = 0;
-    if(!(index_base.empty()))
+    if(index_base.empty())
+    {
+      if(build_from_parse) { dynamic_index.addMetadata(); }
+    }
+    else
     {
       if(!sdsl::load_from_file(dynamic_index, index_base + DynamicGBWT::EXTENSION))
       {
@@ -257,7 +261,6 @@ main(int argc, char** argv)
       if(index_base.empty())
       {
         // New index with new samples and contigs.
-        dynamic_index.addMetadata();
         if(have_sample_names) { dynamic_index.metadata.setSamples(sample_names); }
         else { dynamic_index.metadata.setSamples(samples.size()); }
         dynamic_index.metadata.setHaplotypes(haplotypes.size());
