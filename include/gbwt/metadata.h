@@ -73,8 +73,9 @@ struct PathName
   - Assign contig ids to ranges of node ids (as above).
 */
 
-struct Metadata
+class Metadata
 {
+public:
   typedef gbwt::size_type size_type; // Needed for SDSL serialization.
 
   // Header.
