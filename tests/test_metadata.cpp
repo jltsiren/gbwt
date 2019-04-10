@@ -83,6 +83,13 @@ public:
     this->path_contigs = 2;
   }
 
+  void testMergeConstructor(const Metadata& first, const Metadata& second, const Metadata& correct_result, bool same_samples, bool same_contigs, const std::string& test_name) const
+  {
+    std::vector<const Metadata*> sources { &first, &second };
+    Metadata constructed(sources, same_samples, same_contigs);
+    EXPECT_EQ(constructed, correct_result) << "Merge constructor does not work correctly " << test_name;
+  }
+
   // first[start, limit) should be equal to second.
   bool sameSamples(const Metadata& first, const Metadata& second, size_type start, size_type limit) const
   {
@@ -107,6 +114,7 @@ public:
     merged.merge(second, same_samples, false);
     ASSERT_TRUE(merged.check()) << "Merged metadata object is not in a valid state " << test_name;
     ASSERT_EQ(merged.samples(), correct_count) << "Expected " << correct_count << " samples, got " << merged.samples() << " " << test_name;
+    testMergeConstructor(first, second, merged, same_samples, false, test_name);
 
     if(merge_by_names)
     {
@@ -169,6 +177,7 @@ public:
     merged.merge(second, false, same_contigs);
     ASSERT_TRUE(merged.check()) << "Merged metadata object is not in a valid state " << test_name;
     ASSERT_EQ(merged.contigs(), correct_count) << "Expected " << correct_count << " contigs, got " << merged.contigs() << " " << test_name;
+    testMergeConstructor(first, second, merged, false, same_contigs, test_name);
 
     if(merge_by_names)
     {
@@ -222,6 +231,7 @@ public:
     ASSERT_TRUE(merged.check()) << "Merged metadata object is not in a valid state " << test_name;
     ASSERT_TRUE(merged.hasPathNames()) << "Merged metadata object does not have path names" << test_name;
     ASSERT_EQ(merged.paths(), correct_count) << "Expected " << correct_count << " paths, got " << merged.paths() << " " << test_name;
+    testMergeConstructor(first, second, merged, same, same, test_name);
 
     if(merge_by_names)
     {
