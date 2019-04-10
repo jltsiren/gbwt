@@ -466,8 +466,9 @@ struct MergeParameters
 
 //------------------------------------------------------------------------------
 
-struct Dictionary
+class Dictionary
 {
+public:
   typedef gbwt::size_type size_type;
 
   sdsl::int_vector<0> offsets;    // Starting offsets for each string, including a sentinel at the end.
