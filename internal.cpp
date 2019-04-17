@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018 Jouni Siren
+  Copyright (c) 2017, 2018, 2019 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -30,7 +30,15 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
-const size_type DiskIO::block_size = MEGABYTE;
+// Numerical class constants.
+
+constexpr size_type DiskIO::block_size;
+
+constexpr size_type ByteCode::DATA_BITS;
+constexpr ByteCode::code_type ByteCode::DATA_MASK;
+constexpr ByteCode::code_type ByteCode::NEXT_BYTE;
+
+//------------------------------------------------------------------------------
 
 template<>
 size_type

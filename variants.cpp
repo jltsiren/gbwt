@@ -32,6 +32,26 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
+// Numerical class constants.
+
+constexpr std::uint32_t VariantPaths::TAG;
+constexpr std::uint32_t VariantPaths::VERSION;
+constexpr std::uint64_t VariantPaths::FLAG_MASK;
+constexpr std::uint64_t VariantPaths::FLAG_SAMPLE_NAMES;
+constexpr std::uint64_t VariantPaths::FLAG_CONTIG_NAME;
+
+constexpr size_type Phasing::HAPLOID;
+constexpr size_type Phasing::UNPHASED;
+constexpr size_type Phasing::PHASED;
+
+//------------------------------------------------------------------------------
+
+// Other class variables.
+
+const std::string PhasingInformation::TEMP_FILE_PREFIX = "phasing";
+
+//------------------------------------------------------------------------------
+
 VariantPaths::VariantPaths() :
   tag(TAG), version(VERSION), flags(0),
   ref_index(16, wang_hash_64)
@@ -587,8 +607,6 @@ operator<<(std::ostream& out, Phasing phasing)
 }
 
 //------------------------------------------------------------------------------
-
-const std::string PhasingInformation::TEMP_FILE_PREFIX = "phasing";
 
 PhasingInformation::PhasingInformation() :
   sample_count(0), sample_offset(0), site_count(0),

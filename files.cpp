@@ -30,6 +30,22 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
+// Numerical class constants.
+
+constexpr std::uint32_t GBWTHeader::TAG;
+constexpr std::uint32_t GBWTHeader::VERSION;
+constexpr std::uint64_t GBWTHeader::FLAG_MASK;
+constexpr std::uint64_t GBWTHeader::FLAG_BIDIRECTIONAL;
+constexpr std::uint64_t GBWTHeader::FLAG_METADATA;
+constexpr std::uint32_t GBWTHeader::META_VERSION;
+constexpr std::uint64_t GBWTHeader::META_FLAG_MASK;
+constexpr std::uint32_t GBWTHeader::BD_VERSION;
+constexpr std::uint64_t GBWTHeader::BD_FLAG_MASK;
+constexpr std::uint32_t GBWTHeader::OLD_VERSION;
+constexpr std::uint64_t GBWTHeader::OLD_FLAG_MASK;
+
+//------------------------------------------------------------------------------
+
 /*
   An empty index is bidirectional.
 */

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018 Jouni Siren
+  Copyright (c) 2017, 2018, 2019 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -31,7 +31,20 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
+// Numerical class constants.
+
+constexpr size_type DynamicGBWT::INSERT_BATCH_SIZE;
+constexpr size_type DynamicGBWT::REMOVE_CHUNK_SIZE;
+constexpr size_type DynamicGBWT::MERGE_BATCH_SIZE;
+constexpr size_type DynamicGBWT::SAMPLE_INTERVAL;
+
+//------------------------------------------------------------------------------
+
+// Other class variables.
+
 const std::string DynamicGBWT::EXTENSION = ".gbwt";
+
+//------------------------------------------------------------------------------
 
 DynamicGBWT::DynamicGBWT()
 {

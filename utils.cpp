@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018 Jouni Siren
+  Copyright (c) 2017, 2018, 2019 Jouni Siren
   Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -34,6 +34,23 @@
 
 namespace gbwt
 {
+
+//------------------------------------------------------------------------------
+
+// Numerical class constants.
+
+constexpr size_type Verbosity::SILENT;
+constexpr size_type Verbosity::BASIC;
+constexpr size_type Verbosity::EXTENDED;
+constexpr size_type Verbosity::DEFAULT;
+constexpr size_type Verbosity::FULL;
+
+constexpr size_type Version::MAJOR_VERSION;
+constexpr size_type Version::MINOR_VERSION;
+constexpr size_type Version::PATCH_VERSION;
+constexpr size_type Version::GBWT_VERSION;
+constexpr size_type Version::METADATA_VERSION;
+constexpr size_type Version::VARIANT_VERSION;
 
 //------------------------------------------------------------------------------
 

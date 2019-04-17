@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018 Jouni Siren
+  Copyright (c) 2018, 2019 Jouni Siren
   Copyright (c) 2015 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -30,6 +30,22 @@
 
 namespace gbwt
 {
+
+//------------------------------------------------------------------------------
+
+// Numerical class constants.
+
+constexpr BlockArray::size_type BlockArray::BLOCK_BITS;
+constexpr BlockArray::size_type BlockArray::BLOCK_SIZE;
+constexpr BlockArray::size_type BlockArray::BLOCK_MASK;
+
+template<class Producer> constexpr size_type ProducerBuffer<Producer>::BUFFER_SIZE;
+
+//------------------------------------------------------------------------------
+
+// Other class variables.
+
+const std::string RankArray::TEMP_FILE_PREFIX = "ranks";
 
 //------------------------------------------------------------------------------
 
@@ -323,8 +339,6 @@ GapIterator<BlockArray>::read()
 }
 
 //------------------------------------------------------------------------------
-
-const std::string RankArray::TEMP_FILE_PREFIX = "ranks";
 
 RankArray::RankArray() :
   value(invalid_edge())

@@ -27,6 +27,25 @@
 
 namespace gbwt
 {
+;
+//------------------------------------------------------------------------------
+
+// Numerical class constants.
+
+constexpr node_type Node::REVERSE_MASK;
+constexpr size_type Node::ID_SHIFT;
+
+constexpr node_type Path::REVERSE_MASK;
+constexpr size_type Path::ID_SHIFT;
+
+constexpr size_type MergeParameters::POS_BUFFER_SIZE;
+constexpr size_type MergeParameters::THREAD_BUFFER_SIZE;
+constexpr size_type MergeParameters::MERGE_BUFFERS;
+constexpr size_type MergeParameters::CHUNK_SIZE;
+constexpr size_type MergeParameters::MERGE_JOBS;
+constexpr size_type MergeParameters::MAX_BUFFER_SIZE;
+constexpr size_type MergeParameters::MAX_MERGE_BUFFERS;
+constexpr size_type MergeParameters::MAX_MERGE_JOBS;
 
 //------------------------------------------------------------------------------
 

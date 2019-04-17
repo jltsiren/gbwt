@@ -46,7 +46,7 @@ namespace gbwt
 
 struct DiskIO
 {
-  const static size_type block_size;
+  constexpr static size_type block_size = MEGABYTE;
 
   template<class Element>
   static bool read(std::istream& in, Element* data, size_type n = 1)

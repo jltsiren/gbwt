@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017 Jouni Siren
+  Copyright (c) 2017, 2019 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -31,7 +31,11 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
+// Other class variables.
+
 const std::string GBWT::EXTENSION = ".gbwt";
+
+//------------------------------------------------------------------------------
 
 GBWT::GBWT()
 {

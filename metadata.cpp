@@ -32,6 +32,19 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
+// Numerical class constants.
+
+constexpr std::uint32_t Metadata::TAG;
+constexpr std::uint32_t Metadata::VERSION;
+constexpr std::uint64_t Metadata::FLAG_MASK;
+constexpr std::uint64_t Metadata::FLAG_PATH_NAMES;
+constexpr std::uint64_t Metadata::FLAG_SAMPLE_NAMES;
+constexpr std::uint64_t Metadata::FLAG_CONTIG_NAMES;
+constexpr std::uint32_t Metadata::INITIAL_VERSION;
+constexpr std::uint64_t Metadata::INITIAL_FLAG_MASK;
+
+//------------------------------------------------------------------------------
+
 Metadata::Metadata() :
   tag(TAG), version(VERSION),
   sample_count(0), haplotype_count(0), contig_count(0),
