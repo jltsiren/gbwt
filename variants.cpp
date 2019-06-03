@@ -544,6 +544,10 @@ Phasing::Phasing(const std::string& genotype, bool was_diploid) :
     {
       this->second = 0; // Fall back to reference.
     }
+    if(this->first == this->second)
+    {
+      this->phased = true; // Homozygous calls are effectively phased.
+    }
   }
 }
 
