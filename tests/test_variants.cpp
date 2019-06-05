@@ -292,19 +292,22 @@ TEST(PhasingTest, ParseGenotypes)
   {
     { "1|0", "1|1", "0" },
     { "0",   "1/2", "2|0" },
-    { "2|1", "1|0", "0|1" }
+    { "2|1", "1|0", "0|1" },
+    { "0/0", "1/1", "0/0" }
   };
   std::vector<std::vector<Phasing>> phasing_information =
   {
     { Phasing(1, 0, true), Phasing(1, 1, true),  Phasing(0) },
     { Phasing(0),          Phasing(1, 2, false), Phasing(2, 0, true) },
-    { Phasing(2, 1, true), Phasing(1, 0, true),  Phasing(0, 1, true) }
+    { Phasing(2, 1, true), Phasing(1, 0, true),  Phasing(0, 1, true) },
+    { Phasing(0, 0, true), Phasing(1, 1, true), Phasing(0, 0, false) }
   };
+  std::vector<bool> phase_homozygous = { true, true, false };
   for(size_type site = 0; site < genotypes.size(); site++)
   {
     for(size_type sample = 0; sample < genotypes[site].size(); sample++)
     {
-      EXPECT_EQ(Phasing(genotypes[site][sample]), phasing_information[site][sample])
+      EXPECT_EQ(Phasing(genotypes[site][sample], true, phase_homozygous[sample]), phasing_information[site][sample])
         << "Wrong genotype for site " << site << ", sample " << sample;
     }
   }

@@ -511,7 +511,7 @@ checkOverlaps(const VariantPaths& variants, std::ostream& out, bool print_ids)
 
 //------------------------------------------------------------------------------
 
-Phasing::Phasing(const std::string& genotype, bool was_diploid) :
+Phasing::Phasing(const std::string& genotype, bool was_diploid, bool phase_homozygous) :
   first(0), second(0), diploid(was_diploid), phased(true)
 {
   if(genotype.empty()) { return; }
@@ -544,9 +544,9 @@ Phasing::Phasing(const std::string& genotype, bool was_diploid) :
     {
       this->second = 0; // Fall back to reference.
     }
-    if(this->first == this->second)
+    if(phase_homozygous && this->first == this->second)
     {
-      this->phased = true; // Homozygous calls are effectively phased.
+      this->phased = true;
     }
   }
 }

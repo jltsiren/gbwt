@@ -246,7 +246,7 @@ struct Phasing
   {
   }
 
-  Phasing(const std::string& genotype, bool was_diploid = true);
+  Phasing(const std::string& genotype, bool was_diploid = true, bool phase_homozygous = true);
 
   void forcePhased(std::function<bool()> rng);
 
