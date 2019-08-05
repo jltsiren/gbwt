@@ -153,7 +153,7 @@ struct ByteCode
     while(array[i] & NEXT_BYTE)
     {
       i++; offset += DATA_BITS;
-      res += ((value_type)(array[i] & DATA_MASK)) << offset;
+      res += static_cast<value_type>(array[i] & DATA_MASK) << offset;
     }
     i++;
     return res;
@@ -178,16 +178,25 @@ struct ByteCode
 
 /*
   Run-length encoding using ByteCode. Run lengths and alphabet size are assumed to be > 0.
+  If GBWT_SAVE_MEMORY is defined, this will operate on 32-bit integers instead of
+  64-bit integers, making integer divisions faster.
 */
 
 struct Run
 {
+#ifdef GBWT_SAVE_MEMORY
+  typedef short_type           value_type;
+  typedef short_type           length_type;
+#else
   typedef ByteCode::value_type value_type;
+  typedef size_type            length_type;
+#endif
   typedef ByteCode::code_type  code_type;
 
-  size_type sigma, run_continues;
+  value_type  sigma;
+  length_type run_continues;
 
-  explicit Run(size_type alphabet_size);
+  explicit Run(value_type alphabet_size);
 
   /*
     Returns (value, run length) and updates i to point past the run.
@@ -213,7 +222,7 @@ struct Run
     Encodes the run and stores it in the array using push_back().
   */
   template<class ByteArray>
-  void write(ByteArray& array, value_type value, size_type length)
+  void write(ByteArray& array, value_type value, length_type length)
   {
     if(this->run_continues == 0)
     {
@@ -234,7 +243,7 @@ struct Run
   template<class ByteArray>
   void write(ByteArray& array, run_type run) { this->write(array, run.first, run.second); }
 
-  code_type encodeBasic(value_type value, size_type length)
+  code_type encodeBasic(value_type value, length_type length)
   {
     return value + this->sigma * (length - 1);
   }

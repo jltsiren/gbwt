@@ -75,11 +75,11 @@ loadVector<std::string>(std::vector<std::string>& data, std::istream& in)
 
 //------------------------------------------------------------------------------
 
-Run::Run(size_type alphabet_size) :
+Run::Run(value_type alphabet_size) :
   sigma(alphabet_size),
   run_continues(0)
 {
-  size_type max_code = std::numeric_limits<code_type>::max();
+  value_type max_code = std::numeric_limits<code_type>::max();
   if(this->sigma < max_code)
   {
     this->run_continues = (max_code + 1) / this->sigma;
