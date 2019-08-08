@@ -100,11 +100,11 @@ constexpr size_type BILLION      = 1000 * MILLION;
 
 constexpr node_type ENDMARKER    = 0;
 
-inline size_type invalid_node() { return ~(node_type)0; }
-inline size_type invalid_sequence() { return ~(size_type)0; }
-inline size_type invalid_offset() { return ~(size_type)0; }
-inline edge_type invalid_edge() { return edge_type(invalid_node(), invalid_offset()); }
-inline sample_type invalid_sample() { return sample_type(invalid_offset(), invalid_sequence()); }
+constexpr size_type invalid_node() { return ~(node_type)0; }
+constexpr size_type invalid_sequence() { return ~(size_type)0; }
+constexpr size_type invalid_offset() { return ~(size_type)0; }
+constexpr edge_type invalid_edge() { return edge_type(invalid_node(), invalid_offset()); }
+constexpr sample_type invalid_sample() { return sample_type(invalid_offset(), invalid_sequence()); }
 
 //------------------------------------------------------------------------------
 
@@ -154,7 +154,7 @@ struct Range
     return std::max(std::min(value, high), low);
   }
 
-  static range_type empty_range()
+  constexpr static range_type empty_range()
   {
     return range_type(1, 0);
   }
