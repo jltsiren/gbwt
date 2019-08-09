@@ -1,5 +1,6 @@
 /*
-  Copyright (c) 2019 Jouni Siren
+  Copyright (c) 2017, 2018, 2019 Jouni Siren
+  Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -78,7 +79,7 @@ public:
   */
 
   size_type size() const { return this->index.size(); }
-  bool empty() const { return (this->size() == 0); }
+  bool empty() const { return this->index.empty(); }
   size_type sequences() const { return this->index.sequences(); }
   size_type sigma() const { return this->index.sigma(); }
   size_type effective() const { return this->index.effective(); }
