@@ -352,8 +352,8 @@ generateQueries(const DynamicGBWT& index, size_type find_queries, size_type patt
   while(result.size() < find_queries && attempts < 10 * find_queries)
   {
     node_type node = index.toNode(rng() % (index.effective() - 1) + 1);
-    if(index.record(node).empty()) { attempts++; continue; }
-    edge_type position(node, rng() % index.record(node).size());
+    if(index.empty(node)) { attempts++; continue; }
+    edge_type position(node, rng() % index.nodeSize(node));
     vector_type sequence = index.extract(position, pattern_length);
     if(sequence.size() == pattern_length) { result.push_back(sequence); }
     attempts++;

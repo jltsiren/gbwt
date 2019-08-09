@@ -239,20 +239,6 @@ public:
   size_type nodeSize(node_type node) const { return this->record(node).size(); }
   bool empty(node_type node) const { return this->record(node).empty(); }
 
-  DynamicRecord& record(node_type node)
-  {
-    return this->bwt[this->toComp(node)];
-  }
-
-  const DynamicRecord& record(node_type node) const
-  {
-    return this->bwt[this->toComp(node)];
-  }
-
-  // Expensive, as the endmarker has to be decompressed.
-  // We do not cache the endmarker, as we expect to update it.
-  DecompressedRecord endmarker() const { return DecompressedRecord(this->record(ENDMARKER)); }
-
 //------------------------------------------------------------------------------
 
   /*
@@ -330,11 +316,9 @@ public:
 
 //------------------------------------------------------------------------------
 
-  // Change offset or alphabet size if the new values are beyond the current values.
-  void resize(size_type new_offset, size_type new_sigma);
-
-  // Change offset or alphabet size to remove unused nodes.
-  void resize();
+/*
+  Internal interface. No not use.
+*/
 
 private:
   void copy(const DynamicGBWT& source);
@@ -357,9 +341,30 @@ private:
 
   friend class GBWTBuilder;
 
-//------------------------------------------------------------------------------
+public:
+  DynamicRecord& record(node_type node)
+  {
+    return this->bwt[this->toComp(node)];
+  }
+
+  const DynamicRecord& record(node_type node) const
+  {
+    return this->bwt[this->toComp(node)];
+  }
+
+  // Expensive, as the endmarker has to be decompressed.
+  // We do not cache the endmarker, as we expect to update it.
+  DecompressedRecord endmarker() const { return DecompressedRecord(this->record(ENDMARKER)); }
+
+  // Change offset or alphabet size if the new values are beyond the current values.
+  void resize(size_type new_offset, size_type new_sigma);
+
+  // Change offset or alphabet size to remove unused nodes.
+  void resize();
 
 }; // class DynamicGBWT
+
+//------------------------------------------------------------------------------
 
 void printStatistics(const DynamicGBWT& gbwt, const std::string& name);
 

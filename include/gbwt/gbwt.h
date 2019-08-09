@@ -182,9 +182,6 @@ public:
   size_type nodeSize(node_type node) const { return this->record(node).size(); }
   bool empty(node_type node) const { return this->bwt.empty(this->toComp(node)); }
 
-  CompressedRecord record(node_type node) const;
-  const DecompressedRecord& endmarker() const { return this->endmarker_record; } // Faster than decompressing it.
-
 //------------------------------------------------------------------------------
 
   /*
@@ -268,10 +265,19 @@ public:
   // Decompress and cache the endmarker, because decompressing it is expensive.
   DecompressedRecord endmarker_record;
 
+//------------------------------------------------------------------------------
+
+/*
+  Internal interface. No not use.
+*/
+
 private:
   void copy(const GBWT& source);
-
   void cacheEndmarker();
+
+public:
+  CompressedRecord record(node_type node) const;
+  const DecompressedRecord& endmarker() const { return this->endmarker_record; }
 }; // class GBWT
 
 //------------------------------------------------------------------------------
