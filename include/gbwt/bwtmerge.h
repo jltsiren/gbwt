@@ -259,9 +259,15 @@ public:
     this->read();
   }
 
-  GapIterator(const GapIterator& source) :
-    array(source.array), pos(source.pos), data_pointer(source.data_pointer), value(source.value)
+  GapIterator(const GapIterator& source)
   {
+    this->copy(source);
+  }
+
+  GapIterator& operator=(const GapIterator& source)
+  {
+    if(this != &source) { this->copy(source); }
+    return *this;
   }
 
   // Iterator operations.
@@ -296,6 +302,14 @@ private:
     if(node_diff != 0) { this->value.second = 0; } // Node changed, set previous offset to 0.
     this->value.first += node_diff;
     this->value.second += ByteCode::read(this->array->data, this->data_pointer);
+  }
+
+  void copy(const GapIterator& source)
+  {
+    this->array = source.array;
+    this->pos = source.pos;
+    this->data_pointer = source.data_pointer;
+    this->value = source.value;
   }
 };  // class GapIterator
 

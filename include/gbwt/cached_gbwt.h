@@ -69,8 +69,6 @@ public:
   // Return the successor node of the cached node.
   size_type successor(size_type cache_offset, size_type i) const { return this->cached_records[cache_offset].successor(i); }
 
-  // FIXME LF, bdLF
-
 //------------------------------------------------------------------------------
 
   /*
