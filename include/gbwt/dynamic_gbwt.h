@@ -317,7 +317,7 @@ public:
 //------------------------------------------------------------------------------
 
 /*
-  Internal interface. No not use.
+  Internal interface. Do not use.
 */
 
 private:

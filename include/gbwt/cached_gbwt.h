@@ -1,6 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019 Jouni Siren
-  Copyright (c) 2017 Genome Research Ltd.
+  Copyright (c) 2019 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -23,73 +22,73 @@
   SOFTWARE.
 */
 
-#ifndef GBWT_GBWT_H
-#define GBWT_GBWT_H
+#ifndef GBWT_CACHED_GBWT_H
+#define GBWT_CACHED_GBWT_H
 
-#include <gbwt/algorithms.h>
-#include <gbwt/files.h>
-#include <gbwt/metadata.h>
+#include <gbwt/gbwt.h>
 
 namespace gbwt
 {
 
 /*
-  gbwt.h: Compressed GBWT structures for construction.
+  cached_gbwt.h: Record caching for compressed GBWT. Use a separate CachedGBWT object
+  for each thread, as the object is not thread-safe.
 */
 
 //------------------------------------------------------------------------------
 
-class GBWT
+class CachedGBWT
 {
 public:
-  typedef CompressedRecord::size_type size_type;
+  typedef GBWT::size_type size_type;
+
+  constexpr static size_type INITIAL_CAPACITY = 256;
+  constexpr static double    MAX_LOAD_FACTOR  = 0.77;
 
 //------------------------------------------------------------------------------
 
-  GBWT();
-  GBWT(const GBWT& source);
-  GBWT(GBWT&& source);
-  ~GBWT();
+  explicit CachedGBWT(const GBWT& gbwt_index);
+  ~CachedGBWT();
 
-  // Merge the sources, assuming that node ids do not overlap.
-  // Also merges the metadata if all indexes contain it.
-  explicit GBWT(const std::vector<GBWT>& sources);
+//------------------------------------------------------------------------------
 
-  void swap(GBWT& another);
-  GBWT& operator=(const GBWT& source);
-  GBWT& operator=(GBWT&& source);
+  /*
+    Cache interface. Primarily used for accessing the successors of a node.
+  */
 
-  size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
-  void load(std::istream& in);
+  size_type cacheSize() const { return this->cached_records.size(); }
+  size_type cacheCapacity() const { return this->cache_index.capacity(); }
+  void clearCache() const;
 
-  const static std::string EXTENSION; // .gbwt
+  // Insert the record into the cache if it is not already there. Return the cache offset of the record.
+  size_type findRecord(node_type node) const;
+
+  // Return the outdegree of the cached node.
+  size_type outdegree(size_type cache_offset) const { return this->cached_records[cache_offset].outdegree(); }
+
+  // Return the successor node of the cached node.
+  size_type successor(size_type cache_offset, size_type i) const { return this->cached_records[cache_offset].successor(i); }
+
+  // FIXME LF, bdLF
 
 //------------------------------------------------------------------------------
 
   /*
     Low-level interface: Statistics.
+
+    Note: These are simple wrappers.
   */
 
-  size_type size() const { return this->header.size; }
+  size_type size() const { return this->index.size(); }
   bool empty() const { return (this->size() == 0); }
-  size_type sequences() const { return this->header.sequences; }
-  size_type sigma() const { return this->header.alphabet_size; }
-  size_type effective() const { return this->header.alphabet_size - this->header.offset; }
+  size_type sequences() const { return this->index.sequences(); }
+  size_type sigma() const { return this->index.sigma(); }
+  size_type effective() const { return this->index.effective(); }
 
-  size_type runs() const; // Expensive.
-  size_type samples() const { return this->da_samples.size(); }
+  size_type runs() const { return this->index.runs(); } // Expensive, not cached.
+  size_type samples() const { return this->index.samples(); }
 
-  bool bidirectional() const { return this->header.get(GBWTHeader::FLAG_BIDIRECTIONAL); }
-
-//------------------------------------------------------------------------------
-
-  /*
-    Metadata interface.
-  */
-
-  bool hasMetadata() const { return this->header.get(GBWTHeader::FLAG_METADATA); }
-  void addMetadata() { this->header.set(GBWTHeader::FLAG_METADATA); }
-  void clearMetadata() { this->metadata.clear(); this->header.unset(GBWTHeader::FLAG_METADATA); };
+  bool bidirectional() const { return this->index.bidirectional(); }
 
 //------------------------------------------------------------------------------
 
@@ -103,6 +102,8 @@ public:
     extend   empty search state
     locate   invalid_sequence() or empty vector
     extract  empty vector
+
+    Note: These are all cached.
   */
 
   SearchState find(node_type node) const { return gbwt::find(*this, node); }
@@ -135,6 +136,8 @@ public:
   /*
     Bidirectional search interface. The queries check that the parameters are valid.
     On error or failed search, the return value is an empty bidirectional search state.
+
+    Note: These are cached.
   */
 
   BidirectionalState bdFind(node_type node) const { return gbwt::bdFind(*this, node); }
@@ -148,12 +151,12 @@ public:
   /*
     Low-level interface: Nodes. The interface assumes that node identifiers are valid,
     except in contains() / hasEdge(). This can be checked with contains().
+
+    Note: These are cached whenever they access records and simple wrappers otherwise.
+    Note: Calling record() invalidates references to other records.
   */
 
-  bool contains(node_type node) const
-  {
-    return ((node < this->sigma() && node > this->header.offset) || node == ENDMARKER);
-  }
+  bool contains(node_type node) const { return this->index.contains(node); }
 
   bool contains(edge_type position) const
   {
@@ -175,18 +178,20 @@ public:
     return this->record(from).outgoing;
   }
 
-  node_type firstNode() const { return this->header.offset + 1; }
-  comp_type toComp(node_type node) const { return (node == 0 ? node : node - this->header.offset); }
-  node_type toNode(comp_type comp) const { return (comp == 0 ? comp : comp + this->header.offset); }
+  node_type firstNode() const { return this->index.firstNode(); }
+  comp_type toComp(node_type node) const { return this->index.toComp(node); }
+  node_type toNode(comp_type comp) const { return this->index.toNode(comp); }
 
   size_type nodeSize(node_type node) const { return this->record(node).size(); }
-  bool empty(node_type node) const { return this->bwt.empty(this->toComp(node)); }
+  bool empty(node_type node) const { return this->index.empty(node); }
 
 //------------------------------------------------------------------------------
 
   /*
     Low-level interface: Navigation and searching. The interface assumes that node
     identifiers are valid. This can be checked with contains().
+
+    Note: These are cached.
   */
 
   // On error: invalid_edge().
@@ -238,32 +243,27 @@ public:
   /*
     Low-level interface: Sequences. The interface assumes that node identifiers are
     valid. This can be checked with contains().
+
+    Note: These are simple wrappers.
   */
 
   // Starting position of the sequence or invalid_edge() if something fails.
-  edge_type start(size_type sequence) const { return this->LF(ENDMARKER, sequence); }
+  edge_type start(size_type sequence) const { return this->index.start(sequence); }
 
   // Returns the sampled document identifier or invalid_sequence() if there is no sample.
-  size_type tryLocate(node_type node, size_type i) const
-  {
-    return this->da_samples.tryLocate(this->toComp(node), i);
-  }
+  size_type tryLocate(node_type node, size_type i) const { return this->index.tryLocate(node, i); }
 
   // Returns the sampled document identifier or invalid_sequence() if there is no sample.
-  size_type tryLocate(edge_type position) const
-  {
-    return this->da_samples.tryLocate(this->toComp(position.first), position.second);
-  }
+  size_type tryLocate(edge_type position) const { return this->index.tryLocate(position); }
 
 //------------------------------------------------------------------------------
 
-  GBWTHeader  header;
-  RecordArray bwt;
-  DASamples   da_samples;
-  Metadata    metadata;
+  const GBWT& index;
 
-  // Decompress and cache the endmarker, because decompressing it is expensive.
-  DecompressedRecord endmarker_record;
+  // Node node_in_cache[i].first is at cached_records[node_in_cache[i].second].
+  // Note: We want to update the cache in const member functions.
+  mutable std::vector<edge_type>        cache_index;
+  mutable std::vector<CompressedRecord> cached_records;
 
 //------------------------------------------------------------------------------
 
@@ -272,20 +272,19 @@ public:
 */
 
 private:
-  void copy(const GBWT& source);
-  void cacheEndmarker();
+  CachedGBWT(const CachedGBWT&) = delete;
+  CachedGBWT& operator=(const CachedGBWT&) = delete;
+
+  size_type findOffset(node_type node) const;
+  void rehash() const;
 
 public:
-  CompressedRecord record(node_type node) const;
-  const DecompressedRecord& endmarker() const { return this->endmarker_record; }
-}; // class GBWT
-
-//------------------------------------------------------------------------------
-
-void printStatistics(const GBWT& gbwt, const std::string& name);
+  const CompressedRecord& record(node_type node) const; // The reference may be invalid after accessing other records.
+  const DecompressedRecord& endmarker() const { return this->index.endmarker(); }
+}; // class CachedGBWT
 
 //------------------------------------------------------------------------------
 
 } // namespace gbwt
 
-#endif // GBWT_GBWT_H
+#endif // GBWT_CACHED_GBWT_H
