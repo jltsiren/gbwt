@@ -32,14 +32,15 @@ namespace gbwt
 // Numerical class constants.
 
 constexpr size_type CachedGBWT::INITIAL_CAPACITY;
+constexpr size_type CachedGBWT::SINGLE_CAPACITY;
 constexpr double CachedGBWT::MAX_LOAD_FACTOR;
 
 //------------------------------------------------------------------------------
 
-CachedGBWT::CachedGBWT(const GBWT& gbwt_index) :
-  index(gbwt_index), cache_index(INITIAL_CAPACITY, invalid_edge())
+CachedGBWT::CachedGBWT(const GBWT& gbwt_index, bool single_record) :
+  index(gbwt_index), cache_index((single_record ? SINGLE_CAPACITY : INITIAL_CAPACITY), invalid_edge())
 {
-  this->cached_records.reserve(INITIAL_CAPACITY);
+  this->cached_records.reserve((single_record ? SINGLE_CAPACITY : INITIAL_CAPACITY));
 }
 
 CachedGBWT::~CachedGBWT()
@@ -48,7 +49,8 @@ CachedGBWT::~CachedGBWT()
 
 //------------------------------------------------------------------------------
 
-void CachedGBWT::clearCache() const
+void
+CachedGBWT::clearCache() const
 {
   for (edge_type& cell : this->cache_index)
   {
@@ -57,9 +59,10 @@ void CachedGBWT::clearCache() const
   this->cached_records.clear();
 }
 
-size_type CachedGBWT::findRecord(node_type node) const
+size_type
+CachedGBWT::findRecord(node_type node) const
 {
-  size_type index_offset = this->findOffset(node);
+  size_type index_offset = this->indexOffset(node);
   if(this->cache_index[index_offset].first == node) { return this->cache_index[index_offset].second; }
 
   // Insert the new record into the cache. Rehash if needed.
@@ -70,10 +73,42 @@ size_type CachedGBWT::findRecord(node_type node) const
   return this->cacheSize() - 1;
 }
 
+SearchState
+CachedGBWT::cachedExtend(SearchState state, size_type cache_offset, size_type i) const
+{
+  if(state.empty()) { return SearchState(); }
+  node_type node = this->successor(cache_offset, i);
+  state.range = this->cached_records[cache_offset].LF(state.range, node);
+  state.node = node;
+  return state;
+}
+
+BidirectionalState
+CachedGBWT::cachedExtendForward(BidirectionalState state, size_type cache_offset, size_type i) const
+{
+  if(state.empty()) { return BidirectionalState(); }
+  size_type reverse_offset = 0;
+  node_type node = this->successor(cache_offset, i);
+  state.forward.range = this->cached_records[cache_offset].bdLF(state.forward.range, node, reverse_offset);
+  state.forward.node = node;
+  state.backward.range.first += reverse_offset;
+  state.backward.range.second = state.backward.range.first + state.forward.size() - 1;
+  return state;
+}
+
+BidirectionalState
+CachedGBWT::cachedExtendBackward(BidirectionalState state, size_type cache_offset, size_type i) const
+{
+  state.flip();
+  state = this->cachedExtendForward(state, cache_offset, i);
+  state.flip();
+  return state;
+}
+
 //------------------------------------------------------------------------------
 
 size_type
-CachedGBWT::findOffset(node_type node) const
+CachedGBWT::indexOffset(node_type node) const
 {
   size_type offset = wang_hash_64(node) & (this->cacheCapacity() - 1);
   for(size_type attempt = 0; attempt < this->cacheCapacity(); attempt++)
@@ -85,7 +120,7 @@ CachedGBWT::findOffset(node_type node) const
   }
 
   // This should not happen.
-  std::cerr << "CachedGBWT::findOffset(): Cannot find index offset for node " << node << std::endl;
+  std::cerr << "CachedGBWT::indexOffset(): Cannot find index offset for node " << node << std::endl;
   return invalid_offset();
 }
 
@@ -97,16 +132,9 @@ CachedGBWT::rehash() const
   for(size_type i = 0; i < old_cache_index.size(); i++)
   {
     if(old_cache_index[i].second >= this->cacheSize()) { continue; }
-    size_type offset = this->findOffset(old_cache_index[i].first);
+    size_type offset = this->indexOffset(old_cache_index[i].first);
     this->cache_index[offset] = old_cache_index[i];
   }
-}
-
-const CompressedRecord&
-CachedGBWT::record(node_type node) const
-{
-  size_type cache_offset = this->findRecord(node);
-  return this->cached_records[cache_offset];
 }
 
 //------------------------------------------------------------------------------

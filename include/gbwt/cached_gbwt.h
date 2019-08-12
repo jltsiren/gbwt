@@ -44,11 +44,13 @@ public:
   typedef GBWT::size_type size_type;
 
   constexpr static size_type INITIAL_CAPACITY = 256;
+  constexpr static size_type SINGLE_CAPACITY  = 2;
   constexpr static double    MAX_LOAD_FACTOR  = 0.77;
 
 //------------------------------------------------------------------------------
 
-  explicit CachedGBWT(const GBWT& gbwt_index);
+  // Set single_record = true to quickly cache a single record.
+  explicit CachedGBWT(const GBWT& gbwt_index, bool single_record = false);
   ~CachedGBWT();
 
 //------------------------------------------------------------------------------
@@ -67,8 +69,17 @@ public:
   // Return the outdegree of the cached node.
   size_type outdegree(size_type cache_offset) const { return this->cached_records[cache_offset].outdegree(); }
 
-  // Return the successor node of the cached node.
-  size_type successor(size_type cache_offset, size_type i) const { return this->cached_records[cache_offset].successor(i); }
+  // Return the i-th successor node of the cached node.
+  node_type successor(size_type cache_offset, size_type i) const { return this->cached_records[cache_offset].successor(i); }
+
+  // Extend the state forward to the i-th successor of the cached node (state.node).
+  SearchState cachedExtend(SearchState state, size_type cache_offset, size_type i) const;
+
+  // Extend the state forward to the i-th successor of the cached node (state.forward.node).
+  BidirectionalState cachedExtendForward(BidirectionalState state, size_type cache_offset, size_type i) const;
+
+  // Extend the state backward to the i-th successor of the cached node (state.backward.node).
+  BidirectionalState cachedExtendBackward(BidirectionalState state, size_type cache_offset, size_type i) const;
 
 //------------------------------------------------------------------------------
 
@@ -152,7 +163,6 @@ public:
     except in contains() / hasEdge(). This can be checked with contains().
 
     Note: These are cached whenever they access records and simple wrappers otherwise.
-    Note: Calling record() invalidates references to other records.
   */
 
   bool contains(node_type node) const { return this->index.contains(node); }
@@ -274,11 +284,13 @@ private:
   CachedGBWT(const CachedGBWT&) = delete;
   CachedGBWT& operator=(const CachedGBWT&) = delete;
 
-  size_type findOffset(node_type node) const;
+  size_type indexOffset(node_type node) const;
   void rehash() const;
 
 public:
-  const CompressedRecord& record(node_type node) const; // The reference may be invalid after accessing other records.
+  // The reference may be invalid after accessing other records.
+  const CompressedRecord& record(node_type node) const { return this->cached_records[this->findRecord(node)]; }
+
   const DecompressedRecord& endmarker() const { return this->index.endmarker(); }
 }; // class CachedGBWT
 
