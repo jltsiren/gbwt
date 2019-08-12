@@ -64,6 +64,7 @@ public:
   void clearCache() const;
 
   // Insert the record into the cache if it is not already there. Return the cache offset of the record.
+  // Note: This assumes that the node does exist. Use contains() to check.
   size_type findRecord(node_type node) const;
 
   // Return the outdegree of the cached node.
@@ -131,7 +132,7 @@ public:
   template<class Iterator>
   SearchState extend(SearchState state, Iterator begin, Iterator end) const { return gbwt::extend(*this, state, begin, end); }
 
-  size_type locate(node_type node, size_type i) const { return gbwt::locate(*this, range_type(node, i)); }
+  size_type locate(node_type node, size_type i) const { return gbwt::locate(*this, edge_type(node, i)); }
   size_type locate(edge_type position) const { return gbwt::locate(*this, position); }
 
   std::vector<size_type> locate(node_type node, range_type range) const { return this->locate(SearchState(node, range)); }

@@ -107,6 +107,68 @@ CachedGBWT::cachedExtendBackward(BidirectionalState state, size_type cache_offse
 
 //------------------------------------------------------------------------------
 
+// FIXME This should really have a common implementation with GBWT::locate(state).
+std::vector<size_type>
+CachedGBWT::locate(SearchState state) const
+{
+  std::vector<size_type> result;
+  if(!(this->contains(state))) { return result; }
+
+  // Initialize BWT positions for each offset in the range.
+  std::vector<edge_type> positions(state.size());
+  for(size_type i = state.range.first; i <= state.range.second; i++)
+  {
+    positions[i - state.range.first] = edge_type(state.node, i);
+  }
+
+  // Continue with LF() until samples have been found for all sequences.
+  while(!(positions.empty()))
+  {
+    size_type tail = 0;
+    node_type curr = invalid_node();
+    size_type cache_offset = invalid_offset();
+    sample_type sample;
+    edge_type LF_result;
+    range_type LF_range;
+
+    for(size_type i = 0; i < positions.size(); i++)
+    {
+      if(positions[i].first != curr)              // Node changed.
+      {
+        curr = positions[i].first; cache_offset = this->findRecord(curr);
+        sample = this->index.da_samples.nextSample(this->toComp(curr), positions[i].second);
+        LF_range.first = positions[i].second;
+        LF_result = this->cached_records[cache_offset].runLF(positions[i].second, LF_range.second);
+      }
+      if(sample.first < positions[i].second)      // Went past the sample.
+      {
+        sample = this->index.da_samples.nextSample(this->toComp(curr), positions[i].second);
+      }
+      if(sample.first > positions[i].second)      // Not sampled, also valid for invalid_sample().
+      {
+        if(positions[i].second > LF_range.second) // Went past the existing LF() result.
+        {
+          LF_range.first = positions[i].second;
+          LF_result = this->cached_records[cache_offset].runLF(positions[i].second, LF_range.second);
+        }
+        positions[tail] = edge_type(LF_result.first, LF_result.second + positions[i].second - LF_range.first);
+        tail++;
+      }
+      else                                        // Found a sample.
+      {
+        result.push_back(sample.second);
+      }
+    }
+    positions.resize(tail);
+    sequentialSort(positions.begin(), positions.end());
+  }
+
+  removeDuplicates(result, false);
+  return result;
+}
+
+//------------------------------------------------------------------------------
+
 size_type
 CachedGBWT::indexOffset(node_type node) const
 {

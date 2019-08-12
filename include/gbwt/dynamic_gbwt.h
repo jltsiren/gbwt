@@ -177,7 +177,7 @@ public:
   template<class Iterator>
   SearchState extend(SearchState state, Iterator begin, Iterator end) const { return gbwt::extend(*this, state, begin, end); }
 
-  size_type locate(node_type node, size_type i) const { return gbwt::locate(*this, range_type(node, i)); }
+  size_type locate(node_type node, size_type i) const { return gbwt::locate(*this, edge_type(node, i)); }
   size_type locate(edge_type position) const { return gbwt::locate(*this, position); }
 
   std::vector<size_type> locate(node_type node, range_type range) const { return this->locate(SearchState(node, range)); }
