@@ -156,7 +156,8 @@ struct Range
     return std::max(std::min(value, high), low);
   }
 
-  constexpr static range_type empty_range()
+  // FIXME Change to constexpr when moving to C++14.
+  static range_type empty_range()
   {
     return range_type(1, 0);
   }
