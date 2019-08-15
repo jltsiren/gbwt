@@ -103,8 +103,10 @@ constexpr node_type ENDMARKER    = 0;
 constexpr size_type invalid_node() { return ~(node_type)0; }
 constexpr size_type invalid_sequence() { return ~(size_type)0; }
 constexpr size_type invalid_offset() { return ~(size_type)0; }
-constexpr edge_type invalid_edge() { return edge_type(invalid_node(), invalid_offset()); }
-constexpr sample_type invalid_sample() { return sample_type(invalid_offset(), invalid_sequence()); }
+
+// FIXME Replace these with constexpr after moving to C++14.
+inline edge_type invalid_edge() { return edge_type(invalid_node(), invalid_offset()); }
+inline sample_type invalid_sample() { return sample_type(invalid_offset(), invalid_sequence()); }
 
 //------------------------------------------------------------------------------
 
