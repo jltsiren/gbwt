@@ -69,7 +69,7 @@ public:
 
   size_type cacheSize() const { return this->cached_records.size(); }
   size_type cacheCapacity() const { return this->cache_index.capacity(); }
-  void clearCache() const;
+  void clearCache();
 
   // Insert the record into the cache if it is not already there. Return the cache offset of the record.
   // Note: This assumes that the node does exist. Use contains() to check.

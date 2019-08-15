@@ -104,7 +104,7 @@ CachedGBWT::CachedGBWT(const GBWT& gbwt_index, bool single_record) :
 //------------------------------------------------------------------------------
 
 void
-CachedGBWT::clearCache() const
+CachedGBWT::clearCache()
 {
   for (edge_type& cell : this->cache_index)
   {
