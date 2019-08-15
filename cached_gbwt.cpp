@@ -37,14 +37,68 @@ constexpr double CachedGBWT::MAX_LOAD_FACTOR;
 
 //------------------------------------------------------------------------------
 
-CachedGBWT::CachedGBWT(const GBWT& gbwt_index, bool single_record) :
-  index(gbwt_index), cache_index((single_record ? SINGLE_CAPACITY : INITIAL_CAPACITY), invalid_edge())
+CachedGBWT::CachedGBWT()
 {
-  this->cached_records.reserve((single_record ? SINGLE_CAPACITY : INITIAL_CAPACITY));
+}
+
+CachedGBWT::CachedGBWT(const CachedGBWT& source)
+{
+  this->copy(source);
+}
+
+CachedGBWT::CachedGBWT(CachedGBWT&& source)
+{
+  *this = std::move(source);
+}
+
+void
+CachedGBWT::swap(CachedGBWT& another)
+{
+  if(this != &another)
+  {
+    std::swap(this->index, another.index);
+    this->cache_index.swap(another.cache_index);
+    this->cached_records.swap(another.cached_records);
+  }
+}
+
+CachedGBWT&
+CachedGBWT::operator=(const CachedGBWT& source)
+{
+  if(this != &source) { this->copy(source); }
+  return *this;
+}
+
+CachedGBWT&
+CachedGBWT::operator=(CachedGBWT&& source)
+{
+  if(this != &source)
+  {
+    this->index = std::move(source.index);
+    this->cache_index = std::move(source.cache_index);
+    this->cached_records = std::move(source.cached_records);
+  }
+  return *this;
+}
+
+void
+CachedGBWT::copy(const CachedGBWT& source)
+{
+  this->index = source.index;
+  this->cache_index = source.cache_index;
+  this->cached_records = source.cached_records;
 }
 
 CachedGBWT::~CachedGBWT()
 {
+}
+
+//------------------------------------------------------------------------------
+
+CachedGBWT::CachedGBWT(const GBWT& gbwt_index, bool single_record) :
+  index(&gbwt_index), cache_index((single_record ? SINGLE_CAPACITY : INITIAL_CAPACITY), invalid_edge())
+{
+  this->cached_records.reserve((single_record ? SINGLE_CAPACITY : INITIAL_CAPACITY));
 }
 
 //------------------------------------------------------------------------------
@@ -67,7 +121,7 @@ CachedGBWT::findRecord(node_type node) const
 
   // Insert the new record into the cache. Rehash if needed.
   this->cache_index[index_offset] = edge_type(node, this->cacheSize());
-  this->cached_records.emplace_back(this->index.record(node));
+  this->cached_records.emplace_back(this->index->record(node));
   if(this->cacheSize() > MAX_LOAD_FACTOR * this->cacheCapacity()) { this->rehash(); }
 
   return this->cacheSize() - 1;
@@ -136,13 +190,13 @@ CachedGBWT::locate(SearchState state) const
       if(positions[i].first != curr)              // Node changed.
       {
         curr = positions[i].first; cache_offset = this->findRecord(curr);
-        sample = this->index.da_samples.nextSample(this->toComp(curr), positions[i].second);
+        sample = this->index->da_samples.nextSample(this->toComp(curr), positions[i].second);
         LF_range.first = positions[i].second;
         LF_result = this->cached_records[cache_offset].runLF(positions[i].second, LF_range.second);
       }
       if(sample.first < positions[i].second)      // Went past the sample.
       {
-        sample = this->index.da_samples.nextSample(this->toComp(curr), positions[i].second);
+        sample = this->index->da_samples.nextSample(this->toComp(curr), positions[i].second);
       }
       if(sample.first > positions[i].second)      // Not sampled, also valid for invalid_sample().
       {

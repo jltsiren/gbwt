@@ -49,9 +49,17 @@ public:
 
 //------------------------------------------------------------------------------
 
+  CachedGBWT();
+  CachedGBWT(const CachedGBWT& source);
+  CachedGBWT(CachedGBWT&& source);
+  ~CachedGBWT();
+
   // Set single_record = true to quickly cache a single record.
   explicit CachedGBWT(const GBWT& gbwt_index, bool single_record = false);
-  ~CachedGBWT();
+
+  void swap(CachedGBWT& another);
+  CachedGBWT& operator=(const CachedGBWT& source);
+  CachedGBWT& operator=(CachedGBWT&& source);
 
 //------------------------------------------------------------------------------
 
@@ -90,16 +98,16 @@ public:
     Note: These are simple wrappers.
   */
 
-  size_type size() const { return this->index.size(); }
-  bool empty() const { return this->index.empty(); }
-  size_type sequences() const { return this->index.sequences(); }
-  size_type sigma() const { return this->index.sigma(); }
-  size_type effective() const { return this->index.effective(); }
+  size_type size() const { return this->index->size(); }
+  bool empty() const { return this->index->empty(); }
+  size_type sequences() const { return this->index->sequences(); }
+  size_type sigma() const { return this->index->sigma(); }
+  size_type effective() const { return this->index->effective(); }
 
-  size_type runs() const { return this->index.runs(); } // Expensive, not cached.
-  size_type samples() const { return this->index.samples(); }
+  size_type runs() const { return this->index->runs(); } // Expensive, not cached.
+  size_type samples() const { return this->index->samples(); }
 
-  bool bidirectional() const { return this->index.bidirectional(); }
+  bool bidirectional() const { return this->index->bidirectional(); }
 
 //------------------------------------------------------------------------------
 
@@ -166,7 +174,7 @@ public:
     Note: These are cached whenever they access records and simple wrappers otherwise.
   */
 
-  bool contains(node_type node) const { return this->index.contains(node); }
+  bool contains(node_type node) const { return this->index->contains(node); }
 
   bool contains(edge_type position) const
   {
@@ -188,12 +196,12 @@ public:
     return this->record(from).outgoing;
   }
 
-  node_type firstNode() const { return this->index.firstNode(); }
-  comp_type toComp(node_type node) const { return this->index.toComp(node); }
-  node_type toNode(comp_type comp) const { return this->index.toNode(comp); }
+  node_type firstNode() const { return this->index->firstNode(); }
+  comp_type toComp(node_type node) const { return this->index->toComp(node); }
+  node_type toNode(comp_type comp) const { return this->index->toNode(comp); }
 
   size_type nodeSize(node_type node) const { return this->record(node).size(); }
-  bool empty(node_type node) const { return this->index.empty(node); }
+  bool empty(node_type node) const { return this->index->empty(node); }
 
 //------------------------------------------------------------------------------
 
@@ -258,17 +266,17 @@ public:
   */
 
   // Starting position of the sequence or invalid_edge() if something fails.
-  edge_type start(size_type sequence) const { return this->index.start(sequence); }
+  edge_type start(size_type sequence) const { return this->index->start(sequence); }
 
   // Returns the sampled document identifier or invalid_sequence() if there is no sample.
-  size_type tryLocate(node_type node, size_type i) const { return this->index.tryLocate(node, i); }
+  size_type tryLocate(node_type node, size_type i) const { return this->index->tryLocate(node, i); }
 
   // Returns the sampled document identifier or invalid_sequence() if there is no sample.
-  size_type tryLocate(edge_type position) const { return this->index.tryLocate(position); }
+  size_type tryLocate(edge_type position) const { return this->index->tryLocate(position); }
 
 //------------------------------------------------------------------------------
 
-  const GBWT& index;
+  const GBWT* index;
 
   // Node node_in_cache[i].first is at cached_records[node_in_cache[i].second].
   // Note: We want to update the cache in const member functions.
@@ -282,9 +290,7 @@ public:
 */
 
 private:
-  CachedGBWT(const CachedGBWT&) = delete;
-  CachedGBWT& operator=(const CachedGBWT&) = delete;
-
+  void copy(const CachedGBWT& source);
   size_type indexOffset(node_type node) const;
   void rehash() const;
 
@@ -292,7 +298,7 @@ public:
   // The reference may be invalid after accessing other records.
   const CompressedRecord& record(node_type node) const { return this->cached_records[this->findRecord(node)]; }
 
-  const DecompressedRecord& endmarker() const { return this->index.endmarker(); }
+  const DecompressedRecord& endmarker() const { return this->index->endmarker(); }
 }; // class CachedGBWT
 
 //------------------------------------------------------------------------------
