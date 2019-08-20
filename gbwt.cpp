@@ -24,6 +24,8 @@
 */
 
 #include <gbwt/gbwt.h>
+
+#include <gbwt/dynamic_gbwt.h>
 #include <gbwt/internal.h>
 
 namespace gbwt
@@ -46,6 +48,14 @@ GBWT::GBWT(const GBWT& source)
   this->copy(source);
 }
 
+GBWT::GBWT(const DynamicGBWT& source) :
+  header(source.header),
+  bwt(source.bwt), da_samples(source.bwt),
+  metadata(source.metadata)
+{
+  this->cacheEndmarker();
+}
+
 GBWT::GBWT(GBWT&& source)
 {
   *this = std::move(source);
@@ -64,7 +74,7 @@ GBWT::swap(GBWT& another)
     this->bwt.swap(another.bwt);
     this->da_samples.swap(another.da_samples);
     this->metadata.swap(another.metadata);
-    this->cacheEndmarker(); another.cacheEndmarker();
+    this->endmarker_record.swap(another.endmarker_record);
   }
 }
 
@@ -72,6 +82,22 @@ GBWT&
 GBWT::operator=(const GBWT& source)
 {
   if(this != &source) { this->copy(source); }
+  return *this;
+}
+
+GBWT&
+GBWT::operator=(const DynamicGBWT& source)
+{
+  // Clear the data to save memory.
+  this->bwt = RecordArray();
+  this->da_samples = DASamples();
+
+  this->header = source.header;
+  this->bwt = RecordArray(source.bwt);
+  this->da_samples = DASamples(source.bwt);
+  this->metadata = source.metadata;
+  this->cacheEndmarker();
+
   return *this;
 }
 
@@ -84,7 +110,7 @@ GBWT::operator=(GBWT&& source)
     this->bwt = std::move(source.bwt);
     this->da_samples = std::move(source.da_samples);
     this->metadata = std::move(source.metadata);
-    this->cacheEndmarker();
+    this->endmarker_record = std::move(source.endmarker_record);
   }
   return *this;
 }
@@ -133,7 +159,7 @@ GBWT::copy(const GBWT& source)
   this->bwt = source.bwt;
   this->da_samples = source.da_samples;
   this->metadata = source.metadata;
-  this->cacheEndmarker();
+  this->endmarker_record = source.endmarker_record;
 }
 
 //------------------------------------------------------------------------------

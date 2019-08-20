@@ -39,6 +39,9 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
+// Forward declaration.
+class DynamicGBWT;
+
 class GBWT
 {
 public:
@@ -48,6 +51,7 @@ public:
 
   GBWT();
   GBWT(const GBWT& source);
+  GBWT(const DynamicGBWT&);
   GBWT(GBWT&& source);
   ~GBWT();
 
@@ -57,6 +61,7 @@ public:
 
   void swap(GBWT& another);
   GBWT& operator=(const GBWT& source);
+  GBWT& operator=(const DynamicGBWT& source);
   GBWT& operator=(GBWT&& source);
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;

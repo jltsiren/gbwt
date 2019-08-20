@@ -82,13 +82,7 @@ buildGBWT(const std::vector<vector_type>& paths)
   for(auto& path : paths) { builder.insert(path, true); }
   builder.finish();
 
-  std::string filename = TempFile::getName("gbwt");
-  sdsl::store_to_file(builder.index, filename);
-  GBWT gbwt_index;
-  sdsl::load_from_file(gbwt_index, filename);
-  TempFile::remove(filename);
-
-  return gbwt_index;
+  return GBWT(builder.index);
 }
 
 // Build a bidirectional GBWT with three paths including a duplicate.

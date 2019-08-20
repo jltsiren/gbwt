@@ -592,6 +592,20 @@ DecompressedRecord::DecompressedRecord() :
 {
 }
 
+DecompressedRecord::DecompressedRecord(const DecompressedRecord& source)
+{
+  this->copy(source);
+}
+
+DecompressedRecord::DecompressedRecord(DecompressedRecord&& source)
+{
+  *this = std::move(source);
+}
+
+DecompressedRecord::~DecompressedRecord()
+{
+}
+
 DecompressedRecord::DecompressedRecord(const DynamicRecord& source) :
   outgoing(source.outgoing), after(source.outgoing), body()
 {
@@ -618,6 +632,44 @@ DecompressedRecord::DecompressedRecord(const CompressedRecord& source) :
       this->after[iter->first].second++;
     }
   }
+}
+
+void
+DecompressedRecord::swap(DecompressedRecord& another)
+{
+  if(this != &another)
+  {
+    this->outgoing.swap(another.outgoing);
+    this->after.swap(another.after);
+    this->body.swap(another.body);
+  }
+}
+
+DecompressedRecord&
+DecompressedRecord::operator=(const DecompressedRecord& source)
+{
+  if(this != &source) { this->copy(source); }
+  return *this;
+}
+
+DecompressedRecord&
+DecompressedRecord::operator=(DecompressedRecord&& source)
+{
+  if(this != &source)
+  {
+    this->outgoing = std::move(source.outgoing);
+    this->after = std::move(source.after);
+    this->body = std::move(source.body);
+  }
+  return *this;
+}
+
+void
+DecompressedRecord::copy(const DecompressedRecord& source)
+{
+  this->outgoing = source.outgoing;
+  this->after = source.after;
+  this->body = source.body;
 }
 
 size_type

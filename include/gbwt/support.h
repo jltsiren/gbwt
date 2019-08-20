@@ -259,8 +259,16 @@ struct DecompressedRecord
   std::vector<edge_type> body;
 
   DecompressedRecord();
+  DecompressedRecord(const DecompressedRecord& source);
+  DecompressedRecord(DecompressedRecord&& source);
+  ~DecompressedRecord();
+
   explicit DecompressedRecord(const DynamicRecord& source);
   explicit DecompressedRecord(const CompressedRecord& source);
+
+  void swap(DecompressedRecord& another);
+  DecompressedRecord& operator=(const DecompressedRecord& source);
+  DecompressedRecord& operator=(DecompressedRecord&& source);
 
   size_type size() const { return this->body.size(); }
   bool empty() const { return (this->size() == 0); }
@@ -285,6 +293,9 @@ struct DecompressedRecord
   node_type successor(rank_type outrank) const { return this->outgoing[outrank].first; }
   size_type offset(rank_type outrank) const { return this->outgoing[outrank].second; }
   size_type offsetAfter(rank_type outrank) const { return this->after[outrank].second; }
+
+private:
+  void copy(const DecompressedRecord& source);
 };
 
 //------------------------------------------------------------------------------
