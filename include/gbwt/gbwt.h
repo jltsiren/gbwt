@@ -51,7 +51,7 @@ public:
 
   GBWT();
   GBWT(const GBWT& source);
-  GBWT(const DynamicGBWT&);
+  GBWT(const DynamicGBWT& source);
   GBWT(GBWT&& source);
   ~GBWT();
 
