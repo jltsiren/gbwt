@@ -34,7 +34,7 @@ ifeq ($(shell uname -s),Darwin)
 endif
 
 OTHER_FLAGS=$(PARALLEL_FLAGS)
-CXX_FLAGS=$(MY_CXX_FLAGS) $(OTHER_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(INC_DIR) -I$(GBWT_DIR)/include
+CXX_FLAGS=$(MY_CXX_FLAGS) $(OTHER_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(GBWT_DIR)/include -I$(INC_DIR)
 SOURCES=$(wildcard *.cpp)
 OBJS=$(SOURCES:.cpp=.o)
 PROGRAMS=test_bwtmerge test_metadata test_queries test_support test_variants

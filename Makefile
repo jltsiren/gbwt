@@ -32,7 +32,7 @@ endif
 
 OTHER_FLAGS=$(PARALLEL_FLAGS)
 
-CXX_FLAGS=$(MY_CXX_FLAGS) $(OTHER_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(INC_DIR) -Iinclude
+CXX_FLAGS=$(MY_CXX_FLAGS) $(OTHER_FLAGS) $(MY_CXX_OPT_FLAGS) -Iinclude -I$(INC_DIR)
 LIBOBJS=algorithms.o bwtmerge.o cached_gbwt.o dynamic_gbwt.o files.o gbwt.o internal.o metadata.o support.o utils.o variants.o
 SOURCES=$(wildcard *.cpp)
 HEADERS=$(wildcard include/gbwt/*.h)
