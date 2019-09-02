@@ -41,22 +41,22 @@ PROGRAMS=test_bwtmerge test_metadata test_queries test_support test_variants
 
 all:$(PROGRAMS)
 
-%.o:%.cpp $(LIBRARY)
+%.o:%.cpp
 	$(MY_CXX) $(CXX_FLAGS) -c $<
 
-test_bwtmerge:test_bwtmerge.o $(LIBRARY)
+test_bwtmerge:test_bwtmerge.o
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
-test_metadata:test_metadata.o $(LIBRARY)
+test_metadata:test_metadata.o
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
-test_queries:test_queries.o $(LIBRARY)
+test_queries:test_queries.o
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
-test_support:test_support.o $(LIBRARY)
+test_support:test_support.o
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
-test_variants:test_variants.o $(LIBRARY)
+test_variants:test_variants.o
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 test:$(PROGRAMS)
