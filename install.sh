@@ -5,7 +5,8 @@
 # logical CPU cores unless specified otherwise.
 
 GBWT_DIR=$(pwd)
-INCLUDE_DIR=include/gbwt
+INCLUDE_DIR=include
+INCLUDE=gbwt
 LIBRARY_DIR=lib
 LIBRARY=libgbwt.a
 
@@ -59,7 +60,7 @@ if [ $? != 0 ]; then
 fi
 
 # Install GBWT.
-cp -R "${INCLUDE_DIR}/" "${PREFIX}/${INCLUDE_DIR}" 2> /dev/null
+cp -R "${INCLUDE_DIR}/${INCLUDE}" "${PREFIX}/${INCLUDE_DIR}" 2> /dev/null
 if [ $? != 0 ]; then
 	echo "Error: Could not install the headers."
 	exit 1
