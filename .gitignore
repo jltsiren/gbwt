@@ -22,3 +22,12 @@ metadata
 
 # Mac
 .DS_Store
+
+# emacs
+*~
+
+# vim
+\#*
+
+# cmake
+build
