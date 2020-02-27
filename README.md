@@ -32,10 +32,8 @@ GBWT is compiled with `-DNDEBUG` by default. Using this option is highly recomme
 ## Citing GBWT
 
 Jouni Sirén, Erik Garrison, Adam M. Novak, Benedict Paten, and Richard Durbin: **Haplotype-aware graph indexes**.
-Proc. WABI 2018, LIPIcs 113, pp. 4:1-4:13, Helsinki, Finland, August 20-22, 2018.
-DOI: [10.4230/LIPIcs.WABI.2018.4](https://doi.org/10.4230/LIPIcs.WABI.2018.4)
-
-An extended version of the paper will appear in Bioinformatics.
+Bioinformatics 36(2):400-407, 2020.
+DOI: [10.1093/bioinformatics/btz575](https://doi.org/10.1093/bioinformatics/btz575)
 
 ## Other references
 
