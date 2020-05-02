@@ -229,7 +229,7 @@ CachedGBWT::indexOffset(node_type node) const
   size_type offset = wang_hash_64(node) & (this->cacheCapacity() - 1);
   for(size_type attempt = 0; attempt < this->cacheCapacity(); attempt++)
   {
-    if(this->cache_index[offset].first >= this->cacheSize() || this->cache_index[offset].first == node) { return offset; }
+    if(this->cache_index[offset].first == node || this->cache_index[offset].second >= this->cacheSize()) { return offset; }
 
     // Quadratic probing with triangular numbers.
     offset = (offset + attempt + 1) & (this->cacheCapacity() - 1);

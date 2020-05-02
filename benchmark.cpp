@@ -28,6 +28,7 @@
 #include <string>
 #include <unistd.h>
 
+#include <gbwt/cached_gbwt.h>
 #include <gbwt/dynamic_gbwt.h>
 
 using namespace gbwt;

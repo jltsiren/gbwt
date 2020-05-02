@@ -45,28 +45,28 @@ OBSOLETE=prepare_text prepare_text.o metadata
 all:$(LIBRARY) $(PROGRAMS)
 
 %.o:%.cpp $(HEADERS)
-	$(MY_CXX) $(CXX_FLAGS) -c $<
+	$(MY_CXX) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -c $<
 
 $(LIBRARY):$(LIBOBJS)
 	ar rcs $@ $(LIBOBJS)
 
 build_gbwt:build_gbwt.o $(LIBRARY)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 merge_gbwt:merge_gbwt.o $(LIBRARY)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 benchmark:benchmark.o $(LIBRARY)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 metadata_tool:metadata_tool.o $(LIBRARY)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 remove_seq:remove_seq.o $(LIBRARY)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 test:$(LIBRARY)
-	cd tests && make test
+	cd tests && $(MAKE) test
 
 clean:
 	rm -f $(PROGRAMS) $(OBJS) $(LIBRARY) $(OBSOLETE)
