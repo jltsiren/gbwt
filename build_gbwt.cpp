@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2019 Jouni Siren
+  Copyright (c) 2018, 2019, 2020 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -61,13 +61,13 @@ main(int argc, char** argv)
   if(argc < 2) { printUsage(); }
 
   size_type batch_size = DynamicGBWT::INSERT_BATCH_SIZE / MILLION, sample_interval = DynamicGBWT::SAMPLE_INTERVAL;
-  bool verify_index = false, both_orientations = false, build_index = true;
+  bool verify_index = false, both_orientations = false, build_index = true, build_empty = false;
   bool build_from_parse = false, skip_overlaps = false, check_overlaps = false;
   std::string index_base, output_base;
   std::set<std::string> phasing_files;
   std::vector<std::string> input_files;
   int c = 0;
-  while((c = getopt(argc, argv, "b:cfF:i:lL:o:pP:rs:Sv")) != -1)
+  while((c = getopt(argc, argv, "b:cefF:i:lL:o:pP:rs:Sv")) != -1)
   {
     switch(c)
     {
@@ -75,6 +75,8 @@ main(int argc, char** argv)
       batch_size = std::stoul(optarg); break;
     case 'c':
       check_overlaps = true; break;
+    case 'e':
+      build_empty = true; break;
     case 'f':
       both_orientations = false; break;
     case 'F':
@@ -124,6 +126,29 @@ main(int argc, char** argv)
   {
     std::cerr << "build_gbwt: Index can only be loaded for verification" << std::endl;
     std::exit(EXIT_FAILURE);
+  }
+  if(build_empty)
+  {
+    if(!(index_base.empty()))
+    {
+      std::cerr << "build_gbwt: Cannot load an index when building an empty GBWT" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if(output_base.empty())
+    {
+      std::cerr << "build_gbwt: No output file specified for empty GBWT" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if(build_from_parse)
+    {
+      std::cerr << "build_gbwt: Cannot build empty GBWT from a parsed VCF file" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    if(verify_index)
+    {
+      std::cerr << "build_gbwt: Cannot verify an empty GBWT" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
   }
   std::string gbwt_name = output_base + DynamicGBWT::EXTENSION;
 
@@ -179,8 +204,13 @@ main(int argc, char** argv)
     std::set<size_type> samples;
     std::set<range_type> haplotypes;
     std::vector<std::string> sample_names, contig_names;
+    if(build_empty)
+    {
+      std::cout << "Building an empty GBWT" << std::endl;
+    }
     for(const std::string& input_base : input_files)
     {
+      if(build_empty) { continue; }
       printHeader("Input name"); std::cout << input_base << std::endl;
       if(build_from_parse)
       {
@@ -345,6 +375,7 @@ printUsage(int exit_code)
   std::cerr << "Usage: build_gbwt [options] input1 [input2 ...]" << std::endl;
   std::cerr << "  -b N  Insert in batches of N million nodes (default: " << (DynamicGBWT::INSERT_BATCH_SIZE / MILLION) << ")" << std::endl;
   std::cerr << "  -c    Check for overlapping variants in haplotypes (use with -p)" << std::endl;
+  std::cerr << "  -e    Build an empty GBWT (the input will not be read)" << std::endl;
   std::cerr << "  -f    Index the sequences only in forward orientation (default)" << std::endl;
   std::cerr << "  -F X  Read a list of input files from X, one file per line (no input1 needed; may repeat)" << std::endl;
   std::cerr << "  -i X  Insert the sequences into an existing index with base name X" << std::endl;

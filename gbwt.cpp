@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2019 Jouni Siren
+  Copyright (c) 2017, 2019, 2020 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -239,11 +239,12 @@ GBWT::GBWT(const std::vector<GBWT>& sources)
     this->da_samples = DASamples(sample_sources, origins, record_offsets, sequence_counts);
   }
 
-  // Merge the metadata.
+  // Merge the metadata from non-empty sources.
   {
     bool has_metadata = false, all_metadata = true;
     for(size_type i = 0; i < sources.size(); i++)
     {
+      if(sources[i].empty()) { continue; }
       has_metadata |= sources[i].hasMetadata();
       all_metadata &= sources[i].hasMetadata();
     }
@@ -251,8 +252,13 @@ GBWT::GBWT(const std::vector<GBWT>& sources)
     {
       if(all_metadata)
       {
-        std::vector<const Metadata*> source_metadata(sources.size());
-        for(size_type i = 0; i < sources.size(); i++) { source_metadata[i] = &(sources[i].metadata); }
+        std::vector<const Metadata*> source_metadata;
+        source_metadata.reserve(sources.size());
+        for(size_type i = 0; i < sources.size(); i++)
+        {
+          if(sources[i].empty()) { continue; }
+          source_metadata.push_back(&(sources[i].metadata));
+        }
         this->metadata = Metadata(source_metadata, true, false); // Same samples, different contigs.
         this->addMetadata();
       }

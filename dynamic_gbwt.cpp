@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -976,7 +976,7 @@ DynamicGBWT::remove(const std::vector<size_type>& seq_ids, size_type chunk_size)
   this->resize();
   if(Verbosity::level >= Verbosity::FULL)
   {
-    std::cerr << "DynamicGBWT::merge(): Rebuilding the edges" << std::endl;
+    std::cerr << "DynamicGBWT::remove(): Rebuilding the edges" << std::endl;
   }
   this->rebuildIncoming();
   this->rebuildOutgoing();
@@ -1001,8 +1001,21 @@ DynamicGBWT::remove(size_type seq_id, size_type chunk_size)
 
 template<class GBWTType>
 void
-mergeMetadata(DynamicGBWT& index, const GBWTType& source)
+mergeMetadata(DynamicGBWT& index, const GBWTType& source, bool index_was_empty)
 {
+  // One of the GBWTs is empty.
+  if(source.empty()) { return; }
+  if(index_was_empty)
+  {
+    if(source.hasMetadata())
+    {
+      index.addMetadata();
+      index.metadata = source.metadata;
+    }
+    return;
+  }
+
+  // Non-empty GBWTs.
   if(index.hasMetadata() && source.hasMetadata())
   {
     index.metadata.merge(source.metadata, false, true); // Different samples, same contigs.
@@ -1030,6 +1043,7 @@ DynamicGBWT::merge(const GBWT& source, size_type batch_size, size_type sample_in
     }
     return;
   }
+  bool index_was_empty = this->empty();
 
   // The merged index is bidirectional only if both indexes are bidirectional.
   if(!(source.bidirectional())) { this->header.unset(GBWTHeader::FLAG_BIDIRECTIONAL); }
@@ -1068,7 +1082,7 @@ DynamicGBWT::merge(const GBWT& source, size_type batch_size, size_type sample_in
   this->recode();
 
   // Merge the metadata.
-  mergeMetadata(*this, source);
+  mergeMetadata(*this, source, index_was_empty);
 
   if(Verbosity::level >= Verbosity::BASIC)
   {
@@ -1241,6 +1255,7 @@ DynamicGBWT::merge(const DynamicGBWT& source, const MergeParameters& parameters)
     }
     return;
   }
+  bool index_was_empty = this->empty();
 
   // The merged index is bidirectional only if both indexes are bidirectional.
   if(!(source.bidirectional())) { this->header.unset(GBWTHeader::FLAG_BIDIRECTIONAL); }
@@ -1298,7 +1313,7 @@ DynamicGBWT::merge(const DynamicGBWT& source, const MergeParameters& parameters)
   this->rebuildOutgoing();
 
   // Merge the metadata.
-  mergeMetadata(*this, source);
+  mergeMetadata(*this, source, index_was_empty);
 
   if(Verbosity::level >= Verbosity::BASIC)
   {
