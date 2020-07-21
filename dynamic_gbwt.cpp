@@ -26,6 +26,9 @@
 #include <gbwt/dynamic_gbwt.h>
 #include <gbwt/bwtmerge.h>
 
+#include <memory>
+#include <unordered_map>
+
 namespace gbwt
 {
 
@@ -400,7 +403,8 @@ swapBody(DynamicRecord& record, RunMerger& merger)
 */
 
 void
-updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, size_type iteration, size_type sample_interval)
+updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, size_type iteration, size_type sample_interval,
+  std::unique_ptr<std::unordered_map<node_type, size_type>>& endmarker_edges)
 {
   for(size_type i = 0; i < seqs.size(); )
   {
@@ -413,13 +417,31 @@ updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, size_type iteratio
     size_type insert_count = 0;
     while(i < seqs.size() && seqs[i].curr == curr)
     {
-      rank_type outrank = current.edgeToLinear(seqs[i].next);
-      if(outrank >= current.outdegree())  // Add edge (curr, next) if it does not exist.
+      // Determine the edge to the next node or add it if it does not exist.
+      rank_type outrank = 0;
+      if(curr == ENDMARKER)
       {
-        current.outgoing.push_back(edge_type(seqs[i].next, 0));
-        new_body.addEdge();
+        auto iter = endmarker_edges->find(seqs[i].next);
+        if(iter != endmarker_edges->end()) { outrank = iter->second; }
+        else
+        {
+          outrank = current.outdegree();
+          current.outgoing.push_back(edge_type(seqs[i].next, 0));
+          new_body.addEdge();
+          (*endmarker_edges)[seqs[i].next] = outrank;
+        }
       }
-      while(new_body.size() < seqs[i].offset)  // Add old runs until 'offset'.
+      else
+      {
+        outrank = current.edgeToLinear(seqs[i].next);
+        if(outrank >= current.outdegree())
+        {
+          current.outgoing.push_back(edge_type(seqs[i].next, 0));
+          new_body.addEdge();
+        }
+      }
+      // Add old runs until 'offset'.
+      while(new_body.size() < seqs[i].offset)
       {
         if(iter->second <= seqs[i].offset - new_body.size()) { new_body.insert(*iter); ++iter; }
         else
@@ -546,7 +568,8 @@ sortSequences(std::vector<Sequence>& seqs)
 */
 
 void
-rebuildOffsets(DynamicGBWT& gbwt, std::vector<Sequence>& seqs)
+rebuildOffsets(DynamicGBWT& gbwt, std::vector<Sequence>& seqs,
+  std::unique_ptr<std::unordered_map<node_type, size_type>>& endmarker_edges)
 {
   node_type next = gbwt.sigma();
   for(const Sequence& seq : seqs)
@@ -557,7 +580,8 @@ rebuildOffsets(DynamicGBWT& gbwt, std::vector<Sequence>& seqs)
     for(edge_type inedge : gbwt.record(next).incoming)
     {
       DynamicRecord& predecessor = gbwt.record(inedge.first);
-      predecessor.offset(predecessor.edgeToLinear(next)) = offset;
+      rank_type outrank = (inedge.first == ENDMARKER ? (*endmarker_edges)[next] : predecessor.edgeToLinear(next));
+      predecessor.offset(outrank) = offset;
       offset += inedge.second;
     }
   }
@@ -565,7 +589,8 @@ rebuildOffsets(DynamicGBWT& gbwt, std::vector<Sequence>& seqs)
   for(Sequence& seq : seqs)
   {
     const DynamicRecord& current = gbwt.record(seq.curr);
-    seq.offset += current.offset(current.edgeToLinear(seq.next));
+    rank_type outrank = (seq.curr == ENDMARKER ? (*endmarker_edges)[seq.next] : current.edgeToLinear(seq.next));
+    seq.offset += current.offset(outrank);
   }
 }
 
@@ -640,14 +665,27 @@ insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source, siz
   // Sanity check sample interval only here.
   if(sample_interval == 0) { sample_interval = ~(size_type)0; }
 
+  // The outgoing edges are not expected to be sorted during construction. As the endmarker
+  // may have millions of outgoing edges, we need a faster way of mapping destination nodes
+  // to edges.
+  std::unique_ptr<std::unordered_map<node_type, size_type>> endmarker_edges(new std::unordered_map<node_type, size_type>);
+  if(gbwt.sigma() > 0)
+  {
+    const DynamicRecord& endmarker = gbwt.record(ENDMARKER);
+    for(rank_type outrank = 0; outrank < endmarker.outdegree(); outrank++)
+    {
+      (*endmarker_edges)[endmarker.successor(outrank)] = outrank;
+    }
+  }
+
   for(size_type iterations = 1; ; iterations++)
   {
-    updateRecords(gbwt, seqs, iterations, sample_interval);  // Insert the next nodes into the GBWT.
+    updateRecords(gbwt, seqs, iterations, sample_interval, endmarker_edges); // Insert the next nodes into the GBWT.
     nextPosition(seqs, source); // Determine the next position for each sequence.
-    sortSequences(seqs);  // Sort for the next iteration and remove the ones that have finished.
+    sortSequences(seqs); // Sort for the next iteration and remove the ones that have finished.
     if(seqs.empty()) { return iterations; }
-    rebuildOffsets(gbwt, seqs); // Rebuild offsets in outgoing edges and sequences.
-    advancePosition(seqs, source);  // Move the sequences to the next position.
+    rebuildOffsets(gbwt, seqs, endmarker_edges); // Rebuild offsets in outgoing edges and sequences.
+    advancePosition(seqs, source); // Move the sequences to the next position.
   }
 }
 
@@ -658,6 +696,10 @@ insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source, siz
   The template parameter should be an integer vector. Because resizing text_type always
   causes a reallocation, 'text_length' is used to pass the actual length of the text.
   This function assumes that text.size() >= text_length.
+
+  insertBatch() leaves the index in a state where the outgoing edges are not necessarily
+  sorted. Subsequent insertBatch() calls are possible, but the index cannot be used
+  without calling recode().
 
   Flag has_both_orientations tells whether the text contains both orientations of each
   sequence.
@@ -704,7 +746,7 @@ insertBatch(DynamicGBWT& index, const IntegerVector& text, size_type text_length
   if(max_node == 0) { min_node = 1; } // No real nodes, setting offset to 0.
   index.resize(min_node - 1, max_node + 1);
 
-  // Insert the sequences and sort the outgoing edges.
+  // Insert the sequences.
   size_type iterations = gbwt::insert(index, seqs, text, sample_interval);
   if(Verbosity::level >= Verbosity::EXTENDED)
   {
