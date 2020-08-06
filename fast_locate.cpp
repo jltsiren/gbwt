@@ -107,8 +107,6 @@ FastLocate::swap(FastLocate& another)
     std::swap(this->header, another.header);
     this->samples.swap(another.samples);
     this->last.swap(another.last);
-    sdsl::util::swap_support(this->last_rank, another.last_rank, &(this->last), &(another.last));
-    sdsl::util::swap_support(this->last_select, another.last_select, &(this->last), &(another.last));
     this->last_to_run.swap(another.last_to_run);
     this->comp_to_run.swap(another.comp_to_run);
   }
@@ -129,8 +127,6 @@ FastLocate::operator=(FastLocate&& source)
     this->header = std::move(source.header);
     this->samples = std::move(source.samples);
     this->last = std::move(source.last);
-    this->last_rank = std::move(source.last_rank); this->last_rank.set_vector(&(this->last));
-    this->last_select = std::move(source.last_select); this->last_select.set_vector(&(this->last));
     this->last_to_run = std::move(source.last_to_run);
     this->comp_to_run = std::move(source.comp_to_run);
   }
@@ -146,8 +142,6 @@ FastLocate::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::stri
   written_bytes += this->header.serialize(out, child, "header");
   written_bytes += this->samples.serialize(out, child, "samples");
   written_bytes += this->last.serialize(out, child, "last");
-  written_bytes += this->last_rank.serialize(out, child, "last_rank");
-  written_bytes += this->last_select.serialize(out, child, "last_select");
   written_bytes += this->last_to_run.serialize(out, child, "last_to_run");
   written_bytes += this->comp_to_run.serialize(out, child, "comp_to_run");
 
@@ -169,8 +163,6 @@ FastLocate::load(std::istream& in)
 
   this->samples.load(in);
   this->last.load(in);
-  this->last_rank.load(in, &(this->last));
-  this->last_select.load(in, &(this->last));
   this->last_to_run.load(in);
   this->comp_to_run.load(in);
 }
@@ -181,8 +173,6 @@ FastLocate::copy(const FastLocate& source)
   this->header = source.header;
   this->samples = source.samples;
   this->last = source.last;
-  this->last_rank = source.last_rank; this->last_rank.set_vector(&(this->last));
-  this->last_select = source.last_select; this->last_select.set_vector(&(this->last));
   this->last_to_run = source.last_to_run;
   this->comp_to_run = source.comp_to_run;
 }
@@ -300,11 +290,45 @@ FastLocate::locate(SearchState state, size_type first) const
 size_type
 FastLocate::locateNext(size_type prev) const
 {
-  // Predecessor query.
-  size_type rank = this->last_rank(prev);
-  size_type predecessor = this->last_select(rank + 1);
+  std::pair<size_type, size_type> pred = this->predecessor(prev);
+  return this->samples[this->last_to_run[pred.second] + 1] + (prev - pred.first);
+}
 
-  return this->samples[this->last_to_run[rank] + 1] + (prev - predecessor);
+// Return (i', last.rank(i')) for the largest i' <= i with last[i'] = 1.
+std::pair<size_type, size_type>
+FastLocate::predecessor(size_type i) const
+{
+  std::pair<size_type, size_type> result(0, 0);
+  size_type high_part = (i >> (this->last.wl));
+  size_type low_part = i & sdsl::bits::lo_set[this->last.wl];
+
+  // Bitvector 'high' has an 1 for each value in the sparse bitvector and a 0
+  // after all values sharing the same high_part. The low_offset we get is a
+  // strict upper bound for the rank.
+  size_type high_offset = this->last.high_0_select(high_part + 1);
+  size_type low_offset = high_offset - high_part;
+  if(low_offset == 0) { return result; }
+
+  // Iterate backward until we find a value no larger than i or we run out of
+  // values that share the same high_part.
+  do
+  {
+    if(high_offset == 0) { return result; }
+    high_offset--; low_offset--;
+  }
+  while(this->last.high[high_offset] == 1 && this->last.low[low_offset] > low_part);
+
+  // The predecessor may have a lower high_part. In that case, we iterate backward
+  // until we find a value.
+  while(this->last.high[high_offset] == 0)
+  {
+    if(high_offset == 0) { return result; }
+    high_offset--;
+  }
+
+  result.first = this->last.low[low_offset] + ((high_offset - low_offset) << this->last.wl);;
+  result.second = low_offset;
+  return result;
 }
 
 //------------------------------------------------------------------------------

@@ -118,10 +118,7 @@ public:
   sdsl::int_vector<0> samples;
 
   // Mark the text positions at the end of a run.
-  // FIXME Instead of rank(), we need (i', rank(i)) for the largest i' <= i with last[i'] = 1.
   sdsl::sd_vector<> last;
-  sdsl::sd_vector<>::rank_1_type last_rank;
-  sdsl::sd_vector<>::select_1_type last_select;
 
   // If last[i] = 1, last_to_run[last_rank(i)] is the identifier of the run.
   sdsl::int_vector<0> last_to_run;
@@ -192,6 +189,9 @@ private:
   {
     return this->samples[this->comp_to_run[this->index.toComp(node)] + run_id];
   }
+
+  // Return (i', last.rank(i')) for the largest i' <= i with last[i'] = 1.
+  std::pair<size_type, size_type> predecessor(size_type i) const;
 }; // class FastLocate
 
 //------------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020 Jouni Siren
   Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -51,6 +51,7 @@ constexpr size_type Version::PATCH_VERSION;
 constexpr size_type Version::GBWT_VERSION;
 constexpr size_type Version::METADATA_VERSION;
 constexpr size_type Version::VARIANT_VERSION;
+constexpr size_type Version::R_INDEX_VERSION;
 
 //------------------------------------------------------------------------------
 

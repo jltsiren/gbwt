@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -517,6 +517,54 @@ CompressedRecord::LF(range_type range, node_type to) const
   range.first = iter.rankAt(range.first);
   range.second = iter.rankAt(range.second + 1) - 1;
 
+  return range;
+}
+
+range_type
+CompressedRecord::LF(range_type range, node_type to, bool& starts_with_to, size_type& first_run) const
+{
+  starts_with_to = false;
+  first_run = invalid_offset();
+  if(Range::empty(range)) { return Range::empty_range(); }
+
+  size_type outrank = this->edgeTo(to);
+  if(outrank >= this->outdegree()) { return Range::empty_range(); }
+  CompressedRecordRankIterator iter(*this, outrank);
+
+  // Range start. If the run that reaches range.first overlaps with the query range,
+  // it may be a run of to.
+  size_type start_offset = range.first;
+  size_type run_id = 0;
+  bool first_run_found = false; // Have we seen the first run covering the query range?
+  while(!(iter.end()) && iter.offset() < range.first)
+  {
+    ++iter; run_id++;
+  }
+  range.first = iter.rankAt(range.first);
+  if(iter.offset() > start_offset)
+  {
+    first_run_found = true;
+    if(iter->first == outrank)
+    {
+      starts_with_to = true;
+      first_run = run_id;
+    }
+  }
+
+  // Range end. Determine the first run of to, if we have not seen it already.
+  while(!(iter.end()) && iter.offset() <= range.second)
+  {
+    ++iter; run_id++;
+    if(iter->second == outrank && first_run == invalid_offset())
+    {
+      if(!first_run_found) { starts_with_to = true; }
+      first_run = run_id;
+    }
+    first_run_found = true;
+  }
+  range.second = iter.rankAt(range.second + 1) - 1;
+
+  if(Range::empty(range)) { first_run = invalid_offset(); }
   return range;
 }
 

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -226,6 +226,11 @@ struct CompressedRecord
 
   // Returns Range::empty_range() if the range is empty or the destination is invalid.
   range_type LF(range_type range, node_type to) const;
+
+  // As above, but also sets starts_with_to if the range starts with node to, and
+  // sets first_run to the run identifier of the first run of to in overlapping
+  // with the range.
+  range_type LF(range_type range, node_type to, bool& starts_with_to, size_type& first_run) const;
 
   // As above, but also returns the number of characters x with
   // Node::reverse(x) < Node::reverse(to) in the range.
