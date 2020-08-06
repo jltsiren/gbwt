@@ -48,7 +48,7 @@ initArray(std::vector<size_type>& array, size_type seed = 0xDEADBEEF)
   {
     array.push_back(rng() % UNIVERSE_SIZE);
   }
-  sequentialSort(array.begin(), array.end());
+  removeDuplicates(array, false);
 }
 
 //------------------------------------------------------------------------------
@@ -100,6 +100,85 @@ TEST(SDIteratorTest, Iterator)
   ASSERT_TRUE(ok) << "Expected " << array[failed_at] << " at " << failed_at << ", got " << got << " at " << rank;
   EXPECT_TRUE(iter.end()) << "The iterator finds too many values";
   EXPECT_EQ(found_values, array.size()) << "Expected " << array.size() << found_values << ", got " << found_values;
+}
+
+TEST(SDIteratorTest, Predecessor)
+{
+  std::vector<size_type> array;
+  initArray(array);
+  sdsl::sd_vector<> v(array.begin(), array.end());
+
+  // Iterate over the vector.
+  for(size_type i = 0; i < v.size(); i++)
+  {
+    SDIterator iter(v, i, true);
+    if(iter.end())
+    {
+      ASSERT_LT(i, array.front()) << "Predecessor query fails when the predecessor exists";
+    }
+    else
+    {
+      ASSERT_LE(*iter, i) << "The position is too high";
+      ASSERT_LT(iter.rank(), array.size()) << "The value is outside the range";
+      ASSERT_EQ(*iter, array[iter.rank()]) << "The value is invalid";
+      if(iter.rank() + 1 < array.size())
+      {
+        ASSERT_GT(array[iter.rank() + 1], i) << "The value is not the predecessor";
+      }
+    }
+  }
+}
+
+TEST(SDIteratorTest, SpecialCases)
+{
+  {
+    sdsl::sd_vector<> empty;
+    SDIterator select_iter(empty, 1, false);
+    EXPECT_TRUE(select_iter.end()) << "Invalid state for a select iterator over an empty vector";
+    SDIterator pred_iter(empty, 0, true);
+    EXPECT_TRUE(pred_iter.end()) << "Invalid state for a predecessor iterator over an empty vector";
+  }
+
+  {
+    std::vector<size_type> values = { static_cast<size_type>(42) };
+    sdsl::sd_vector<> v(values.begin(), values.end());
+    for(size_type i = 0; i < values.front(); i++)
+    {
+      SDIterator iter(v, i, true);
+      EXPECT_TRUE(iter.end()) << "Found a predecessor for " << i << " when none should exist";
+      if(!(iter.end())) { break; }
+    }
+  }
+
+  {
+    std::vector<size_type> values = { static_cast<size_type>(0), static_cast<size_type>(42) };
+    sdsl::sd_vector<> v(values.begin(), values.end());
+    for(size_type i = 0; i < values.back(); i++)
+    {
+      SDIterator iter(v, i, true);
+      EXPECT_FALSE(iter.end()) << "Could not find the predecessor for " << i << " at vector start";
+      if(iter.end()) { break; }
+      EXPECT_EQ(iter.rank(), static_cast<size_type>(0)) << "Invalid predecessor for " << i;
+      EXPECT_EQ(*iter, values.front()) << "Invalid predecessor value for " << i;
+    }
+  }
+
+  {
+    /*
+      predecessor(v.size()) always calls select_0 for a 0 that is not used by any
+      of the values. In this case, v.size() is (1 << k) and the high part of the
+      query parameter has a higher bit width than any of the values. This case
+      checks that bitvector 'high' has always at least one more 0-bit than needed,
+      even when the number of necessary 0-bits is a power of 2. SDSL is a bit
+      wasteful here, as the vector actually has twice as many 0-bits as necessary.
+    */
+    std::vector<size_type> values = { static_cast<size_type>(0), static_cast<size_type>(3) };
+    sdsl::sd_vector<> v(values.begin(), values.end());
+    SDIterator iter(v, v.size(), true);
+    ASSERT_FALSE(iter.end()) << "Could not find the predecessor for the end of the vector";
+    EXPECT_EQ(iter.rank(), static_cast<size_type>(values.size() - 1)) << "Invalid predecessor for the end of the vector";
+    EXPECT_EQ(*iter, values.back()) << "Invalid predecessor value for the end of the vector";
+  }
 }
 
 //------------------------------------------------------------------------------

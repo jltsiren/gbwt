@@ -290,45 +290,8 @@ FastLocate::locate(SearchState state, size_type first) const
 size_type
 FastLocate::locateNext(size_type prev) const
 {
-  std::pair<size_type, size_type> pred = this->predecessor(prev);
-  return this->samples[this->last_to_run[pred.second] + 1] + (prev - pred.first);
-}
-
-// Return (i', last.rank(i')) for the largest i' <= i with last[i'] = 1.
-std::pair<size_type, size_type>
-FastLocate::predecessor(size_type i) const
-{
-  std::pair<size_type, size_type> result(0, 0);
-  size_type high_part = (i >> (this->last.wl));
-  size_type low_part = i & sdsl::bits::lo_set[this->last.wl];
-
-  // Bitvector 'high' has an 1 for each value in the sparse bitvector and a 0
-  // after all values sharing the same high_part. The low_offset we get is a
-  // strict upper bound for the rank.
-  size_type high_offset = this->last.high_0_select(high_part + 1);
-  size_type low_offset = high_offset - high_part;
-  if(low_offset == 0) { return result; }
-
-  // Iterate backward until we find a value no larger than i or we run out of
-  // values that share the same high_part.
-  do
-  {
-    if(high_offset == 0) { return result; }
-    high_offset--; low_offset--;
-  }
-  while(this->last.high[high_offset] == 1 && this->last.low[low_offset] > low_part);
-
-  // The predecessor may have a lower high_part. In that case, we iterate backward
-  // until we find a value.
-  while(this->last.high[high_offset] == 0)
-  {
-    if(high_offset == 0) { return result; }
-    high_offset--;
-  }
-
-  result.first = this->last.low[low_offset] + ((high_offset - low_offset) << this->last.wl);;
-  result.second = low_offset;
-  return result;
+  SDIterator iter(this->last, prev, true); // Predecessor query.
+  return this->samples[this->last_to_run[iter.rank()] + 1] + (prev - *iter);
 }
 
 //------------------------------------------------------------------------------

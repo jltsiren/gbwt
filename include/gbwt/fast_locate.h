@@ -189,9 +189,6 @@ private:
   {
     return this->samples[this->comp_to_run[this->index.toComp(node)] + run_id];
   }
-
-  // Return (i', last.rank(i')) for the largest i' <= i with last[i'] = 1.
-  std::pair<size_type, size_type> predecessor(size_type i) const;
 }; // class FastLocate
 
 //------------------------------------------------------------------------------

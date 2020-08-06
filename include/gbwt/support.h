@@ -306,7 +306,10 @@ private:
 //------------------------------------------------------------------------------
 
 /*
-  An iterator over the 1-bits in sdsl::sd_vector<>.
+  An iterator over the 1-bits in sdsl::sd_vector<>. The iterator is initialized with
+  either a select query or a predecessor query. Latter finds the largest i' <= i
+  such that vector[i'] = 1. If no such i' exists, the iterator is set to the end of
+  the vector.
 */
 struct SDIterator
 {
@@ -315,10 +318,12 @@ struct SDIterator
   size_type low_offset, high_offset;
   size_type vector_offset;
 
-  SDIterator(const sdsl::sd_vector<>& v, size_type i) :
+  SDIterator(const sdsl::sd_vector<>& v, size_type i, bool predecessor_query = false) :
     vector(v)
   {
-    this->select(i);
+    if(this->size() == 0) { this->low_offset = 0; return; }
+    if(predecessor_query) { this->predecessor(i); }
+    else { this->select(i); }
   }
 
   size_type operator*() const { return this->vector_offset; }
@@ -326,24 +331,12 @@ struct SDIterator
   size_type size() const { return this->vector.low.size(); }
   bool end() const { return (this->rank() >= this->size()); }
 
-  void select(size_type i)
-  {
-    this->low_offset = i - 1;
-    this->high_offset = this->vector.high_1_select(i);
-    this->vector_offset = this->vector.low[this->low_offset] + ((this->high_offset + 1 - i) << this->vector.wl);
-  }
+  void select(size_type i);
+  void predecessor(size_type i);
+  void operator++();
 
-  void operator++()
-  {
-    this->low_offset++;
-    if(this->end()) { return; }
-    do
-    {
-      this->high_offset++;
-    }
-    while(this->vector.high[this->high_offset] != 1);
-    this->vector_offset = this->vector.low[low_offset] + ((this->high_offset - this->low_offset) << this->vector.wl);
-  }
+private:
+  void setOffset();
 };
 
 //------------------------------------------------------------------------------

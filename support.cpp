@@ -772,6 +772,68 @@ DecompressedRecord::hasEdge(node_type to) const
 
 //------------------------------------------------------------------------------
 
+void
+SDIterator::select(size_type i)
+{
+  this->low_offset = i - 1;
+  this->high_offset = this->vector.high_1_select(i);
+  this->setOffset();
+}
+
+void
+SDIterator::predecessor(size_type i)
+{
+  size_type high_part = (i >> (this->vector.wl));
+  size_type low_part = i & sdsl::bits::lo_set[this->vector.wl];
+
+  // Bitvector 'high' has an 1 for each value in the sparse bitvector and a 0
+  // after all values sharing the same high_part. The low_offset we get is a
+  // strict upper bound for the rank.
+  this->high_offset = this->vector.high_0_select(high_part + 1);
+  this->low_offset = this->high_offset - high_part;
+  if(this->low_offset == 0) { this->low_offset = this->size(); return; }
+
+  // Iterate backward until we find a value no larger than i or we run out of
+  // values that share the same high_part.
+  do
+  {
+    if(this->high_offset == 0) { this->low_offset = this->size(); return; }
+    this->high_offset--; this->low_offset--;
+  }
+  while(this->vector.high[this->high_offset] == 1 && this->vector.low[this->low_offset] > low_part);
+
+  // The predecessor may have a lower high_part. In that case, we iterate backward
+  // until we find a value.
+  while(this->vector.high[this->high_offset] == 0)
+  {
+    if(this->high_offset == 0) { this->low_offset = this->size(); return; }
+    this->high_offset--;
+  }
+
+  this->setOffset();
+}
+
+void
+SDIterator::operator++()
+{
+  this->low_offset++;
+  if(this->end()) { return; }
+  do
+  {
+    this->high_offset++;
+  }
+  while(this->vector.high[this->high_offset] != 1);
+  this->setOffset();
+}
+
+void
+SDIterator::setOffset()
+{
+  this->vector_offset = this->vector.low[low_offset] + ((this->high_offset - this->low_offset) << this->vector.wl);
+}
+
+//------------------------------------------------------------------------------
+
 RecordArray::RecordArray() :
   records(0)
 {
