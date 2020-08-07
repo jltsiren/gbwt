@@ -791,13 +791,13 @@ SDIterator::predecessor(size_type i)
   // strict upper bound for the rank.
   this->high_offset = this->vector.high_0_select(high_part + 1);
   this->low_offset = this->high_offset - high_part;
-  if(this->low_offset == 0) { this->low_offset = this->size(); return; }
+  if(this->low_offset == 0) { this->toEnd(); return; }
 
   // Iterate backward until we find a value no larger than i or we run out of
   // values that share the same high_part.
   do
   {
-    if(this->high_offset == 0) { this->low_offset = this->size(); return; }
+    if(this->high_offset == 0) { this->toEnd(); return; }
     this->high_offset--; this->low_offset--;
   }
   while(this->vector.high[this->high_offset] == 1 && this->vector.low[this->low_offset] > low_part);
@@ -806,7 +806,7 @@ SDIterator::predecessor(size_type i)
   // until we find a value.
   while(this->vector.high[this->high_offset] == 0)
   {
-    if(this->high_offset == 0) { this->low_offset = this->size(); return; }
+    if(this->high_offset == 0) { this->toEnd(); return; }
     this->high_offset--;
   }
 
@@ -817,7 +817,7 @@ void
 SDIterator::operator++()
 {
   this->low_offset++;
-  if(this->end()) { return; }
+  if(this->end()) { this->toEnd(); return; }
   do
   {
     this->high_offset++;
@@ -830,6 +830,13 @@ void
 SDIterator::setOffset()
 {
   this->vector_offset = this->vector.low[low_offset] + ((this->high_offset - this->low_offset) << this->vector.wl);
+}
+
+void
+SDIterator::toEnd()
+{
+  this->low_offset = this->size();
+  this->vector_offset = this->vector.size();
 }
 
 //------------------------------------------------------------------------------
@@ -867,21 +874,29 @@ RecordArray::RecordArray(const std::vector<DynamicRecord>& bwt) :
   this->buildIndex(offsets);
 }
 
-RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sdsl::int_vector<0>& origins, const std::vector<size_type>& record_offsets) :
+RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sdsl::int_vector<0>& origins) :
   records(origins.size())
 {
   size_type data_size = 0;
   for(auto source : sources) { data_size += source->data.size(); }
 
+  // Initialize the iterators.
+  std::vector<SDIterator> iters;
+  iters.reserve(sources.size());
+  for(size_type i = 0; i < sources.size(); i++)
+  {
+    iters.emplace_back(sources[i]->index, 1);
+  }
+
   // Merge the endmarkers.
-  std::vector<size_type> limits(sources.size(), 0); // Pointers to the end of the current records.
   {
     DynamicRecord merged;
     for(size_type i = 0; i < sources.size(); i++)
     {
       if(sources[i]->empty()) { continue; }
-      size_type start = sources[i]->start(ENDMARKER), limit = sources[i]->limit(ENDMARKER);
-      CompressedRecord record(sources[i]->data, start, limit);
+      size_type start = *(iters[i]);
+      ++(iters[i]);
+      CompressedRecord record(sources[i]->data, start, *(iters[i]));
       for(CompressedRecordIterator iter(record); !(iter.end()); ++iter)
       {
         run_type run = *iter; run.first += merged.outdegree();
@@ -891,7 +906,6 @@ RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sd
       {
         merged.outgoing.push_back(outedge);
       }
-      limits[i] = limit;
     }
     merged.recode();
     merged.writeBWT(this->data);
@@ -909,8 +923,9 @@ RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sd
       this->data.push_back(0);  // Empty record, outdegree 0.
       continue;
     }
-    size_type start = limits[origin], limit = sources[origin]->limit(comp - record_offsets[origin]);
-    limits[origin] = limit;
+    size_type start = *(iters[origin]);
+    ++(iters[origin]);
+    size_type limit = *(iters[origin]);
     for(size_type i = start; i < limit; i++)
     {
       this->data.push_back(sources[origin]->data[i]);
@@ -1002,6 +1017,31 @@ RecordArray::load(std::istream& in)
   // Read the data.
   this->data.resize(this->index.size());
   if(this->data.size() > 0) { DiskIO::read(in, this->data.data(), this->data.size()); }
+}
+
+std::pair<size_type, size_type>
+RecordArray::getRange(size_type record) const
+{
+  SDIterator iter(this->index, record + 1);
+  size_type start = *iter;
+  ++iter;
+  return std::pair<size_type, size_type>(start, *iter);
+}
+
+void
+RecordArray::forEach(std::function<void(size_type, const CompressedRecord&)> iteratee) const
+{
+  if(this->empty()) { return; }
+
+  SDIterator iter(this->index, 1);
+  while(!(iter.end()))
+  {
+    size_type start = *iter;
+    ++iter;
+    size_type limit = *iter;
+    CompressedRecord record(this->data, start, limit);
+    iteratee(iter.rank() - 1, record);
+  }
 }
 
 void

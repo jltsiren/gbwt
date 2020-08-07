@@ -28,6 +28,8 @@
 
 #include <gbwt/utils.h>
 
+#include <functional>
+
 namespace gbwt
 {
 
@@ -310,6 +312,8 @@ private:
   either a select query or a predecessor query. Latter finds the largest i' <= i
   such that vector[i'] = 1. If no such i' exists, the iterator is set to the end of
   the vector.
+
+  If iter.end() is true, *iter will be vector.size() and iter.rank() will be iter.size().
 */
 struct SDIterator
 {
@@ -337,6 +341,7 @@ struct SDIterator
 
 private:
   void setOffset();
+  void toEnd();
 };
 
 //------------------------------------------------------------------------------
@@ -356,7 +361,7 @@ struct RecordArray
   ~RecordArray();
 
   explicit RecordArray(const std::vector<DynamicRecord>& bwt);
-  RecordArray(const std::vector<RecordArray const*> sources, const sdsl::int_vector<0>& origins, const std::vector<size_type>& record_offsets);
+  RecordArray(const std::vector<RecordArray const*> sources, const sdsl::int_vector<0>& origins);
 
   // Set the number of records, build the data manually, and give the offsets to build the index.
   explicit RecordArray(size_type array_size);
@@ -371,14 +376,11 @@ struct RecordArray
 
   size_type size() const { return this->records; }
   bool empty() const { return (this->size() == 0); }
-  bool empty(size_type record) const { return CompressedRecord::emptyRecord(this->data, this->start(record)); }
+  bool empty(size_type record) const { return CompressedRecord::emptyRecord(this->data, this->select(record + 1)); }
 
-  // 0-based indexing.
-  size_type start(size_type record) const { return this->select(record + 1); }
-  size_type limit(size_type record) const
-  {
-    return (record + 1 < this->size() ? this->select(record + 2) : this->data.size());
-  }
+  // Records use 0-based indexing and semiopen ranges [start, limit).
+  std::pair<size_type, size_type> getRange(size_type record) const;
+  void forEach(std::function<void(size_type, const CompressedRecord&)> iteratee) const;
 
 private:
   void copy(const RecordArray& source);

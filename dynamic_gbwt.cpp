@@ -140,35 +140,20 @@ DynamicGBWT::load(std::istream& in)
   {
     RecordArray array;
     array.load(in);
-    size_type offset = 0;
-    for(comp_type comp = 0; comp < this->effective(); comp++)
+    array.forEach([&](size_type comp, const CompressedRecord& record)
     {
-      size_type limit = array.limit(comp);
       DynamicRecord& current = this->bwt[comp];
       current.clear();
-
-      // Decompress the outgoing edges.
-      current.outgoing.resize(ByteCode::read(array.data, offset));
-      node_type prev = 0;
-      for(edge_type& outedge : current.outgoing)
-      {
-        outedge.first = ByteCode::read(array.data, offset) + prev;
-        prev = outedge.first;
-        outedge.second = ByteCode::read(array.data, offset);
-      }
-
-      // Decompress the body.
+      current.outgoing = record.outgoing;
       if(current.outdegree() > 0)
       {
-        Run decoder(current.outdegree());
-        while(offset < limit)
+        for(CompressedRecordIterator iter(record); !(iter.end()); ++iter)
         {
-          run_type run = decoder.read(array.data, offset);
-          current.body.push_back(run);
-          current.body_size += run.second;
+          current.body.push_back(*iter);
+          current.body_size += iter->second;
         }
       }
-    }
+    });
   }
 
   // Read and decompress the samples.

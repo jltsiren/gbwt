@@ -224,7 +224,7 @@ GBWT::GBWT(const std::vector<GBWT>& sources)
     {
       bwt_sources[i] = &(sources[i].bwt);
     }
-    this->bwt = RecordArray(bwt_sources, origins, record_offsets);
+    this->bwt = RecordArray(bwt_sources, origins);
   }
 
   // Interleave the samples.
@@ -277,14 +277,11 @@ GBWT::GBWT(const std::vector<GBWT>& sources)
 size_type
 GBWT::runs() const
 {
-  size_type start = 0, result = 0;
-  for(comp_type comp = 0; comp < this->effective(); comp++)
+  size_type result = 0;
+  this->bwt.forEach([&result](size_type, const CompressedRecord& record)
   {
-    size_type limit = this->bwt.limit(comp);
-    CompressedRecord record(this->bwt.data, start, limit);
     result += record.runs();
-    start = limit;
-  }
+  });
   return result;
 }
 
@@ -355,8 +352,8 @@ CompressedRecord
 GBWT::record(node_type node) const
 {
   comp_type comp = this->toComp(node);
-  size_type start = this->bwt.start(comp), limit = this->bwt.limit(comp);
-  return CompressedRecord(this->bwt.data, start, limit);
+  std::pair<size_type, size_type> range = this->bwt.getRange(comp);
+  return CompressedRecord(this->bwt.data, range.first, range.second);
 }
 
 void

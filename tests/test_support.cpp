@@ -99,6 +99,8 @@ TEST(SDIteratorTest, Iterator)
 
   ASSERT_TRUE(ok) << "Expected " << array[failed_at] << " at " << failed_at << ", got " << got << " at " << rank;
   EXPECT_TRUE(iter.end()) << "The iterator finds too many values";
+  EXPECT_EQ(*iter, v.size()) << "Invalid vector offset at the end";
+  EXPECT_EQ(iter.rank(), iter.size()) << "Invalid rank at the end";
   EXPECT_EQ(found_values, array.size()) << "Expected " << array.size() << found_values << ", got " << found_values;
 }
 
