@@ -1355,13 +1355,6 @@ DASamples::nextSample(size_type record, size_type offset) const
   return invalid_sample();
 }
 
-size_type
-DASamples::limit(size_type rank) const
-{
-  size_type rank_limit = this->record_rank(this->sampled_records.size());
-  return (rank + 1 < rank_limit ? this->bwt_select(rank + 2) : this->bwt_ranges.size());
-}
-
 //------------------------------------------------------------------------------
 
 MergeParameters::MergeParameters() :

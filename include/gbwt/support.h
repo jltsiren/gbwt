@@ -435,9 +435,6 @@ struct DASamples
   // We assume that 'record' has samples.
   size_type start(size_type record) const { return this->bwt_select(this->record_rank(record) + 1); }
 
-  // Upper bound for the range of a record, given its rank among records with samples.
-  size_type limit(size_type rank) const;
-
 private:
   void copy(const DASamples& source);
   void setVectors();

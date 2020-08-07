@@ -532,32 +532,18 @@ struct SampleIterator
 {
   explicit SampleIterator(const DASamples& source) :
     data(source),
-    pos(0), sample_offset(0),
-    offset_select(&(source.sampled_offsets))
+    iter(source.sampled_offsets, 1)
   {
-    this->update();
   }
 
-  bool end() const { return (this->pos >= this->data.size()); }
-  void operator++() { this->pos++; this->update(); }
+  bool end() const { return this->iter.end(); }
+  void operator++() { ++(this->iter); }
 
-  size_type operator*() const { return this->data.array[this->pos]; }
-
-  size_type offset() const { return this->sample_offset; }
+  size_type operator*() const { return this->data.array[this->iter.rank()]; }
+  size_type offset() const { return *(this->iter); }
 
   const DASamples& data;
-  size_type        pos, sample_offset;
-
-private:
-  sdsl::sd_vector<>::select_1_type offset_select;
-
-  void update()
-  {
-    if(!(this->end()))
-    {
-      this->sample_offset = this->offset_select(this->pos + 1);
-    }
-  }
+  SDIterator       iter;
 };
 
 /*
@@ -568,24 +554,24 @@ struct SampleRangeIterator
 {
   explicit SampleRangeIterator(const DASamples& source) :
     data(source),
-    record_id(0), record_rank(0),
-    record_start(0), record_limit(0)
+    record_id(0), record_start(0),
+    iter(source.bwt_ranges, 1)
   {
     this->advance();
   }
 
   bool end() const { return (this->record_id >= this->data.records()); }
-  void operator++() { this->record_id++; this->record_rank++; this->advance(); }
+  void operator++() { this->record_id++; this->advance(); }
 
   size_type record() const { return this->record_id; }
-  size_type rank() const { return this->record_rank; }
+  size_type rank() const { return this->iter.rank() - 1; }
   size_type start() const { return this->record_start; }
-  size_type limit() const { return this->record_limit; }
+  size_type limit() const { return *(this->iter); }
   size_type length() const { return this->limit() - this->start(); }
 
   const DASamples& data;
-  size_type        record_id, record_rank;
-  size_type        record_start, record_limit;
+  size_type        record_id, record_start;
+  SDIterator       iter;
 
 private:
   void advance()
@@ -594,8 +580,8 @@ private:
     {
       if(this->data.isSampled(this->record_id))
       {
-        this->record_start = this->record_limit;
-        this->record_limit = this->data.limit(this->record_rank);
+        this->record_start = *(this->iter);
+        ++(this->iter);
         return;
       }
       record_id++;
