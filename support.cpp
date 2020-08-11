@@ -814,6 +814,40 @@ SDIterator::predecessor(size_type i)
 }
 
 void
+SDIterator::successor(size_type i)
+{
+  size_type high_part = (i >> (this->vector.wl));
+  size_type low_part = i & sdsl::bits::lo_set[this->vector.wl];
+
+  // Bitvector 'high' has an 1 for each value in the sparse bitvector and a 0
+  // after all values sharing the same high_part. The low_offset we get is a
+  // strict upper bound for the rank.
+  this->high_offset = this->vector.high_0_select(high_part + 1);
+  this->low_offset = this->high_offset - high_part;
+
+  // There is a value with the same or lower high_part that could be the
+  // successor. Find the smallest value with the same high_part and with
+  // the same or greater low_part.
+  bool found = false;
+  while(this->low_offset > 0 && this->vector.high[this->high_offset - 1] == 1 && this->vector.low[this->low_offset - 1] >= low_part)
+  {
+    this->high_offset--; this->low_offset--;
+    found = true;
+  }
+  if(found) { this->setOffset(); return; }
+
+  // If there is a value > i, its high_part must be greater than that of i.
+  // Find the correct high_part.
+  if(this->low_offset >= this->size()) { this->toEnd(); return; }
+  do
+  {
+    this->high_offset++;
+  }
+  while(this->vector.high[this->high_offset] == 0);
+  this->setOffset();
+}
+
+void
 SDIterator::operator++()
 {
   this->low_offset++;

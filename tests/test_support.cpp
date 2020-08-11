@@ -113,7 +113,7 @@ TEST(SDIteratorTest, Predecessor)
   // Iterate over the vector.
   for(size_type i = 0; i < v.size(); i++)
   {
-    SDIterator iter(v, i, true);
+    SDIterator iter(v, i, SDIterator::query_predecessor);
     if(iter.end())
     {
       ASSERT_LT(i, array.front()) << "Predecessor query fails when the predecessor exists";
@@ -131,33 +131,106 @@ TEST(SDIteratorTest, Predecessor)
   }
 }
 
+TEST(SDIteratorTest, Successor)
+{
+  std::vector<size_type> array;
+  initArray(array);
+  sdsl::sd_vector<> v(array.begin(), array.end());
+
+  // Iterate over the vector.
+  for(size_type i = 0; i < v.size(); i++)
+  {
+    SDIterator iter(v, i, SDIterator::query_successor);
+    if(iter.end())
+    {
+      ASSERT_GT(i, array.back()) << "Successor query fails when the successor exists";
+    }
+    else
+    {
+      ASSERT_GE(*iter, i) << "The position is too low";
+      ASSERT_LT(iter.rank(), array.size()) << "The value is outside the range";
+      ASSERT_EQ(*iter, array[iter.rank()]) << "The value is invalid";
+      if(iter.rank() > 0)
+      {
+        ASSERT_LT(array[iter.rank() - 1], i) << "The value is not the successor";
+      }
+    }
+  }
+}
+
+// FIXME successor special cases, including empty space at the end
 TEST(SDIteratorTest, SpecialCases)
 {
   {
+    // Empty vector.
     sdsl::sd_vector<> empty;
-    SDIterator select_iter(empty, 1, false);
+    SDIterator select_iter(empty, 1, SDIterator::query_select);
     EXPECT_TRUE(select_iter.end()) << "Invalid state for a select iterator over an empty vector";
-    SDIterator pred_iter(empty, 0, true);
+    SDIterator pred_iter(empty, 0, SDIterator::query_predecessor);
     EXPECT_TRUE(pred_iter.end()) << "Invalid state for a predecessor iterator over an empty vector";
+    SDIterator succ_iter(empty, 0, SDIterator::query_successor);
+    EXPECT_TRUE(succ_iter.end()) << "Invalid state for a successor iterator over an empty vector";
   }
 
   {
+    // Predecessor with leading 0s.
     std::vector<size_type> values = { static_cast<size_type>(42) };
     sdsl::sd_vector<> v(values.begin(), values.end());
     for(size_type i = 0; i < values.front(); i++)
     {
-      SDIterator iter(v, i, true);
+      SDIterator iter(v, i, SDIterator::query_predecessor);
       EXPECT_TRUE(iter.end()) << "Found a predecessor for " << i << " when none should exist";
       if(!(iter.end())) { break; }
     }
   }
 
   {
+    // Successor with leading 0s.
+    std::vector<size_type> values = { static_cast<size_type>(42) };
+    sdsl::sd_vector<> v(values.begin(), values.end());
+    for(size_type i = 0; i < values.front(); i++)
+    {
+      SDIterator iter(v, i, SDIterator::query_successor);
+      EXPECT_FALSE(iter.end()) << "Could not find a successor for " << i << " after leading 0s";
+      if(!iter.end()) { break; }
+    }
+  }
+
+  {
+    // Predecessor with trailing 0s.
+    std::vector<size_type> values = { static_cast<size_type>(42) };
+    sdsl::sd_vector_builder builder(64, 1);
+    for(size_type value : values) { builder.set(value); }
+    sdsl::sd_vector<> v(builder);
+    for(size_type i = values.back() + 1; i < v.size(); i++)
+    {
+      SDIterator iter(v, i, SDIterator::query_predecessor);
+      EXPECT_FALSE(iter.end()) << "Could not find a predecessor for " << i << " before trailing 0s";
+      if(iter.end()) { break; }
+    }
+  }
+
+  {
+    // Successor with trailing 0s.
+    std::vector<size_type> values = { static_cast<size_type>(42) };
+    sdsl::sd_vector_builder builder(64, 1);
+    for(size_type value : values) { builder.set(value); }
+    sdsl::sd_vector<> v(builder);
+    for(size_type i = values.back() + 1; i < v.size(); i++)
+    {
+      SDIterator iter(v, i, SDIterator::query_successor);
+      EXPECT_TRUE(iter.end()) << "Found a successor for " << i << " when none should exist";
+      if(!(iter.end())) { break; }
+    }
+  }
+
+  {
+    // Predecessor at the start of the vector.
     std::vector<size_type> values = { static_cast<size_type>(0), static_cast<size_type>(42) };
     sdsl::sd_vector<> v(values.begin(), values.end());
     for(size_type i = 0; i < values.back(); i++)
     {
-      SDIterator iter(v, i, true);
+      SDIterator iter(v, i, SDIterator::query_predecessor);
       EXPECT_FALSE(iter.end()) << "Could not find the predecessor for " << i << " at vector start";
       if(iter.end()) { break; }
       EXPECT_EQ(iter.rank(), static_cast<size_type>(0)) << "Invalid predecessor for " << i;
@@ -166,7 +239,22 @@ TEST(SDIteratorTest, SpecialCases)
   }
 
   {
+    // Successor at the end of the vector.
+    std::vector<size_type> values = { static_cast<size_type>(42), static_cast<size_type>(63) };
+    sdsl::sd_vector<> v(values.begin(), values.end());
+    for(size_type i = values.front() + 1; i < v.size(); i++)
+    {
+      SDIterator iter(v, i, SDIterator::query_successor);
+      EXPECT_FALSE(iter.end()) << "Could not find the successor for " << i << " at vector end";
+      if(iter.end()) { break; }
+      EXPECT_EQ(iter.rank(), static_cast<size_type>(1)) << "Invalid successor for " << i;
+      EXPECT_EQ(*iter, values.back()) << "Invalid successor value for " << i;
+    }
+  }
+
+  {
     /*
+      Predecessor for past-the-end iterator.
       predecessor(v.size()) always calls select_0 for a 0 that is not used by any
       of the values. In this case, v.size() is (1 << k) and the high part of the
       query parameter has a higher bit width than any of the values. This case
@@ -176,10 +264,21 @@ TEST(SDIteratorTest, SpecialCases)
     */
     std::vector<size_type> values = { static_cast<size_type>(0), static_cast<size_type>(3) };
     sdsl::sd_vector<> v(values.begin(), values.end());
-    SDIterator iter(v, v.size(), true);
-    ASSERT_FALSE(iter.end()) << "Could not find the predecessor for the end of the vector";
-    EXPECT_EQ(iter.rank(), static_cast<size_type>(values.size() - 1)) << "Invalid predecessor for the end of the vector";
-    EXPECT_EQ(*iter, values.back()) << "Invalid predecessor value for the end of the vector";
+    SDIterator iter(v, v.size(), SDIterator::query_predecessor);
+    EXPECT_FALSE(iter.end()) << "Could not find the predecessor for a past-the-end iterator";
+    if(!(iter.end()))
+    {
+      EXPECT_EQ(iter.rank(), static_cast<size_type>(values.size() - 1)) << "Invalid predecessor at past-the_end";
+      EXPECT_EQ(*iter, values.back()) << "Invalid predecessor value at past-the-end";
+    }
+  }
+
+  {
+    // Successor for past-the-end iterator.
+    std::vector<size_type> values = { static_cast<size_type>(0), static_cast<size_type>(3) };
+    sdsl::sd_vector<> v(values.begin(), values.end());
+    SDIterator iter(v, v.size(), SDIterator::query_successor);
+    EXPECT_TRUE(iter.end()) << "Found a successor for a past-the-end iterator";
   }
 }
 

@@ -308,12 +308,16 @@ private:
 //------------------------------------------------------------------------------
 
 /*
-  An iterator over the 1-bits in sdsl::sd_vector<>. The iterator is initialized with
-  either a select query or a predecessor query. Latter finds the largest i' <= i
-  such that vector[i'] = 1. If no such i' exists, the iterator is set to the end of
-  the vector.
+  An iterator over the 1-bits in sdsl::sd_vector<>. The iterator can be initialized
+  with a number of queries:
 
-  If iter.end() is true, *iter will be vector.size() and iter.rank() will be iter.size().
+  - query_select: 1-based select(), as with SDSL bitvectors.
+  - query_predecessor: Largest i' <= i such that vector[i'] = 1.
+  - query_successor: Smallest i' >= i such that vector[i'] = 1.
+
+  If a predecessor/successor query fails, the iterator is initialized at the end.
+  An iterator at the end is still valid, with *iter == vector.size() and
+  iter.rank() == iter.size().
 */
 struct SDIterator
 {
@@ -322,12 +326,21 @@ struct SDIterator
   size_type low_offset, high_offset;
   size_type vector_offset;
 
-  SDIterator(const sdsl::sd_vector<>& v, size_type i, bool predecessor_query = false) :
+  enum query_type { query_select, query_predecessor, query_successor };
+
+  SDIterator(const sdsl::sd_vector<>& v, size_type i, query_type type = query_select) :
     vector(v)
   {
-    if(this->size() == 0) { this->low_offset = 0; return; }
-    if(predecessor_query) { this->predecessor(i); }
-    else { this->select(i); }
+    if(this->size() == 0) { this->toEnd(); return; }
+    switch(type)
+    {
+      case query_select:
+        this->select(i); break;
+      case query_predecessor:
+        this->predecessor(i); break;
+      case query_successor:
+        this->successor(i); break;
+    }
   }
 
   size_type operator*() const { return this->vector_offset; }
@@ -337,6 +350,7 @@ struct SDIterator
 
   void select(size_type i);
   void predecessor(size_type i);
+  void successor(size_type i);
   void operator++();
 
 private:

@@ -290,7 +290,7 @@ FastLocate::locate(SearchState state, size_type first) const
 size_type
 FastLocate::locateNext(size_type prev) const
 {
-  SDIterator iter(this->last, prev, true); // Predecessor query.
+  SDIterator iter(this->last, prev, SDIterator::query_predecessor);
   return this->samples[this->last_to_run[iter.rank()] + 1] + (prev - *iter);
 }
 
