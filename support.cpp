@@ -1142,7 +1142,6 @@ DASamples::DASamples(const std::vector<DynamicRecord>& bwt)
   this->bwt_ranges = sdsl::sd_vector<>(range_builder);
   sdsl::util::init_support(this->bwt_select, &(this->bwt_ranges));
   this->sampled_offsets = sdsl::sd_vector<>(offset_builder);
-  sdsl::util::init_support(this->sample_rank, &(this->sampled_offsets));
 
   // Store the samples.
   this->array = sdsl::int_vector<0>(sample_count, 0, bit_length(max_sample));
@@ -1251,7 +1250,6 @@ DASamples::DASamples(const std::vector<DASamples const*> sources, const sdsl::in
   this->bwt_ranges = sdsl::sd_vector<>(range_builder);
   sdsl::util::init_support(this->bwt_select, &(this->bwt_ranges));
   this->sampled_offsets = sdsl::sd_vector<>(offset_builder);
-  sdsl::util::init_support(this->sample_rank, &(this->sampled_offsets));
 }
 
 void
@@ -1266,7 +1264,6 @@ DASamples::swap(DASamples& another)
     sdsl::util::swap_support(this->bwt_select, another.bwt_select, &(this->bwt_ranges), &(another.bwt_ranges));
 
     this->sampled_offsets.swap(another.sampled_offsets);
-    sdsl::util::swap_support(this->sample_rank, another.sample_rank, &(this->sampled_offsets), &(another.sampled_offsets));
 
     this->array.swap(another.array);
   }
@@ -1291,7 +1288,6 @@ DASamples::operator=(DASamples&& source)
     this->bwt_select = std::move(source.bwt_select);
 
     this->sampled_offsets = std::move(source.sampled_offsets);
-    this->sample_rank = std::move(source.sample_rank);
 
     this->array = std::move(source.array);
 
@@ -1313,7 +1309,6 @@ DASamples::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::strin
   written_bytes += this->bwt_select.serialize(out, child, "bwt_select");
 
   written_bytes += this->sampled_offsets.serialize(out, child, "sampled_offsets");
-  written_bytes += this->sample_rank.serialize(out, child, "sample_rank");
 
   written_bytes += this->array.serialize(out, child, "array");
 
@@ -1331,7 +1326,6 @@ DASamples::load(std::istream& in)
   this->bwt_select.load(in, &(this->bwt_ranges));
 
   this->sampled_offsets.load(in);
-  this->sample_rank.load(in, &(this->sampled_offsets));
 
   this->array.load(in);
 }
@@ -1346,7 +1340,6 @@ DASamples::copy(const DASamples& source)
   this->bwt_select = source.bwt_select;
 
   this->sampled_offsets = source.sampled_offsets;
-  this->sample_rank = source.sample_rank;
 
   this->array = source.array;
 
@@ -1358,7 +1351,6 @@ DASamples::setVectors()
 {
   this->record_rank.set_vector(&(this->sampled_records));
   this->bwt_select.set_vector(&(this->bwt_ranges));
-  this->sample_rank.set_vector(&(this->sampled_offsets));
 }
 
 size_type
@@ -1367,9 +1359,10 @@ DASamples::tryLocate(size_type record, size_type offset) const
   if(!(this->isSampled(record))) { return invalid_sequence(); }
 
   size_type record_start = this->start(record);
-  if(this->sampled_offsets[record_start + offset])
+  SDIterator iter(this->sampled_offsets, record_start + offset, SDIterator::query_predecessor);
+  if(*iter == record_start + offset)
   {
-    return this->array[this->sample_rank(record_start + offset)];
+    return this->array[iter.rank()];
   }
   return invalid_sequence();
 }
@@ -1380,11 +1373,10 @@ DASamples::nextSample(size_type record, size_type offset) const
   if(!(this->isSampled(record))) { return invalid_sample(); }
 
   size_type record_start = this->start(record);
-  size_type rank = this->sample_rank(record_start + offset);
-  if(rank < this->array.size())
+  SDIterator iter(this->sampled_offsets, record_start + offset, SDIterator::query_successor);
+  if(iter.rank() < this->array.size())
   {
-    sdsl::sd_vector<>::select_1_type sample_select(&(this->sampled_offsets));
-    return sample_type(sample_select(rank + 1) - record_start, this->array[rank]);
+    return sample_type(*iter - record_start, this->array[iter.rank()]);
   }
   return invalid_sample();
 }

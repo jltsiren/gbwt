@@ -416,7 +416,6 @@ struct DASamples
 
   // Sampled offsets.
   sdsl::sd_vector<>                sampled_offsets;
-  sdsl::sd_vector<>::rank_1_type   sample_rank;
 
   sdsl::int_vector<0>              array;
 
