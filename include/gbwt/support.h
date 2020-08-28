@@ -220,6 +220,10 @@ struct CompressedRecord
   // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
   edge_type LF(size_type i) const;
 
+  // As above, but also sets 'run_head' and 'run_tail' to indicate whether offset
+  // 'i' was the head/tail of a run.
+  edge_type LF(size_type i, bool& run_head, bool& run_tail) const;
+
   // As above, but also sets 'run_end' to the last offset of the current run.
   edge_type runLF(size_type i, size_type& run_end) const;
 
@@ -229,8 +233,8 @@ struct CompressedRecord
   // Returns Range::empty_range() if the range is empty or the destination is invalid.
   range_type LF(range_type range, node_type to) const;
 
-  // As above, but also sets starts_with_to if the range starts with node to, and
-  // sets first_run to the run identifier of the first run of to in overlapping
+  // As above, but also sets 'starts_with_to' if the range starts with node 'to', and
+  // sets 'first_run' to the run identifier of the first run of to in overlapping
   // with the range.
   range_type LF(range_type range, node_type to, bool& starts_with_to, size_type& first_run) const;
 

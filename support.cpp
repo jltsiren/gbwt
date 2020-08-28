@@ -477,6 +477,35 @@ CompressedRecord::LF(size_type i) const
 }
 
 edge_type
+CompressedRecord::LF(size_type i, bool& run_head, bool& run_tail) const
+{
+  if(this->outdegree() == 0) { return invalid_edge(); }
+
+  if(this->outdegree() <= MAX_OUTDEGREE_FOR_ARRAY)
+  {
+    CompressedRecordArrayIterator iter(*this);
+    edge_type result = iter.edgeAt(i);
+    if(result != invalid_edge())
+    {
+      run_head = (iter.offset() - iter->second == i);
+      run_tail = (iter.offset() == i + 1);
+    }
+    return result;
+  }
+  else
+  {
+    CompressedRecordFullIterator iter(*this);
+    edge_type result = iter.edgeAt(i);
+    if(result != invalid_edge())
+    {
+      run_head = (iter.offset() - iter->second == i);
+      run_tail = (iter.offset() == i + 1);
+    }
+    return result;
+  }
+}
+
+edge_type
 CompressedRecord::runLF(size_type i, size_type& run_end) const
 {
   if(this->outdegree() == 0) { return invalid_edge(); }
