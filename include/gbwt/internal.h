@@ -347,6 +347,7 @@ struct CompressedRecordGenericIterator
   explicit CompressedRecordGenericIterator(const CompressedRecord& source, rank_type outrank = 0) :
     record(source), decoder(source.outdegree()),
     record_offset(0), curr_offset(0), next_offset(0),
+    runs_read(0),
     rank_support(source, outrank)
   {
     this->read();
@@ -375,8 +376,10 @@ struct CompressedRecordGenericIterator
     }
   }
 
+  // Current run.
   run_type operator*() const { return this->run; }
   const run_type* operator->() const { return &(this->run); }
+  size_type runId() const { return this->runs_read - 1; }
 
   // After the current run.
   size_type offset() const { return this->record_offset; }
@@ -394,6 +397,7 @@ struct CompressedRecordGenericIterator
 
   size_type               record_offset;
   size_type               curr_offset, next_offset;
+  size_type               runs_read;
   run_type                run;
 
   RankSupport             rank_support;
@@ -410,6 +414,7 @@ private:
   void readUnsafe()
   {
     this->run = this->decoder.read(this->record.body, this->next_offset);
+    this->runs_read++;
     this->record_offset += this->run.second;
     this->rank_support.handle(this->run);
   }

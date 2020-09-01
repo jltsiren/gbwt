@@ -129,6 +129,10 @@ struct DynamicRecord
   // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
   edge_type LF(size_type i) const;
 
+  // As above, but also reports the closed offset range ('run') and the identifier
+  // ('run_id') of the run used for computing LF().
+  edge_type LF(size_type i, range_type& run, size_type& run_id) const;
+
   // As above, but also sets 'run_end' to the last offset of the current run.
   edge_type runLF(size_type i, size_type& run_end) const;
 
@@ -220,9 +224,9 @@ struct CompressedRecord
   // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
   edge_type LF(size_type i) const;
 
-  // As above, but also sets 'run_head' and 'run_tail' to indicate whether offset
-  // 'i' was the head/tail of a run.
-  edge_type LF(size_type i, bool& run_head, bool& run_tail) const;
+  // As above, but also reports the closed offset range ('run') and the identifier
+  // ('run_id') of the run used for computing LF().
+  edge_type LF(size_type i, range_type& run, size_type& run_id) const;
 
   // As above, but also sets 'run_end' to the last offset of the current run.
   edge_type runLF(size_type i, size_type& run_end) const;
@@ -287,6 +291,8 @@ struct DecompressedRecord
   size_type outdegree() const { return this->outgoing.size(); }
 
   // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
+  // LF(i, run, run_id) is not supported, because there are no good ways of
+  // determining the run_id.
   edge_type LF(size_type i) const;
 
   // As above, but also sets 'run_end' to the last offset of the current run.

@@ -174,33 +174,40 @@ DynamicRecord::writeBWT(std::vector<byte_type>& data) const
 }
 //------------------------------------------------------------------------------
 
-edge_type
-DynamicRecord::LF(size_type i) const
-{
-  size_type run_end = 0;
-  return this->runLF(i, run_end);
-}
-
 template<class Array>
-edge_type LFLoop(Array& result, const std::vector<edge_type>& body, size_type i, size_type& run_end)
+edge_type LFLoop(Array& result, const std::vector<edge_type>& body, size_type i, range_type& run, size_type& run_id)
 {
   rank_type last_edge = 0;
   size_type offset = 0;
-  for(run_type run : body)
+  for(size_type j = 0; j < body.size(); j++)
   {
-    last_edge = run.first;
-    result[run.first].second += run.second;
-    offset += run.second;
-    if(offset > i) { break; }
+    run_type curr = body[j];
+    last_edge = curr.first;
+    result[curr.first].second += curr.second;
+    offset += curr.second;
+    if(offset > i)
+    {
+      run.first = offset - curr.second;
+      run.second = offset - 1;
+      run_id = j;
+      break;
+    }
   }
 
   result[last_edge].second -= (offset - i);
-  run_end = offset - 1;
   return result[last_edge];
 }
 
 edge_type
-DynamicRecord::runLF(size_type i, size_type& run_end) const
+DynamicRecord::LF(size_type i) const
+{
+  range_type run(0, 0);
+  size_type run_id = 0;
+  return this->LF(i, run, run_id);
+}
+
+edge_type
+DynamicRecord::LF(size_type i, range_type& run, size_type& run_id) const
 {
   if(i >= this->size()) { return invalid_edge(); }
 
@@ -208,13 +215,23 @@ DynamicRecord::runLF(size_type i, size_type& run_end) const
   {
     edge_type result[MAX_OUTDEGREE_FOR_ARRAY];
     for(size_type i = 0; i < this->outdegree(); i++) { result[i] = this->outgoing[i]; }
-    return LFLoop(result, this->body, i, run_end);
+    return LFLoop(result, this->body, i, run, run_id);
   }
   else
   {
     std::vector<edge_type> result(this->outgoing);
-    return LFLoop(result, this->body, i, run_end);
+    return LFLoop(result, this->body, i, run, run_id);
   }
+}
+
+edge_type
+DynamicRecord::runLF(size_type i, size_type& run_end) const
+{
+  range_type run(0, 0);
+  size_type run_id = 0;
+  edge_type result = this->LF(i, run, run_id);
+  run_end = run.second;
+  return result;
 }
 
 // run is *(--iter); offset and result are for the beginning of the run at iter.
@@ -472,12 +489,13 @@ CompressedRecord::runs() const
 edge_type
 CompressedRecord::LF(size_type i) const
 {
-  size_type run_end = 0;
-  return this->runLF(i, run_end);
+  range_type run(0, 0);
+  size_type run_id = 0;
+  return this->LF(i, run, run_id);
 }
 
 edge_type
-CompressedRecord::LF(size_type i, bool& run_head, bool& run_tail) const
+CompressedRecord::LF(size_type i, range_type& run, size_type& run_id) const
 {
   if(this->outdegree() == 0) { return invalid_edge(); }
 
@@ -485,22 +503,18 @@ CompressedRecord::LF(size_type i, bool& run_head, bool& run_tail) const
   {
     CompressedRecordArrayIterator iter(*this);
     edge_type result = iter.edgeAt(i);
-    if(result != invalid_edge())
-    {
-      run_head = (iter.offset() - iter->second == i);
-      run_tail = (iter.offset() == i + 1);
-    }
+    run.first = iter.offset() - iter->second;
+    run.second = iter.offset() - 1;
+    run_id = iter.runId();
     return result;
   }
   else
   {
     CompressedRecordFullIterator iter(*this);
     edge_type result = iter.edgeAt(i);
-    if(result != invalid_edge())
-    {
-      run_head = (iter.offset() - iter->second == i);
-      run_tail = (iter.offset() == i + 1);
-    }
+    run.first = iter.offset() - iter->second;
+    run.second = iter.offset() - 1;
+    run_id = iter.runId();
     return result;
   }
 }
@@ -508,22 +522,11 @@ CompressedRecord::LF(size_type i, bool& run_head, bool& run_tail) const
 edge_type
 CompressedRecord::runLF(size_type i, size_type& run_end) const
 {
-  if(this->outdegree() == 0) { return invalid_edge(); }
-
-  if(this->outdegree() <= MAX_OUTDEGREE_FOR_ARRAY)
-  {
-    CompressedRecordArrayIterator iter(*this);
-    edge_type result = iter.edgeAt(i);
-    if(result != invalid_edge()) { run_end = iter.offset() - 1; }
-    return result;
-  }
-  else
-  {
-    CompressedRecordFullIterator iter(*this);
-    edge_type result = iter.edgeAt(i);
-    if(result != invalid_edge()) { run_end = iter.offset() - 1; }
-    return result;
-  }
+  range_type run(0, 0);
+  size_type run_id = 0;
+  edge_type result = this->LF(i, run, run_id);
+  run_end = run.second;
+  return result;
 }
 
 size_type
@@ -563,12 +566,8 @@ CompressedRecord::LF(range_type range, node_type to, bool& starts_with_to, size_
   // Range start. If the run that reaches range.first overlaps with the query range,
   // it may be a run of to.
   size_type start_offset = range.first;
-  size_type run_id = 0;
   bool first_run_found = false; // Have we seen the first run covering the query range?
-  while(!(iter.end()) && iter.offset() < range.first)
-  {
-    ++iter; run_id++;
-  }
+  while(!(iter.end()) && iter.offset() < range.first) { ++iter; }
   range.first = iter.rankAt(range.first);
   if(iter.offset() > start_offset)
   {
@@ -576,18 +575,18 @@ CompressedRecord::LF(range_type range, node_type to, bool& starts_with_to, size_
     if(iter->first == outrank)
     {
       starts_with_to = true;
-      first_run = run_id;
+      first_run = iter.runId();
     }
   }
 
   // Range end. Determine the first run of to, if we have not seen it already.
   while(!(iter.end()) && iter.offset() <= range.second)
   {
-    ++iter; run_id++;
+    ++iter;
     if(iter->second == outrank && first_run == invalid_offset())
     {
       if(!first_run_found) { starts_with_to = true; }
-      first_run = run_id;
+      first_run = iter.runId();
     }
     first_run_found = true;
   }

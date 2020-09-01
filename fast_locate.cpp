@@ -81,7 +81,8 @@ FastLocate::Header::check() const
 
 //------------------------------------------------------------------------------
 
-FastLocate::FastLocate()
+FastLocate::FastLocate() :
+  index(nullptr)
 {
 }
 
@@ -104,6 +105,7 @@ FastLocate::swap(FastLocate& another)
 {
   if(this != &another)
   {
+    std::swap(this->index, another.index);
     std::swap(this->header, another.header);
     this->samples.swap(another.samples);
     this->last.swap(another.last);
@@ -124,6 +126,7 @@ FastLocate::operator=(FastLocate&& source)
 {
   if(this != &source)
   {
+    this->index = source.index;
     this->header = std::move(source.header);
     this->samples = std::move(source.samples);
     this->last = std::move(source.last);
@@ -175,6 +178,30 @@ FastLocate::copy(const FastLocate& source)
   this->last = source.last;
   this->last_to_run = source.last_to_run;
   this->comp_to_run = source.comp_to_run;
+}
+
+//------------------------------------------------------------------------------
+
+FastLocate::FastLocate(const GBWT& source) :
+  index(&source)
+{
+  // FIXME implement
+  // First we determine the total number of runs in the GBWT and the number of runs in each node.
+  // - determine 'comp_to_run'
+  // We traverse the sequences using multiple threads and keep track of (sequence id, sequence offset).
+  // Note that we must handle the endmarker record separately in one global pass.
+  // The search thread has a buffer for head/tail samples.
+  // If the position we did LF() at was a run head/tail, we store the position and global run id in the corresponding buffer.
+  // Note that each ENDMARKER is considered a separate run.
+  // Once we have finished the current sequence, we replace the sequence offsets with the distance to the end of the sequence.
+  // Then we insert the content from the buffers to the shared structures in a critical section.
+  // - update 'header.max_length'
+  // - write the head samples to 'samples'
+  // - store the tail samples in a global buffer
+  // - store sequence length in a global buffer
+  // Once the traversal is done, sort the tail samples by (sequence id, sequence offset)
+  // - build 'last' using global offsets
+  // - store the global run ids in 'last_to_run'
 }
 
 //------------------------------------------------------------------------------
