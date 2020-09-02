@@ -60,15 +60,28 @@ TEST(SDIteratorTest, Select)
   sdsl::sd_vector<> v(array.begin(), array.end());
 
   // select() returns the original values.
-  bool ok = true;
-  size_type failed_at = 0, got = 0;
-  for(size_type i = 0; i < array.size(); i++)
   {
-    SDIterator iter(v, i + 1);
-    if(*iter != array[i]) { ok = false; failed_at = i; got = *iter; break; }
+    bool ok = true;
+    size_type failed_at = 0, got = 0;
+    for(size_type i = 0; i < array.size(); i++)
+    {
+      SDIterator iter(v, i + 1);
+      if(*iter != array[i]) { ok = false; failed_at = i; got = *iter; break; }
+    }
+    EXPECT_TRUE(ok) << "At " << failed_at << ": expected " << array[failed_at] << ", got " << got;
   }
 
-  EXPECT_TRUE(ok) << "At " << failed_at << ": expected " << array[failed_at] << ", got " << got;
+  // Advance iterator after select().
+  {
+    bool ok = true;
+    size_type failed_at = 0, got = 0;
+    for(size_type i = 1; i < array.size(); i++)
+    {
+      SDIterator iter(v, i); ++iter;
+      if(*iter != array[i]) { ok = false; failed_at = i; got = *iter; break; }
+    }
+    EXPECT_TRUE(ok) << "Successor of select(" << failed_at << "): expected " << array[failed_at] << ", got " << got;
+  }
 }
 
 TEST(SDIteratorTest, Iterator)
@@ -76,7 +89,7 @@ TEST(SDIteratorTest, Iterator)
   std::vector<size_type> array;
   initArray(array);
   sdsl::sd_vector<> v(array.begin(), array.end());
-  SDIterator iter(v, 1);
+  SDIterator iter(v);
 
   // Right size.
   ASSERT_EQ(iter.size(), array.size()) << "The number of values is wrong";
@@ -158,7 +171,6 @@ TEST(SDIteratorTest, Successor)
   }
 }
 
-// FIXME successor special cases, including empty space at the end
 TEST(SDIteratorTest, SpecialCases)
 {
   {

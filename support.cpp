@@ -800,6 +800,30 @@ DecompressedRecord::hasEdge(node_type to) const
 
 //------------------------------------------------------------------------------
 
+SDIterator::SDIterator(const sdsl::sd_vector<>& v) :
+  vector(v), low_offset(0), high_offset(0)
+{
+  if(this->size() == 0) { this->toEnd(); return; }
+  while(this->vector.high[this->high_offset] == 0) { this->high_offset++; }
+  this->setOffset();
+}
+
+
+SDIterator::SDIterator(const sdsl::sd_vector<>& v, size_type i, query_type type) :
+  vector(v)
+{
+  if(this->size() == 0) { this->toEnd(); return; }
+  switch(type)
+  {
+    case query_select:
+      this->select(i); break;
+    case query_predecessor:
+      this->predecessor(i); break;
+    case query_successor:
+      this->successor(i); break;
+  }
+}
+
 void
 SDIterator::select(size_type i)
 {
@@ -947,7 +971,7 @@ RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sd
   iters.reserve(sources.size());
   for(size_type i = 0; i < sources.size(); i++)
   {
-    iters.emplace_back(sources[i]->index, 1);
+    iters.emplace_back(sources[i]->index);
   }
 
   // Merge the endmarkers.
@@ -1095,7 +1119,7 @@ RecordArray::forEach(std::function<void(size_type, const CompressedRecord&)> ite
 {
   if(this->empty()) { return; }
 
-  SDIterator iter(this->index, 1);
+  SDIterator iter(this->index);
   while(!(iter.end()))
   {
     size_type start = *iter;

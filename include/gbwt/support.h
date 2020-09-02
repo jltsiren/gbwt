@@ -338,20 +338,10 @@ struct SDIterator
 
   enum query_type { query_select, query_predecessor, query_successor };
 
-  SDIterator(const sdsl::sd_vector<>& v, size_type i, query_type type = query_select) :
-    vector(v)
-  {
-    if(this->size() == 0) { this->toEnd(); return; }
-    switch(type)
-    {
-      case query_select:
-        this->select(i); break;
-      case query_predecessor:
-        this->predecessor(i); break;
-      case query_successor:
-        this->successor(i); break;
-    }
-  }
+  // select(1)
+  explicit SDIterator(const sdsl::sd_vector<>& v);
+
+  SDIterator(const sdsl::sd_vector<>& v, size_type i, query_type type = query_select);
 
   size_type operator*() const { return this->vector_offset; }
   size_type rank() const { return this->low_offset; }

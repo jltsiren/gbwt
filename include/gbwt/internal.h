@@ -537,7 +537,7 @@ struct SampleIterator
 {
   explicit SampleIterator(const DASamples& source) :
     data(source),
-    iter(source.sampled_offsets, 1)
+    iter(source.sampled_offsets)
   {
   }
 
@@ -560,7 +560,7 @@ struct SampleRangeIterator
   explicit SampleRangeIterator(const DASamples& source) :
     data(source),
     record_id(0), record_start(0),
-    iter(source.bwt_ranges, 1)
+    iter(source.bwt_ranges)
   {
     this->advance();
   }
