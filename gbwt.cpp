@@ -274,13 +274,14 @@ GBWT::GBWT(const std::vector<GBWT>& sources)
 
 //------------------------------------------------------------------------------
 
-size_type
+std::pair<size_type, size_type>
 GBWT::runs() const
 {
-  size_type result = 0;
+  std::pair<size_type, size_type> result(0, 0);
   this->bwt.forEach([&result](size_type, const CompressedRecord& record)
   {
-    result += record.runs();
+    std::pair<size_type, size_type> temp = record.runs();
+    result.first += temp.first; result.second += temp.second;
   });
   return result;
 }
@@ -375,7 +376,8 @@ printStatistics(const GBWT& gbwt, const std::string& name)
   printHeader("Sequences"); std::cout << gbwt.sequences() << std::endl;
   printHeader("Alphabet size"); std::cout << gbwt.sigma() << std::endl;
   printHeader("Effective"); std::cout << gbwt.effective() << std::endl;
-  printHeader("Runs"); std::cout << gbwt.runs() << std::endl;
+  std::pair<size_type, size_type> runs = gbwt.runs();
+  printHeader("Runs"); std::cout << runs.first << " concrete / " << runs.second << " logical" << std::endl;
   printHeader("DA samples"); std::cout << gbwt.samples() << std::endl;
   printHeader("BWT"); std::cout << inMegabytes(sdsl::size_in_bytes(gbwt.bwt)) << " MB" << std::endl;
   printHeader("DA samples"); std::cout << inMegabytes(sdsl::size_in_bytes(gbwt.da_samples)) << " MB" << std::endl;

@@ -379,6 +379,11 @@ struct CompressedRecordGenericIterator
   // Current run.
   run_type operator*() const { return this->run; }
   const run_type* operator->() const { return &(this->run); }
+
+  // The 0-based identifier of the current run. Because we cannot do LF-mapping with
+  // the endmarker, it makes sense to consider each endmarker a separate logical run.
+  // If there is a concrete run of endmarkers, the returned identifier is that of
+  // the last occurrence.
   size_type runId() const { return this->runs_read - 1; }
 
   // After the current run.
@@ -414,7 +419,7 @@ private:
   void readUnsafe()
   {
     this->run = this->decoder.read(this->record.body, this->next_offset);
-    this->runs_read++;
+    this->runs_read += (this->record.successor(this->run.first) == ENDMARKER ? this->run.second : 1);
     this->record_offset += this->run.second;
     this->rank_support.handle(this->run);
   }

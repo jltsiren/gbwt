@@ -189,12 +189,16 @@ DynamicGBWT::copy(const DynamicGBWT& source)
 
 //------------------------------------------------------------------------------
 
-size_type
+std::pair<size_type, size_type>
 DynamicGBWT::runs() const
 {
-  size_type total = 0;
-  for(const DynamicRecord& node : this->bwt) { total += node.runs(); }
-  return total;
+  std::pair<size_type, size_type> result(0, 0);
+  for(const DynamicRecord& node : this->bwt)
+  {
+    std::pair<size_type, size_type> temp = node.runs();
+    result.first += temp.first; result.second += temp.second;
+  }
+  return result;
 }
 
 size_type
@@ -1436,7 +1440,8 @@ printStatistics(const DynamicGBWT& gbwt, const std::string& name)
   printHeader("Sequences"); std::cout << gbwt.sequences() << std::endl;
   printHeader("Alphabet size"); std::cout << gbwt.sigma() << std::endl;
   printHeader("Effective"); std::cout << gbwt.effective() << std::endl;
-  printHeader("Runs"); std::cout << gbwt.runs() << std::endl;
+  std::pair<size_type, size_type> runs = gbwt.runs();
+  printHeader("Runs"); std::cout << runs.first << " concrete / " << runs.second << " logical" << std::endl;
   printHeader("DA samples"); std::cout << gbwt.samples() << std::endl;
   if(gbwt.hasMetadata())
   {

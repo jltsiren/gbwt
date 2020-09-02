@@ -23,6 +23,7 @@
 */
 
 #include <gbwt/fast_locate.h>
+#include <gbwt/internal.h>
 
 namespace gbwt
 {
@@ -183,11 +184,18 @@ FastLocate::copy(const FastLocate& source)
 //------------------------------------------------------------------------------
 
 FastLocate::FastLocate(const GBWT& source) :
-  index(&source)
+  index(&source),
+  comp_to_run(source.effective())
 {
+  // Determine the number of logical runs before each record.
+  size_type total_runs = 0;
+  this->index->bwt.forEach([&](size_type comp, const CompressedRecord& record)
+  {
+    this->comp_to_run[comp] = total_runs; total_runs += record.runs().second;
+  });
+  this->comp_to_run.bit_compress();
+
   // FIXME implement
-  // First we determine the total number of runs in the GBWT and the number of runs in each node.
-  // - determine 'comp_to_run'
   // We traverse the sequences using multiple threads and keep track of (sequence id, sequence offset).
   // Note that we must handle the endmarker record separately in one global pass.
   // The search thread has a buffer for head/tail samples.

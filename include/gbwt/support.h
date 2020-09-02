@@ -107,7 +107,7 @@ struct DynamicRecord
   bool empty() const { return (this->size() == 0); }
   size_type indegree() const { return this->incoming.size(); }
   size_type outdegree() const { return this->outgoing.size(); }
-  size_type runs() const { return this->body.size(); }
+  std::pair<size_type, size_type> runs() const; // (concrete, logical)
   size_type samples() const { return this->ids.size(); }
 
   void clear();
@@ -130,10 +130,10 @@ struct DynamicRecord
   edge_type LF(size_type i) const;
 
   // As above, but also reports the closed offset range ('run') and the identifier
-  // ('run_id') of the run used for computing LF().
+  // ('run_id') of the logical run used for computing LF().
   edge_type LF(size_type i, range_type& run, size_type& run_id) const;
 
-  // As above, but also sets 'run_end' to the last offset of the current run.
+  // As above, but also sets 'run_end' to the last offset of the current logical run.
   edge_type runLF(size_type i, size_type& run_end) const;
 
   // Returns invalid_offset() if there is no edge to the destination.
@@ -218,17 +218,17 @@ struct CompressedRecord
 
   size_type size() const; // Expensive.
   bool empty() const { return (this->size() == 0); }
-  size_type runs() const; // Expensive.
+  std::pair<size_type, size_type> runs() const; // (concrete, logical)
   size_type outdegree() const { return this->outgoing.size(); }
 
   // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
   edge_type LF(size_type i) const;
 
   // As above, but also reports the closed offset range ('run') and the identifier
-  // ('run_id') of the run used for computing LF().
+  // ('run_id') of the logical run used for computing LF().
   edge_type LF(size_type i, range_type& run, size_type& run_id) const;
 
-  // As above, but also sets 'run_end' to the last offset of the current run.
+  // As above, but also sets 'run_end' to the last offset of the current logical run.
   edge_type runLF(size_type i, size_type& run_end) const;
 
   // Returns invalid_offset() if there is no edge to the destination.
@@ -287,7 +287,7 @@ struct DecompressedRecord
 
   size_type size() const { return this->body.size(); }
   bool empty() const { return (this->size() == 0); }
-  size_type runs() const; // Expensive.
+  std::pair<size_type, size_type> runs() const; // (concrete, logical)
   size_type outdegree() const { return this->outgoing.size(); }
 
   // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
@@ -295,7 +295,7 @@ struct DecompressedRecord
   // determining the run_id.
   edge_type LF(size_type i) const;
 
-  // As above, but also sets 'run_end' to the last offset of the current run.
+  // As above, but also sets 'run_end' to the last offset of the current logical run.
   edge_type runLF(size_type i, size_type& run_end) const;
 
   // Returns BWT[i] within the record.

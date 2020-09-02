@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -325,15 +325,16 @@ extendedStatistics(const DynamicGBWT& index)
 
   {
     const DynamicRecord& endmarker = index.record(ENDMARKER);
-    endmarker_runs = endmarker.runs();
+    endmarker_runs = endmarker.runs().first;
     endmarker_outdegree = endmarker.outdegree();
   }
   for(comp_type comp = 1; comp < index.effective(); comp++)
   {
     const DynamicRecord& record = index.record(index.toNode(comp));
-    run_distribution[record.runs()]++;
+    size_type record_runs = record.runs().first;
+    run_distribution[record_runs]++;
     outdegree_distribution[record.outdegree()]++;
-    total_runs += record.runs();
+    total_runs += record_runs;
     total_outdegree += record.outdegree();
   }
 

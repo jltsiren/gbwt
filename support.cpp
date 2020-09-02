@@ -109,6 +109,17 @@ DynamicRecord::swap(DynamicRecord& another)
   }
 }
 
+std::pair<size_type, size_type>
+DynamicRecord::runs() const
+{
+  std::pair<size_type, size_type> result(this->body.size(), 0);
+  for(run_type run : this->body)
+  {
+    result.second += (this->successor(run.first) == ENDMARKER ? run.second : 1);
+  }
+  return result;
+}
+
 //------------------------------------------------------------------------------
 
 void
@@ -179,17 +190,27 @@ edge_type LFLoop(Array& result, const std::vector<edge_type>& body, size_type i,
 {
   rank_type last_edge = 0;
   size_type offset = 0;
+  size_type runs_seen = 0;
   for(size_type j = 0; j < body.size(); j++)
   {
     run_type curr = body[j];
     last_edge = curr.first;
     result[curr.first].second += curr.second;
     offset += curr.second;
+    runs_seen += (result[curr.first].first == ENDMARKER ? curr.second : 1);
     if(offset > i)
     {
-      run.first = offset - curr.second;
-      run.second = offset - 1;
-      run_id = j;
+      if(result[curr.first].first == ENDMARKER)
+      {
+        run.first = run.second = i;
+        run_id = runs_seen - (offset - i);
+      }
+      else
+      {
+        run.first = offset - curr.second;
+        run.second = offset - 1;
+        run_id = runs_seen - 1;
+      }
       break;
     }
   }
@@ -424,8 +445,10 @@ DynamicRecord::nextSample(size_type i) const
 std::ostream&
 operator<<(std::ostream& out, const DynamicRecord& record)
 {
+  std::pair<size_type, size_type> run_counts = record.runs();
+
   out << "(size " << record.size() << ", "
-      << record.runs() << " runs, "
+      << run_counts.first << " concrete / " << run_counts.second << " logical runs, "
       << "indegree " << record.indegree()
       << ", outdegree " << record.outdegree()
       << ", incoming = " << record.incoming
@@ -475,13 +498,17 @@ CompressedRecord::size() const
   return result;
 }
 
-size_type
+std::pair<size_type, size_type>
 CompressedRecord::runs() const
 {
-  size_type result = 0;
+  std::pair<size_type, size_type> result(0, 0);
   if(this->outdegree() > 0)
   {
-    for(CompressedRecordIterator iter(*this); !(iter.end()); ++iter) { result++; }
+    for(CompressedRecordIterator iter(*this); !(iter.end()); ++iter)
+    {
+      result.first++;
+      result.second += (this->successor(iter->first) == ENDMARKER ? iter->second : 1);
+    }
   }
   return result;
 }
@@ -494,6 +521,26 @@ CompressedRecord::LF(size_type i) const
   return this->LF(i, run, run_id);
 }
 
+template<class Iterator>
+edge_type
+LFLoop(const CompressedRecord& record, size_type i, range_type& run, size_type& run_id)
+{
+  Iterator iter(record);
+  edge_type result = iter.edgeAt(i);
+  if(result.first == ENDMARKER)
+  {
+    run.first = run.second = i;
+    run_id = iter.runId() - (iter.offset() - 1 - i);
+  }
+  else
+  {
+    run.first = iter.offset() - iter->second;
+    run.second = iter.offset() - 1;
+    run_id = iter.runId();
+  }
+  return result;
+}
+
 edge_type
 CompressedRecord::LF(size_type i, range_type& run, size_type& run_id) const
 {
@@ -501,21 +548,11 @@ CompressedRecord::LF(size_type i, range_type& run, size_type& run_id) const
 
   if(this->outdegree() <= MAX_OUTDEGREE_FOR_ARRAY)
   {
-    CompressedRecordArrayIterator iter(*this);
-    edge_type result = iter.edgeAt(i);
-    run.first = iter.offset() - iter->second;
-    run.second = iter.offset() - 1;
-    run_id = iter.runId();
-    return result;
+    return LFLoop<CompressedRecordArrayIterator>(*this, i, run, run_id);
   }
   else
   {
-    CompressedRecordFullIterator iter(*this);
-    edge_type result = iter.edgeAt(i);
-    run.first = iter.offset() - iter->second;
-    run.second = iter.offset() - 1;
-    run_id = iter.runId();
-    return result;
+    return LFLoop<CompressedRecordFullIterator>(*this, i, run, run_id);
   }
 }
 
@@ -748,16 +785,17 @@ DecompressedRecord::copy(const DecompressedRecord& source)
   this->body = source.body;
 }
 
-size_type
+std::pair<size_type, size_type>
 DecompressedRecord::runs() const
 {
-  if(this->empty()) { return 0; }
+  std::pair<size_type, size_type> result(0, 0);
+  if(this->empty()) { return result; }
 
-  size_type result = 0;
   node_type prev = invalid_node();
   for(edge_type edge : body)
   {
-    if(edge.first != prev) { result++; prev = edge.first; }
+    if(edge.first != prev) { result.first++; result.second++; prev = edge.first; }
+    else if(edge.first == ENDMARKER) { result.second++; }
   }
 
   return result;
@@ -776,7 +814,10 @@ DecompressedRecord::runLF(size_type i, size_type& run_end) const
   if(i >= this->size()) { return invalid_edge(); }
 
   run_end = i;
-  while(run_end + 1 < this->size() && this->body[run_end + 1].first == this->body[i].first) { run_end++; }
+  if(this->body[i].first != ENDMARKER)
+  {
+    while(run_end + 1 < this->size() && this->body[run_end + 1].first == this->body[i].first) { run_end++; }
+  }
 
   return this->body[i];
 }

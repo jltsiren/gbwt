@@ -104,7 +104,7 @@ public:
   size_type sigma() const { return this->index->sigma(); }
   size_type effective() const { return this->index->effective(); }
 
-  size_type runs() const { return this->index->runs(); } // Expensive, not cached.
+  std::pair<size_type, size_type> runs() const { return this->index->runs(); } // Not cached.
   size_type samples() const { return this->index->samples(); }
 
   bool bidirectional() const { return this->index->bidirectional(); }
