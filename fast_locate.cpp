@@ -184,16 +184,25 @@ FastLocate::copy(const FastLocate& source)
 //------------------------------------------------------------------------------
 
 FastLocate::FastLocate(const GBWT& source) :
-  index(&source),
-  comp_to_run(source.effective())
+  index(&source)
 {
+  if(this->index->empty()) { return; }
+
   // Determine the number of logical runs before each record.
   size_type total_runs = 0;
+  this->comp_to_run.resize(this->index->effective());
   this->index->bwt.forEach([&](size_type comp, const CompressedRecord& record)
   {
     this->comp_to_run[comp] = total_runs; total_runs += record.runs().second;
   });
   this->comp_to_run.bit_compress();
+
+  // Global sample buffers. Each sample is a (seq id, seq offset) pair.
+  // Head samples are stored in the correct order.
+  // Tail samples are stored as (sample, run id) pairs.
+  std::vector<sample_type> head_samples(total_runs, sample_type(0, 0));
+  std::vector<std::pair<sample_type, size_type>> tail_samples;
+  tail_samples.reserve(total_runs);
 
   // FIXME implement
   // We traverse the sequences using multiple threads and keep track of (sequence id, sequence offset).
@@ -204,12 +213,30 @@ FastLocate::FastLocate(const GBWT& source) :
   // Once we have finished the current sequence, we replace the sequence offsets with the distance to the end of the sequence.
   // Then we insert the content from the buffers to the shared structures in a critical section.
   // - update 'header.max_length'
-  // - write the head samples to 'samples'
-  // - store the tail samples in a global buffer
-  // - store sequence length in a global buffer
-  // Once the traversal is done, sort the tail samples by (sequence id, sequence offset)
-  // - build 'last' using global offsets
-  // - store the global run ids in 'last_to_run'
+  // - store the head samples in correct positions in head_samples
+  // - push the tail samples to tail_samples
+
+  // Store the head samples.
+  this->samples.set_width(bit_length(this->pack(this->index.sequences() - 1, this->header.max_length - 1)));
+  this->samples.resize(total_runs);
+  for(size_type i = 0; i < total_runs; i++)
+  {
+    this->samples[i] = this->pack(head_samples[i].first, head_samples[i].second);
+  }
+  sdsl::util::clear(head_samples);
+
+  // Store the tail samples.
+  parallelQuickSort(tail_samples.begin(), tail_samples.end());
+  sdsl::sd_vector_builder builder(this->index.sequences() * this->header.max_length, total_runs);
+  this->last_to_run.set_width(bit_length(total_runs - 1));
+  this->last_to_run.resize(total_runs);
+  for(size_type i = 0; i < total_runs; i++)
+  {
+    builder.set(this->pack(tail_samples[i].first.first, tail_samples[i].first.second));
+    this->last_to_run[i] = tail_samples[i].second;
+  }
+  sdsl::util::clear(tail_samples);
+  this->last = sdsl::sd_vector<>(builder);
 }
 
 //------------------------------------------------------------------------------

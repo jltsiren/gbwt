@@ -52,8 +52,9 @@ namespace gbwt
 
 /*
   We can save a lot of memory during construction by using 32-bit integers instead of
-  64-bit integers in the dynamic records. This limits the number of nodes, the number
-  of paths, and the number of occurrences of each node to less than 2^32.
+  64-bit integers in the dynamic records and internal buffers. This limits the number
+  of nodes, the number of paths, the length of the paths, and the number of
+  occurrences of each node to less than 2^32.
 */
 
 #define GBWT_SAVE_MEMORY
@@ -71,11 +72,11 @@ typedef size_type rank_type;  // Rank of incoming / outgoing edge.
 #ifdef GBWT_SAVE_MEMORY
 typedef std::pair<short_type, short_type> edge_type;
 typedef std::pair<short_type, short_type> run_type;
-typedef std::pair<short_type, short_type> sample_type;  // (i, DA[i]) within a record
+typedef std::pair<short_type, short_type> sample_type;  // (i, DA[i]) within a record or (seq id, seq offset)
 #else
 typedef std::pair<node_type, size_type>   edge_type;
 typedef std::pair<rank_type, size_type>   run_type;
-typedef std::pair<size_type, size_type>   sample_type;  // (i, DA[i]) within a record
+typedef std::pair<size_type, size_type>   sample_type;  // (i, DA[i]) within a record or (seq id, seq offset)
 #endif
 
 //------------------------------------------------------------------------------
