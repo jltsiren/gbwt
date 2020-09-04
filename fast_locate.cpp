@@ -197,31 +197,88 @@ FastLocate::FastLocate(const GBWT& source) :
   });
   this->comp_to_run.bit_compress();
 
-  // Global sample buffers. Each sample is a (seq id, seq offset) pair.
-  // Head samples are stored in the correct order.
-  // Tail samples are stored as (sample, run id) pairs.
-  std::vector<sample_type> head_samples(total_runs, sample_type(0, 0));
-  std::vector<std::pair<sample_type, size_type>> tail_samples;
+  // Global sample buffers.
+  struct sample_record
+  {
+    size_type seq_id, seq_offset, run_id;
+
+    // Sort by text position.
+    bool operator<(const sample_record& another) const
+    {
+      return (this->seq_id < another.seq_id || (this->seq_id == another.seq_id && this->seq_offset < another.seq_offset));
+    }
+  };
+  std::vector<sample_record> head_samples, tail_samples;
+  head_samples.reserve(total_runs);
   tail_samples.reserve(total_runs);
 
-  // FIXME implement
-  // We traverse the sequences using multiple threads and keep track of (sequence id, sequence offset).
-  // Note that we must handle the endmarker record separately in one global pass.
-  // The search thread has a buffer for head/tail samples.
-  // If the position we did LF() at was a run head/tail, we store the position and global run id in the corresponding buffer.
-  // Note that each ENDMARKER is considered a separate run.
-  // Once we have finished the current sequence, we replace the sequence offsets with the distance to the end of the sequence.
-  // Then we insert the content from the buffers to the shared structures in a critical section.
-  // - update 'header.max_length'
-  // - store the head samples in correct positions in head_samples
-  // - push the tail samples to tail_samples
+  // Run identifier for each offset in the endmarker. We cannot get this
+  // information efficiently with random access.
+  std::vector<size_type> endmarker_runs(this->index->sequences(), 0);
+  {
+    size_type run_id = 0;
+    edge_type prev = this->index->start(0);
+    for(size_type i = 1; i < this->index->sequences(); i++)
+    {
+      edge_type curr = this->index->start(i);
+      if(curr.first != prev.first) { run_id++; prev = curr; }
+      endmarker_runs[i] = run_id;
+    }
+  }
+
+  // Extract the samples from each sequence.
+  #pragma omp parallel for schedule(dynamic, 1)
+  for(size_type i = 0; i < this->index->sequences(); i++)
+  {
+    std::vector<sample_record> head_buffer, tail_buffer;
+    size_type seq_offset = 0, run_id = endmarker_runs[i];
+    if(i == 0 || run_id != endmarker_runs[i - 1])
+    {
+      head_buffer.push_back({ i, seq_offset, run_id });
+    }
+    if(i + 1 >= this->index->sequences() || run_id != endmarker_runs[i + 1])
+    {
+      tail_buffer.push_back({ i, seq_offset, run_id });
+    }
+    edge_type curr = this->index->start(i); seq_offset++;
+    range_type run(0, 0);
+    while(curr.first != ENDMARKER)
+    {
+      edge_type next = this->index->record(curr.first).LF(curr.second, run, run_id);
+      if(curr.second == run.first)
+      {
+        head_buffer.push_back({ i, seq_offset, run_id });
+      }
+      if(curr.second == run.second)
+      {
+        tail_buffer.push_back({ i, seq_offset, run_id });
+      }
+      curr = next; seq_offset++;
+    }
+    // GBWT is an FM-index of the reverse paths. The sequence offset r-index needs
+    // is the distance to the BWT position with the endmarker (to the end of the
+    // path, to the start of the string).
+    for(sample_record& record : head_buffer) { record.seq_offset = seq_offset - 1 - record.seq_offset; }
+    for(sample_record& record : tail_buffer) { record.seq_offset = seq_offset - 1 - record.seq_offset; }
+    #pragma omp critical
+    {
+      this->header.max_length = std::max(this->header.max_length, seq_offset);
+      head_samples.insert(head_samples.end(), head_buffer.begin(), head_buffer.end());
+      tail_samples.insert(tail_samples.end(), tail_buffer.begin(), tail_buffer.end());
+    }
+  }
+  sdsl::util::clear(endmarker_runs);
 
   // Store the head samples.
+  parallelQuickSort(head_samples.begin(), head_samples.end(), [](const sample_record& a, const sample_record& b)
+  {
+    return (a.run_id < b.run_id)
+  });
   this->samples.set_width(bit_length(this->pack(this->index.sequences() - 1, this->header.max_length - 1)));
   this->samples.resize(total_runs);
   for(size_type i = 0; i < total_runs; i++)
   {
-    this->samples[i] = this->pack(head_samples[i].first, head_samples[i].second);
+    this->samples[i] = this->pack(head_samples[i].seq_id, head_samples[i].seq_offset);
   }
   sdsl::util::clear(head_samples);
 
@@ -232,8 +289,8 @@ FastLocate::FastLocate(const GBWT& source) :
   this->last_to_run.resize(total_runs);
   for(size_type i = 0; i < total_runs; i++)
   {
-    builder.set(this->pack(tail_samples[i].first.first, tail_samples[i].first.second));
-    this->last_to_run[i] = tail_samples[i].second;
+    builder.set(this->pack(tail_samples[i].seq_id, tail_samples[i].seq_offset));
+    this->last_to_run[i] = tail_samples[i].run_id;
   }
   sdsl::util::clear(tail_samples);
   this->last = sdsl::sd_vector<>(builder);
