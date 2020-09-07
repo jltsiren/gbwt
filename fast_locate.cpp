@@ -186,7 +186,16 @@ FastLocate::copy(const FastLocate& source)
 FastLocate::FastLocate(const GBWT& source) :
   index(&source)
 {
-  if(this->index->empty()) { return; }
+  double start = readTimer();
+
+  if(this->index->empty())
+  {
+    if(Verbosity::level >= Verbosity::FULL)
+    {
+      std::cerr << "FastLocate::FastLocate(): The input GBWT is empty" << std::endl;
+    }
+    return;
+  }
 
   // Determine the number of logical runs before each record.
   size_type total_runs = 0;
@@ -196,6 +205,10 @@ FastLocate::FastLocate(const GBWT& source) :
     this->comp_to_run[comp] = total_runs; total_runs += record.runs().second;
   });
   this->comp_to_run.bit_compress();
+  if(Verbosity::level >= Verbosity::FULL)
+  {
+    std::cerr << "FastLocate::FastLocate(): " << total_runs << " logical runs in the GBWT" << std::endl;
+  }
 
   // Global sample buffers.
   struct sample_record
@@ -214,6 +227,10 @@ FastLocate::FastLocate(const GBWT& source) :
 
   // Run identifier for each offset in the endmarker. We cannot get this
   // information efficiently with random access.
+  if(Verbosity::level >= Verbosity::FULL)
+  {
+    std::cerr << "FastLocate::FastLocate(): Processing the endmarker record" << std::endl;
+  }
   std::vector<size_type> endmarker_runs(this->index->sequences(), 0);
   {
     size_type run_id = 0;
@@ -227,6 +244,11 @@ FastLocate::FastLocate(const GBWT& source) :
   }
 
   // Extract the samples from each sequence.
+  double extract_start = readTimer();
+  if(Verbosity::level >= Verbosity::FULL)
+  {
+    std::cerr << "FastLocate::FastLocate(): Extracting head/tail samples" << std::endl;
+  }
   #pragma omp parallel for schedule(dynamic, 1)
   for(size_type i = 0; i < this->index->sequences(); i++)
   {
@@ -268,8 +290,17 @@ FastLocate::FastLocate(const GBWT& source) :
     }
   }
   sdsl::util::clear(endmarker_runs);
+  if(Verbosity::level >= Verbosity::BASIC)
+  {
+    double seconds = readTimer() - extract_start;
+    std::cerr << "FastLocate::FastLocate(): Extracted " << head_samples.size() << " / " << tail_samples.size() << " head/tail samples in " << seconds << " seconds" << std::endl;
+  }
 
   // Store the head samples.
+  if(Verbosity::level >= Verbosity::FULL)
+  {
+    std::cerr << "FastLocate::FastLocate(): Storing the head samples" << std::endl;
+  }
   parallelQuickSort(head_samples.begin(), head_samples.end(), [](const sample_record& a, const sample_record& b)
   {
     return (a.run_id < b.run_id)
@@ -283,6 +314,10 @@ FastLocate::FastLocate(const GBWT& source) :
   sdsl::util::clear(head_samples);
 
   // Store the tail samples.
+  if(Verbosity::level >= Verbosity::FULL)
+  {
+    std::cerr << "FastLocate::FastLocate(): Storing the tail samples" << std::endl;
+  }
   parallelQuickSort(tail_samples.begin(), tail_samples.end());
   sdsl::sd_vector_builder builder(this->index.sequences() * this->header.max_length, total_runs);
   this->last_to_run.set_width(bit_length(total_runs - 1));
@@ -294,6 +329,12 @@ FastLocate::FastLocate(const GBWT& source) :
   }
   sdsl::util::clear(tail_samples);
   this->last = sdsl::sd_vector<>(builder);
+
+  if(Verbosity::level >= Verbosity::BASIC)
+  {
+    double seconds = readTimer() - start;
+    std::cerr << "FastLocate::FastLocate(): Processed " << this->index->sequences() << " sequences of total length " << this->index->size() << " in " << seconds << " seconds" << std::endl;
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -411,6 +452,16 @@ FastLocate::locateNext(size_type prev) const
 {
   SDIterator iter(this->last, prev, SDIterator::query_predecessor);
   return this->samples[this->last_to_run[iter.rank()] + 1] + (prev - *iter);
+}
+
+//------------------------------------------------------------------------------
+
+void
+printStatistics(const FastLocate& index, const std::string& name)
+{
+  printHeader("Fast locate()"); std::cout << name << std::endl;
+  printHeader("Runs"); std::cout << index.size() << std::endl;
+  std::cout << std::endl;
 }
 
 //------------------------------------------------------------------------------

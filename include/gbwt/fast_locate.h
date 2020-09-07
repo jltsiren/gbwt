@@ -124,8 +124,16 @@ public:
   sdsl::int_vector<0> last_to_run;
 
   // Run identifier of the first run in each node.
-  // FIXME Should this be an sd_vector?
   sdsl::int_vector<0> comp_to_run;
+
+//------------------------------------------------------------------------------
+
+  /*
+    Low-level interface: Statistics.
+  */
+
+  size_type size() const { return this->samples.size(); }
+  bool empty() const { return (this->size() == 0); }
 
 //------------------------------------------------------------------------------
 
@@ -190,6 +198,10 @@ private:
     return this->samples[this->comp_to_run[this->index.toComp(node)] + run_id];
   }
 }; // class FastLocate
+
+//------------------------------------------------------------------------------
+
+void printStatistics(const FastLocate& index, const std::string& name);
 
 //------------------------------------------------------------------------------
 
