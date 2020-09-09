@@ -5,6 +5,7 @@
 
 # Tools
 build_gbwt
+build_ri
 merge_gbwt
 benchmark
 metadata_tool

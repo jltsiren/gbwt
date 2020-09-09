@@ -461,6 +461,7 @@ printStatistics(const FastLocate& index, const std::string& name)
 {
   printHeader("Fast locate()"); std::cout << name << std::endl;
   printHeader("Runs"); std::cout << index.size() << std::endl;
+  printHeader("Size"); std::cout << inMegabytes(sdsl::size_in_bytes(index)) << " MB" << std::endl;
   std::cout << std::endl;
 }
 

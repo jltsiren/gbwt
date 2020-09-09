@@ -70,7 +70,6 @@ public:
   FastLocate(FastLocate&& source);
   ~FastLocate();
 
-  // FIXME implement actual construction
   FastLocate(const GBWT& source);
 
   void swap(FastLocate& another);
