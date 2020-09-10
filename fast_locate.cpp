@@ -204,7 +204,7 @@ FastLocate::FastLocate(const GBWT& source) :
   {
     this->comp_to_run[comp] = total_runs; total_runs += record.runs().second;
   });
-  this->comp_to_run.bit_compress();
+  sdsl::util::bit_compress(this->comp_to_run);
   if(Verbosity::level >= Verbosity::FULL)
   {
     std::cerr << "FastLocate::FastLocate(): " << total_runs << " logical runs in the GBWT" << std::endl;
@@ -303,9 +303,9 @@ FastLocate::FastLocate(const GBWT& source) :
   }
   parallelQuickSort(head_samples.begin(), head_samples.end(), [](const sample_record& a, const sample_record& b)
   {
-    return (a.run_id < b.run_id)
+    return (a.run_id < b.run_id);
   });
-  this->samples.set_width(bit_length(this->pack(this->index.sequences() - 1, this->header.max_length - 1)));
+  this->samples.width(bit_length(this->pack(this->index->sequences() - 1, this->header.max_length - 1)));
   this->samples.resize(total_runs);
   for(size_type i = 0; i < total_runs; i++)
   {
@@ -319,8 +319,8 @@ FastLocate::FastLocate(const GBWT& source) :
     std::cerr << "FastLocate::FastLocate(): Storing the tail samples" << std::endl;
   }
   parallelQuickSort(tail_samples.begin(), tail_samples.end());
-  sdsl::sd_vector_builder builder(this->index.sequences() * this->header.max_length, total_runs);
-  this->last_to_run.set_width(bit_length(total_runs - 1));
+  sdsl::sd_vector_builder builder(this->index->sequences() * this->header.max_length, total_runs);
+  this->last_to_run.width(bit_length(total_runs - 1));
   this->last_to_run.resize(total_runs);
   for(size_type i = 0; i < total_runs; i++)
   {
@@ -342,9 +342,9 @@ FastLocate::FastLocate(const GBWT& source) :
 SearchState
 FastLocate::find(node_type node, size_type& first) const
 {
-  if(!(this->index.contains(node))) { return SearchState(); }
+  if(!(this->index->contains(node))) { return SearchState(); }
 
-  CompressedRecord record = this->index.record(node);
+  CompressedRecord record = this->index->record(node);
   if(!(record.empty()))
   {
     first = this->getSample(node, 0);
@@ -367,13 +367,12 @@ FastLocate::find(Iterator begin, Iterator end, size_type& first) const
 SearchState
 FastLocate::extend(SearchState state, node_type node, size_type& first) const
 {
-  if(state.empty() || !(this->index.contains(node))) { return SearchState(); }
+  if(state.empty() || !(this->index->contains(node))) { return SearchState(); }
 
-  CompressedRecord record = this->index.record(node);
+  CompressedRecord record = this->index->record(node);
   bool starts_with_node = false;
   size_type run_id = invalid_offset();
-  size_type first_occ = invalid_offset();
-  state.range = record.LF(state, node, starts_with_node, run_id);
+  state.range = record.LF(state.range, node, starts_with_node, run_id);
   state.node = node;
   if(!(state.empty()))
   {
@@ -407,7 +406,7 @@ std::vector<size_type>
 FastLocate::locate(SearchState state, size_type first) const
 {
   std::vector<size_type> result;
-  if(!(this->contains(state))) { return result; }
+  if(!(this->index->contains(state))) { return result; }
   result.reserve(state.size());
 
   // Find the nearest run start and use the sample there as the first hit,
@@ -415,7 +414,7 @@ FastLocate::locate(SearchState state, size_type first) const
   size_type offset_of_first = state.range.first;
   if(first == NO_POSITION)
   {
-    CompressedRecord record = this->index.record(state.node);
+    CompressedRecord record = this->index->record(state.node);
     CompressedRecordIterator iter(record);
     size_type run_id = 0;
     while(!(iter.end()) && iter.offset() <= state.range.first)

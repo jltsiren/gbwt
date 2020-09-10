@@ -194,7 +194,7 @@ private:
 
   size_type getSample(node_type node, size_type run_id) const
   {
-    return this->samples[this->comp_to_run[this->index.toComp(node)] + run_id];
+    return this->samples[this->comp_to_run[this->index->toComp(node)] + run_id];
   }
 }; // class FastLocate
 

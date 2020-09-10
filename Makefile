@@ -33,13 +33,13 @@ endif
 OTHER_FLAGS=$(PARALLEL_FLAGS)
 
 CXX_FLAGS=$(MY_CXX_FLAGS) $(OTHER_FLAGS) $(MY_CXX_OPT_FLAGS) -Iinclude -I$(INC_DIR)
-LIBOBJS=algorithms.o bwtmerge.o cached_gbwt.o dynamic_gbwt.o files.o gbwt.o internal.o metadata.o support.o utils.o variants.o
+LIBOBJS=algorithms.o bwtmerge.o cached_gbwt.o dynamic_gbwt.o fast_locate.o files.o gbwt.o internal.o metadata.o support.o utils.o variants.o
 SOURCES=$(wildcard *.cpp)
 HEADERS=$(wildcard include/gbwt/*.h)
 OBJS=$(SOURCES:.cpp=.o)
 
 LIBRARY=libgbwt.a
-PROGRAMS=build_gbwt merge_gbwt benchmark metadata_tool remove_seq
+PROGRAMS=build_gbwt build_ri merge_gbwt benchmark metadata_tool remove_seq
 OBSOLETE=prepare_text prepare_text.o metadata
 
 all:$(LIBRARY) $(PROGRAMS)
@@ -51,6 +51,9 @@ $(LIBRARY):$(LIBOBJS)
 	ar rcs $@ $(LIBOBJS)
 
 build_gbwt:build_gbwt.o $(LIBRARY)
+	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+
+build_ri:build_ri.o $(LIBRARY)
 	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 merge_gbwt:merge_gbwt.o $(LIBRARY)

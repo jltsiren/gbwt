@@ -22,6 +22,7 @@
   SOFTWARE.
 */
 
+#include <string>
 #include <unistd.h>
 
 #include <gbwt/fast_locate.h>
@@ -46,10 +47,12 @@ main(int argc, char** argv)
   std::string base_name;
   bool verify_index = false;
   int c = 0;
-  while((c = getopt(argc, argv, "v")) != -1)
+  while((c = getopt(argc, argv, "t:v")) != -1)
   {
     switch(c)
     {
+    case 't':
+      omp_set_num_threads(std::stoul(optarg)); break;
     case 'v':
       verify_index = true; break;
     case '?':
@@ -110,6 +113,7 @@ printUsage(int exit_code)
   Version::print(std::cerr, tool_name);
 
   std::cerr << "Usage: build_ri [options] base_name" << std::endl;
+  std::cerr << "  -t N  Extract the samples using N threads" << std::endl;
   std::cerr << "  -v    Verify the index after construction" << std::endl;
   std::cerr << std::endl;
 
