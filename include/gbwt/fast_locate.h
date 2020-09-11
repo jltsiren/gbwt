@@ -192,11 +192,46 @@ public:
 private:
   void copy(const FastLocate& source);
 
+  size_type globalRunId(node_type node, size_type run_id) const
+  {
+    return this->comp_to_run[this->index->toComp(node)] + run_id;
+  }
+
   size_type getSample(node_type node, size_type run_id) const
   {
-    return this->samples[this->comp_to_run[this->index->toComp(node)] + run_id];
+    return this->samples[this->globalRunId(node, run_id)];
   }
 }; // class FastLocate
+
+//------------------------------------------------------------------------------
+
+/*
+  Template query implementations.
+*/
+
+template<class Iterator>
+SearchState
+FastLocate::find(Iterator begin, Iterator end, size_type& first) const
+{
+  if(begin == end) { return SearchState(); }
+
+  SearchState state = this->find(*begin, first);
+  ++begin;
+
+  return this->extend(state, begin, end, first);
+}
+
+template<class Iterator>
+SearchState
+FastLocate::extend(SearchState state, Iterator begin, Iterator end, size_type& first) const
+{
+  while(begin != end && !(state.empty()))
+  {
+    state = this->extend(state, *begin, first);
+    ++begin;
+  }
+  return state;
+}
 
 //------------------------------------------------------------------------------
 

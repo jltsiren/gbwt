@@ -23,13 +23,13 @@
   SOFTWARE.
 */
 
-#include <random>
 #include <set>
 #include <unistd.h>
 
 #include <atomic>
 
 #include <gbwt/dynamic_gbwt.h>
+#include <gbwt/test.h>
 #include <gbwt/variants.h>
 
 using namespace gbwt;
@@ -38,12 +38,8 @@ using namespace gbwt;
 
 const std::string tool_name = "GBWT construction";
 
-const size_type MAX_ERRORS   = 100; // Do not print more error messages.
-size_type errors             = 0;
-
-const size_type RANDOM_SEED  = 0xDEADBEEF;
-const size_type QUERIES      = 20000;
-const size_type QUERY_LENGTH = 60;
+constexpr size_type MAX_ERRORS   = 100; // Do not print more error messages.
+size_type errors                 = 0;
 
 void printUsage(int exit_code = EXIT_SUCCESS);
 
@@ -347,12 +343,12 @@ main(int argc, char** argv)
     }
 
     std::vector<vector_type> queries;
-    std::vector<SearchState> results = verifyFind(compressed_index, dynamic_index, input_base, queries);
+    std::vector<SearchState> result = verifyFind(compressed_index, dynamic_index, input_base, queries);
     if(both_orientations)
     {
-      verifyBidirectional(compressed_index, dynamic_index, queries, results);
+      verifyBidirectional(compressed_index, dynamic_index, queries, result);
     }
-    verifyLocate(compressed_index, dynamic_index, results);
+    verifyLocate(compressed_index, dynamic_index, result);
     verifyExtract(compressed_index, dynamic_index, input_base, both_orientations);
     verifySamples(compressed_index, dynamic_index);
 
@@ -393,52 +389,6 @@ printUsage(int exit_code)
   std::exit(exit_code);
 }
 
-std::vector<size_type>
-startOffsets(const std::string& base_name)
-{
-  std::vector<size_type> offsets;
-  text_buffer_type text(base_name);
-  bool seq_start = true;
-  for(size_type i = 0; i < text.size(); i++)
-  {
-    if(seq_start) { offsets.push_back(i); seq_start = false; }
-    if(text[i] == ENDMARKER) { seq_start = true; }
-  }
-
-  std::cout << "Found the starting offsets for " << offsets.size() << " sequences" << std::endl;
-  return offsets;
-}
-
-std::vector<vector_type>
-generateQueries(const std::string& base_name)
-{
-  std::mt19937_64 rng(RANDOM_SEED);
-  std::vector<vector_type> result;
-  text_buffer_type text(base_name);
-  if(text.size() <= QUERY_LENGTH)
-  {
-    std::cerr << "generateQueries(): Text length " << text.size() << " is too small for query length " << QUERY_LENGTH << std::endl;
-    return result;
-  }
-
-  size_type attempts = 0;
-  while(result.size() < QUERIES && attempts < 2 * QUERIES)
-  {
-    size_type start_offset = rng() % (text.size() - QUERY_LENGTH);  // We do not want queries containing the final endmarker.
-    vector_type candidate(text.begin() + start_offset, text.begin() + start_offset + QUERY_LENGTH);
-    bool ok = true;
-    for(auto node : candidate)
-    {
-      if(node == ENDMARKER) { ok = false; break; }
-    }
-    if(ok) { result.push_back(candidate); }
-    attempts++;
-  }
-
-  std::cout << "Generated " << result.size() << " queries of total length " << (result.size() * QUERY_LENGTH) << std::endl;
-  return result;
-}
-
 std::string indexType(const GBWT&) { return "Compressed GBWT"; }
 std::string indexType(const DynamicGBWT&) { return "Dynamic GBWT"; }
 
@@ -465,20 +415,20 @@ verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const
 
   double start = readTimer();
   size_type initial_errors = errors;
-  queries = generateQueries(query_base);
-  std::vector<SearchState> results(queries.size());
+  queries = generateQueries(query_base, true);
+  std::vector<SearchState> result(queries.size());
 
   for(size_type i = 0; i < queries.size(); i++)
   {
-    results[i] = compressed_index.find(queries[i].begin(), queries[i].end());
+    result[i] = compressed_index.find(queries[i].begin(), queries[i].end());
     SearchState dynamic_result = dynamic_index.find(queries[i].begin(), queries[i].end());
-    if(dynamic_result != results[i])
+    if(dynamic_result != result[i])
     {
       errors++;
       if(errors <= MAX_ERRORS)
       {
         std::cerr << "verifyFind(): Mismatching results with query " << i << std::endl;
-        std::cerr << "verifyFind(): " << indexType(compressed_index) << ": " << results[i] << ", " << indexType(dynamic_index) << ": " << dynamic_result << std::endl;
+        std::cerr << "verifyFind(): " << indexType(compressed_index) << ": " << result[i] << ", " << indexType(dynamic_index) << ": " << dynamic_result << std::endl;
       }
     }
   }
@@ -488,7 +438,7 @@ verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const
   else { std::cout << "find() verified in " << seconds << " seconds" << std::endl; }
   std::cout << std::endl;
 
-  return results;
+  return result;
 }
 
 //------------------------------------------------------------------------------
@@ -561,13 +511,13 @@ size_type
 directLocate(const GBWTType& index, SearchState query)
 {
   size_type hash = 0;
-  std::vector<size_type> results;
+  std::vector<size_type> result;
   for(size_type i = query.range.first; i <= query.range.second; i++)
   {
-    results.push_back(index.locate(query.node, i));
+    result.push_back(index.locate(query.node, i));
   }
-  removeDuplicates(results, false);
-  for(size_type res : results) { hash ^= wang_hash_64(res); }
+  removeDuplicates(result, false);
+  for(size_type res : result) { hash ^= wang_hash_64(res); }
   return hash;
 }
 
@@ -576,8 +526,8 @@ size_type
 fastLocate(const GBWTType& index, SearchState query)
 {
   size_type hash = 0;
-  std::vector<size_type> results = index.locate(query);
-  for(size_type res : results) { hash ^= wang_hash_64(res); }
+  std::vector<size_type> result = index.locate(query);
+  for(size_type res : result) { hash ^= wang_hash_64(res); }
   return hash;
 }
 
@@ -692,7 +642,7 @@ verifyExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, co
 
   double start = readTimer();
   size_type initial_errors = errors;
-  std::vector<size_type> offsets = startOffsets(base_name);
+  std::vector<size_type> offsets = startOffsets(base_name, true);
   size_type expected_sequences = offsets.size() * (both_orientations ? 2 : 1);
   if(compressed_index.sequences() != expected_sequences || compressed_index.sequences() != dynamic_index.sequences())
   {

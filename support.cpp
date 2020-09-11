@@ -604,7 +604,6 @@ CompressedRecord::LF(range_type range, node_type to, bool& starts_with_to, size_
   // it may be a run of to.
   size_type start_offset = range.first;
   bool first_run_found = false; // Have we seen the first run covering the query range?
-  while(!(iter.end()) && iter.offset() < range.first) { ++iter; }
   range.first = iter.rankAt(range.first);
   if(iter.offset() > start_offset)
   {
@@ -620,7 +619,7 @@ CompressedRecord::LF(range_type range, node_type to, bool& starts_with_to, size_
   while(!(iter.end()) && iter.offset() <= range.second)
   {
     ++iter;
-    if(iter->second == outrank && first_run == invalid_offset())
+    if(iter->first == outrank && first_run == invalid_offset())
     {
       if(!first_run_found) { starts_with_to = true; }
       first_run = iter.runId();

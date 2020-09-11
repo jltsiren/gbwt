@@ -256,11 +256,11 @@ FastLocate::FastLocate(const GBWT& source) :
     size_type seq_offset = 0, run_id = endmarker_runs[i];
     if(i == 0 || run_id != endmarker_runs[i - 1])
     {
-      head_buffer.push_back({ i, seq_offset, run_id });
+      head_buffer.push_back({ i, seq_offset, this->globalRunId(ENDMARKER, run_id) });
     }
     if(i + 1 >= this->index->sequences() || run_id != endmarker_runs[i + 1])
     {
-      tail_buffer.push_back({ i, seq_offset, run_id });
+      tail_buffer.push_back({ i, seq_offset, this->globalRunId(ENDMARKER, run_id) });
     }
     edge_type curr = this->index->start(i); seq_offset++;
     range_type run(0, 0);
@@ -269,11 +269,11 @@ FastLocate::FastLocate(const GBWT& source) :
       edge_type next = this->index->record(curr.first).LF(curr.second, run, run_id);
       if(curr.second == run.first)
       {
-        head_buffer.push_back({ i, seq_offset, run_id });
+        head_buffer.push_back({ i, seq_offset, this->globalRunId(curr.first, run_id) });
       }
       if(curr.second == run.second)
       {
-        tail_buffer.push_back({ i, seq_offset, run_id });
+        tail_buffer.push_back({ i, seq_offset, this->globalRunId(curr.first, run_id) });
       }
       curr = next; seq_offset++;
     }
@@ -352,28 +352,15 @@ FastLocate::find(node_type node, size_type& first) const
   return SearchState(node, 0, record.size() - 1);
 }
 
-template<class Iterator>
-SearchState
-FastLocate::find(Iterator begin, Iterator end, size_type& first) const
-{
-  if(begin == end) { return SearchState(); }
-
-  SearchState state = this->find(*begin, first);
-  ++begin;
-
-  return this->extend(state, begin, end, first);
-}
-
 SearchState
 FastLocate::extend(SearchState state, node_type node, size_type& first) const
 {
   if(state.empty() || !(this->index->contains(node))) { return SearchState(); }
 
-  CompressedRecord record = this->index->record(node);
+  CompressedRecord record = this->index->record(state.node);
   bool starts_with_node = false;
   size_type run_id = invalid_offset();
   state.range = record.LF(state.range, node, starts_with_node, run_id);
-  state.node = node;
   if(!(state.empty()))
   {
     // The position at the start of the resulting range is the successor of the
@@ -383,22 +370,11 @@ FastLocate::extend(SearchState state, node_type node, size_type& first) const
     if(starts_with_node) { first--; }
     else
     {
-      first = this->getSample(node, run_id) - 1;
+      first = this->getSample(state.node, run_id) - 1;
     }
   }
+  state.node = node;
 
-  return state;
-}
-
-template<class Iterator>
-SearchState
-FastLocate::extend(SearchState state, Iterator begin, Iterator end, size_type& first) const
-{
-  while(begin != end && !(state.empty()))
-  {
-    state = this->extend(state, *begin, first);
-    ++begin;
-  }
   return state;
 }
 

@@ -1,5 +1,6 @@
 /*
-  Copyright (c) 2020 Jouni Siren
+  Copyright (c) 2018, 2020 Jouni Siren
+  Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -26,6 +27,7 @@
 #include <unistd.h>
 
 #include <gbwt/fast_locate.h>
+#include <gbwt/test.h>
 
 using namespace gbwt;
 
@@ -33,9 +35,15 @@ using namespace gbwt;
 
 const std::string tool_name = "R-index construction";
 
+constexpr size_type MAX_ERRORS   = 100; // Do not print more error messages.
+size_type errors                 = 0;
+
 void printUsage(int exit_code = EXIT_SUCCESS);
 
-// FIXME index verification
+typedef std::pair<SearchState, size_type> find_result;
+
+std::vector<find_result> verifyFind(const GBWT& gbwt_index, const FastLocate& r_index, const std::string& base_name, std::vector<vector_type>& queries);
+void verifyLocate(const GBWT& gbwt_index, const FastLocate& r_index, const std::vector<find_result>& queries);
 
 //------------------------------------------------------------------------------
 
@@ -99,7 +107,18 @@ main(int argc, char** argv)
 
   if(verify_index)
   {
-    std::cerr << "build_ri: Verification has not been implemented yet" << std::endl;
+    std::cout << "Verifying the index..." << std::endl;
+    double verify_start = readTimer();
+    std::cout << std::endl;
+
+    std::vector<vector_type> queries;
+    std::vector<find_result> result = verifyFind(gbwt_index, r_index, base_name, queries);
+    verifyLocate(gbwt_index, r_index, result);
+
+    double verify_seconds = readTimer() - verify_start;
+    if(errors > 0) { std::cout << "Index verification failed" << std::endl; }
+    else { std::cout << "Index verified in " << verify_seconds << " seconds" << std::endl; }
+    std::cout << std::endl;
   }
 
   return 0;
@@ -118,6 +137,110 @@ printUsage(int exit_code)
   std::cerr << std::endl;
 
   std::exit(exit_code);
+}
+
+//------------------------------------------------------------------------------
+
+/*
+  find() queries: Ensure that both index types give the same results.
+*/
+
+std::vector<find_result>
+verifyFind(const GBWT& gbwt_index, const FastLocate& r_index, const std::string& base_name, std::vector<vector_type>& queries)
+{
+  std::cout << "Verifying find()..." << std::endl;
+
+  double start = readTimer();
+  size_type initial_errors = errors;
+  queries = generateQueries(base_name, true);
+  std::vector<find_result> result(queries.size());
+
+  for(size_type i = 0; i < queries.size(); i++)
+  {
+    result[i].first = gbwt_index.find(queries[i].begin(), queries[i].end());
+    SearchState r_index_result = r_index.find(queries[i].begin(), queries[i].end(), result[i].second);
+    if(r_index_result != result[i].first)
+    {
+      errors++;
+      if(errors <= MAX_ERRORS)
+      {
+        std::cerr << "verifyFind(): Mismatching results with query " << i << std::endl;
+        std::cerr << "verifyFind(): Expected " << result[i].first << ", got " << r_index_result << std::endl;
+      }
+    }
+  }
+
+  double seconds = readTimer() - start;
+  if(errors > initial_errors) { std::cout << "find() verification failed" << std::endl; }
+  else { std::cout << "find() verified in " << seconds << " seconds" << std::endl; }
+  std::cout << std::endl;
+
+  return result;
+}
+
+//------------------------------------------------------------------------------
+
+/*
+  locate() queries: Ensure that both index types give the same results.
+*/
+
+size_type
+totalLength(const std::vector<find_result>& states)
+{
+  size_type result = 0;
+  for(find_result state : states) { result += state.first.size(); }
+  return result;
+}
+
+void
+verifyLocate(const GBWT& gbwt_index, const FastLocate& r_index, const std::vector<find_result>& queries)
+{
+  std::cout << "Verifying locate()..." << std::endl;
+
+  double start = readTimer();
+  size_type initial_errors = errors;
+  std::cout << queries.size() << " ranges of total length " << totalLength(queries) << std::endl;
+  std::vector<range_type> blocks = Range::partition(range_type(0, queries.size() - 1), 4 * omp_get_max_threads());
+
+  #pragma omp parallel for schedule(dynamic, 1)
+  for(size_type block = 0; block < blocks.size(); block++)
+  {
+    for(size_type i = blocks[block].first; i <= blocks[block].second; i++)
+    {
+      if(queries[i].first.empty()) { continue; }
+      size_type gbwt_hash = 0, r_index_slow = 0, r_index_fast = 0;
+      {
+        std::vector<size_type> result = gbwt_index.locate(queries[i].first);
+        for(size_type res : result) { gbwt_hash ^= wang_hash_64(res); }
+      }
+      {
+        std::vector<size_type> result = r_index.locate(queries[i].first);
+        for(size_type res : result) { r_index_slow ^= wang_hash_64(res); }
+      }
+      {
+        std::vector<size_type> result = r_index.locate(queries[i].first, queries[i].second);
+        for(size_type res : result) { r_index_fast ^= wang_hash_64(res); }
+      }
+
+      if(r_index_slow != gbwt_hash || r_index_fast != gbwt_hash)
+      {
+        #pragma omp critical
+        {
+          errors++;
+          if(errors <= MAX_ERRORS)
+          {
+            std::cerr << "verifyLocate(): Hash mismatch with query " << i << std::endl;
+            std::cerr << "verifyLocate(): Expected " << gbwt_hash << ", got " << r_index_slow << " (slow), " << r_index_fast << " (fast)" << std::endl;
+          }
+        }
+      }
+    }
+  }
+
+  double seconds = readTimer() - start;
+  if(errors > initial_errors) { std::cout << "locate() verification failed" << std::endl; }
+  else { std::cout << "locate() verified in " << seconds << " seconds" << std::endl; }
+  std::cout << std::endl;
 }
 
 //------------------------------------------------------------------------------
