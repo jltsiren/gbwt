@@ -369,7 +369,7 @@ GBWT::cacheEndmarker()
 void
 printStatistics(const GBWT& gbwt, const std::string& name)
 {
-  printHeader("Compressed GBWT"); std::cout << name;
+  printHeader(indexType(gbwt)); std::cout << name;
   if(gbwt.bidirectional()) { std::cout << " (bidirectional)"; }
   std::cout << std::endl;
   printHeader("Total length"); std::cout << gbwt.size() << std::endl;
@@ -387,6 +387,12 @@ printStatistics(const GBWT& gbwt, const std::string& name)
     printHeader("Metadata"); std::cout << gbwt.metadata << std::endl;
   }
   std::cout << std::endl;
+}
+
+std::string
+indexType(const GBWT&)
+{
+  return "Compressed GBWT";
 }
 
 //------------------------------------------------------------------------------

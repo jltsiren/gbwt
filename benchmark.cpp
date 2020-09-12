@@ -28,8 +28,8 @@
 #include <string>
 #include <unistd.h>
 
-#include <gbwt/cached_gbwt.h>
 #include <gbwt/dynamic_gbwt.h>
+#include <gbwt/fast_locate.h>
 
 using namespace gbwt;
 
@@ -45,12 +45,14 @@ void compareIndexes(const GBWT& first, const GBWT& second, const std::string& fi
 
 void extendedStatistics(const DynamicGBWT& index);
 
-std::vector<SearchState> findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type find_queries, size_type pattern_length, std::vector<vector_type>& queries);
+std::vector<SearchState> findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const FastLocate& r_index, size_type find_queries, size_type pattern_length, std::vector<vector_type>& queries, std::vector<size_type>& first_occs);
 
 void bidirectionalBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<vector_type>& queries);
 
 template<class GBWTType>
-void locateBenchmark(const GBWTType& index, const std::vector<SearchState>& queries);
+void locateBenchmark(const GBWTType& index, const std::vector<SearchState>& queries, const std::vector<size_type>& first_occs);
+template<>
+void locateBenchmark<FastLocate>(const FastLocate& index, const std::vector<SearchState>& queries, const std::vector<size_type>& first_occs);
 
 void extractBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type extract_queries);
 
@@ -63,9 +65,10 @@ main(int argc, char** argv)
 
   int c = 0;
   bool compare = false, find = false, locate = false, extract = false, statistics = false, breakdown = false;
+  bool use_r_index = false;
   size_type find_queries = 0, pattern_length = 0, extract_queries = 0;
   std::string compare_base;
-  while((c = getopt(argc, argv, "c:f:p:le:sS")) != -1)
+  while((c = getopt(argc, argv, "c:f:p:le:rsS")) != -1)
   {
     switch(c)
     {
@@ -83,6 +86,8 @@ main(int argc, char** argv)
     case 'e':
       extract = true;
       extract_queries = std::stoul(optarg); break;
+    case 'r':
+      use_r_index = true; break;
     case 's':
       statistics = true;
       break;
@@ -184,10 +189,23 @@ main(int argc, char** argv)
 
   if(!(find || locate || extract)) { return 0; }
 
+  FastLocate r_index;
+  if(use_r_index)
+  {
+    if(!sdsl::load_from_file(r_index, index_base + FastLocate::EXTENSION))
+    {
+      std::cerr << "benchmark: Cannot load the r-index from " << (index_base + FastLocate::EXTENSION) << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    r_index.setGBWT(compressed_index);
+    printStatistics(r_index, index_base);
+  }
+
   if(find)
   {
     std::vector<vector_type> queries;
-    std::vector<SearchState> results = findBenchmark(compressed_index, dynamic_index, find_queries, pattern_length, queries);
+    std::vector<size_type> first_occs;
+    std::vector<SearchState> result = findBenchmark(compressed_index, dynamic_index, r_index, find_queries, pattern_length, queries, first_occs);
     if(compressed_index.bidirectional())
     {
       bidirectionalBenchmark(compressed_index, dynamic_index, queries);
@@ -195,8 +213,9 @@ main(int argc, char** argv)
     queries.clear();
     if(locate)
     {
-      locateBenchmark(compressed_index, results);
-      locateBenchmark(dynamic_index, results);
+      locateBenchmark(compressed_index, result, first_occs);
+      locateBenchmark(dynamic_index, result, first_occs);
+      if(use_r_index) { locateBenchmark(r_index, result, first_occs); }
     }
   }
   if(extract)
@@ -220,6 +239,7 @@ printUsage(int exit_code)
   std::cerr << "  -p N  Use patterns of length N" << std::endl;
   std::cerr << "  -l    Benchmark locate() queries (requires -f)" << std::endl;
   std::cerr << "  -e N  Benchmark N extract() queries" << std::endl;
+  std::cerr << "  -r    Also use the r-index for find()/locate() queries" << std::endl;
   std::cerr << "  -s    Print extended statistics" << std::endl;
   std::cerr << "  -S    Write size breakdown to index_base.html" << std::endl;
   std::cerr << std::endl;
@@ -365,22 +385,36 @@ generateQueries(const DynamicGBWT& index, size_type find_queries, size_type patt
   return result;
 }
 
-std::string indexType(const GBWT&) { return "Compressed GBWT"; }
-std::string indexType(const DynamicGBWT&) { return "Dynamic GBWT"; }
-
 //------------------------------------------------------------------------------
 
 template<class GBWTType>
 size_type
-findBenchmark(const GBWTType& index, const std::vector<vector_type>& queries, std::vector<SearchState>& results)
+findBenchmark(const GBWTType& index, const std::vector<vector_type>& queries, std::vector<SearchState>& result, std::vector<size_type>&)
 {
   double start = readTimer();
   size_type total_length = 0, total_size = 0;
   for(size_type i = 0; i < queries.size(); i++)
   {
-    results[i] = index.find(queries[i].begin(), queries[i].end());
+    result[i] = index.find(queries[i].begin(), queries[i].end());
     total_length += queries[i].size();
-    total_size += results[i].size();
+    total_size += result[i].size();
+  }
+  double seconds = readTimer() - start;
+  printTimeLength(indexType(index), queries.size(), total_length, seconds);
+  return total_size;
+}    
+
+template<>
+size_type
+findBenchmark<FastLocate>(const FastLocate& index, const std::vector<vector_type>& queries, std::vector<SearchState>& result, std::vector<size_type>& first_occs)
+{
+  double start = readTimer();
+  size_type total_length = 0, total_size = 0;
+  for(size_type i = 0; i < queries.size(); i++)
+  {
+    result[i] = index.find(queries[i].begin(), queries[i].end(), first_occs[i]);
+    total_length += queries[i].size();
+    total_size += result[i].size();
   }
   double seconds = readTimer() - start;
   printTimeLength(indexType(index), queries.size(), total_length, seconds);
@@ -388,27 +422,41 @@ findBenchmark(const GBWTType& index, const std::vector<vector_type>& queries, st
 }    
 
 std::vector<SearchState>
-findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type find_queries, size_type pattern_length, std::vector<vector_type>& queries)
+findBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const FastLocate& r_index, size_type find_queries, size_type pattern_length, std::vector<vector_type>& queries, std::vector<size_type>& first_occs)
 {
   std::cout << "find() benchmarks:" << std::endl;
 
+  bool use_r_index = !(r_index.empty());
+
   queries = generateQueries(dynamic_index, find_queries, pattern_length);
-  std::vector<SearchState> results(queries.size());
+  std::vector<SearchState> result(queries.size());
+  if(use_r_index) { first_occs.resize(queries.size()); }
 
-  size_type compressed_length = findBenchmark(compressed_index, queries, results);
-  size_type dynamic_length = findBenchmark(dynamic_index, queries, results);
+  size_type compressed_length = findBenchmark(compressed_index, queries, result, first_occs);
+  size_type dynamic_length = findBenchmark(dynamic_index, queries, result, first_occs);
 
-  if(compressed_length != dynamic_length)
+  size_type r_length = compressed_length;
+  if(use_r_index)
+  {
+    r_length = findBenchmark(r_index, queries, result, first_occs);
+  }
+
+  if(compressed_length != dynamic_length || compressed_length != r_length)
   {
     std::cerr << "findBenchmark(): Total length mismatch: "
               << compressed_length << " (" << indexType(compressed_index) << "), "
-              << dynamic_length << " (" << indexType(dynamic_index) << ")" << std::endl;
+              << dynamic_length << " (" << indexType(dynamic_index) << ")";
+    if(use_r_index)
+    {
+      std::cerr << ", " << r_length << "(" << indexType(r_index) << ")";
+    }
+    std::cerr << std::endl;
   }
 
-  std::cout << "Found " << results.size() << " ranges of total length " << compressed_length << std::endl;
+  std::cout << "Found " << result.size() << " ranges of total length " << compressed_length << std::endl;
   std::cout << std::endl;
 
-  return results;
+  return result;
 }
 
 //------------------------------------------------------------------------------
@@ -473,7 +521,7 @@ bidirectionalBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_
 
 template<class GBWTType>
 void
-locateBenchmark(const GBWTType& index, const std::vector<SearchState>& queries)
+locateBenchmark(const GBWTType& index, const std::vector<SearchState>& queries, const std::vector<size_type>&)
 {
   std::cout << "locate() benchmarks (" << indexType(index) << "):" << std::endl;
 
@@ -501,6 +549,41 @@ locateBenchmark(const GBWTType& index, const std::vector<SearchState>& queries)
     for(SearchState query : queries)
     {
       std::vector<size_type> result = index.locate(query);
+      found += result.size();
+    }
+    double seconds = readTimer() - start;
+    printTime("Fast", found, seconds);
+  }
+
+  std::cout << std::endl;
+}
+
+template<>
+void
+locateBenchmark<FastLocate>(const FastLocate& index, const std::vector<SearchState>& queries, const std::vector<size_type>& first_occs)
+{
+  std::cout << "locate() benchmarks (" << indexType(index) << "):" << std::endl;
+
+  {
+    double start = readTimer();
+    size_type found = 0;
+    for(size_type i = 0; i < queries.size(); i++)
+    {
+      if(queries[i].empty()) { continue; }
+      std::vector<size_type> result = index.locate(queries[i]);
+      found += result.size();
+    }
+    double seconds = readTimer() - start;
+    printTime("Slow", found, seconds);
+  }
+
+  {
+    double start = readTimer();
+    size_type found = 0;
+    for(size_type i = 0; i < queries.size(); i++)
+    {
+      if(queries[i].empty()) { continue; }
+      std::vector<size_type> result = index.locate(queries[i], first_occs[i]);
       found += result.size();
     }
     double seconds = readTimer() - start;

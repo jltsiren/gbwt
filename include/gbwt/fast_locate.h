@@ -236,6 +236,7 @@ FastLocate::extend(SearchState state, Iterator begin, Iterator end, size_type& f
 //------------------------------------------------------------------------------
 
 void printStatistics(const FastLocate& index, const std::string& name);
+std::string indexType(const FastLocate&);
 
 //------------------------------------------------------------------------------
 

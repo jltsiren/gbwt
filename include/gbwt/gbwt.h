@@ -288,6 +288,7 @@ public:
 //------------------------------------------------------------------------------
 
 void printStatistics(const GBWT& gbwt, const std::string& name);
+std::string indexType(const GBWT&);
 
 //------------------------------------------------------------------------------
 

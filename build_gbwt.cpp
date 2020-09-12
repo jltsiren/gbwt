@@ -389,9 +389,6 @@ printUsage(int exit_code)
   std::exit(exit_code);
 }
 
-std::string indexType(const GBWT&) { return "Compressed GBWT"; }
-std::string indexType(const DynamicGBWT&) { return "Dynamic GBWT"; }
-
 size_type
 totalLength(const std::vector<SearchState>& states)
 {

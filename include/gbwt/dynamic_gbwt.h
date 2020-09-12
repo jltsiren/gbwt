@@ -367,6 +367,7 @@ public:
 //------------------------------------------------------------------------------
 
 void printStatistics(const DynamicGBWT& gbwt, const std::string& name);
+std::string indexType(const DynamicGBWT&);
 
 //------------------------------------------------------------------------------
 
