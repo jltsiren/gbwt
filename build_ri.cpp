@@ -133,7 +133,7 @@ printUsage(int exit_code)
 
   std::cerr << "Usage: build_ri [options] base_name" << std::endl;
   std::cerr << "  -t N  Extract the samples using N threads" << std::endl;
-  std::cerr << "  -v    Verify the index after construction" << std::endl;
+  std::cerr << "  -v    Verify the index using the sequences in file 'base_name'" << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);

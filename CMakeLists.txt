@@ -58,12 +58,14 @@ add_library(gbwt STATIC
   ${CMAKE_SOURCE_DIR}/bwtmerge.cpp
   ${CMAKE_SOURCE_DIR}/cached_gbwt.cpp
   ${CMAKE_SOURCE_DIR}/dynamic_gbwt.cpp
+  ${CMAKE_SOURCE_DIR}/fast_locate.cpp
   ${CMAKE_SOURCE_DIR}/files.cpp
   ${CMAKE_SOURCE_DIR}/gbwt.cpp
   ${CMAKE_SOURCE_DIR}/internal.cpp
   ${CMAKE_SOURCE_DIR}/metadata.cpp
   ${CMAKE_SOURCE_DIR}/support.cpp
   ${CMAKE_SOURCE_DIR}/utils.cpp
+  ${CMAKE_SOURCE_DIR}/test.cpp
   ${CMAKE_SOURCE_DIR}/variants.cpp)
 add_dependencies(gbwt sdsl-lite)
 
@@ -74,6 +76,18 @@ target_include_directories(build_gbwt PUBLIC
   "${sdsl-lite_INCLUDE}"
   "${sdsl-lite-divsufsort_INCLUDE}")
 target_link_libraries(build_gbwt
+  "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
+  "${sdsl-lite_LIB}/libsdsl.a"
+  "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
+  "${sdsl-lite-divsufsort_LIB}/libdivsufsort64.a")
+
+add_executable(build_ri ${CMAKE_SOURCE_DIR}/build_ri.cpp)
+add_dependencies(build_ri gbwt)
+target_include_directories(build_ri PUBLIC
+  "${CMAKE_SOURCE_DIR}/include"
+  "${sdsl-lite_INCLUDE}"
+  "${sdsl-lite-divsufsort_INCLUDE}")
+target_link_libraries(build_ri
   "${LIBRARY_OUTPUT_PATH}/libgbwt.a"
   "${sdsl-lite_LIB}/libsdsl.a"
   "${sdsl-lite-divsufsort_LIB}/libdivsufsort.a"
