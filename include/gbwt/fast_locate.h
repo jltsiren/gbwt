@@ -70,7 +70,7 @@ public:
   FastLocate(FastLocate&& source);
   ~FastLocate();
 
-  FastLocate(const GBWT& source);
+  explicit FastLocate(const GBWT& source);
 
   void swap(FastLocate& another);
   FastLocate& operator=(const FastLocate& source);
