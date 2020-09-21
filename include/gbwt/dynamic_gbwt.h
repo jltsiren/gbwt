@@ -55,6 +55,7 @@ public:
 
   DynamicGBWT();
   DynamicGBWT(const DynamicGBWT& source);
+  DynamicGBWT(const GBWT& source);
   DynamicGBWT(DynamicGBWT&& source);
   ~DynamicGBWT();
 

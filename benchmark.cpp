@@ -177,12 +177,7 @@ main(int argc, char** argv)
 
   if(!(find || locate || extract || statistics)) { return 0; }
 
-  DynamicGBWT dynamic_index;
-  if(!sdsl::load_from_file(dynamic_index, index_base + DynamicGBWT::EXTENSION))
-  {
-    std::cerr << "benchmark: Cannot load the index from " << (index_base + DynamicGBWT::EXTENSION) << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  DynamicGBWT dynamic_index(compressed_index);
   printStatistics(dynamic_index, index_base);
 
   if(statistics) { extendedStatistics(dynamic_index); }

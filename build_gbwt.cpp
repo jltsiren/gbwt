@@ -335,12 +335,7 @@ main(int argc, char** argv)
       std::cerr << "build_gbwt: Cannot load the index from " << gbwt_name << std::endl;
       std::exit(EXIT_FAILURE);
     }
-    DynamicGBWT dynamic_index;
-    if(!sdsl::load_from_file(dynamic_index, gbwt_name))
-    {
-      std::cerr << "build_gbwt: Cannot load the index from " << gbwt_name << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
+    DynamicGBWT dynamic_index(compressed_index);
 
     std::vector<vector_type> queries;
     std::vector<SearchState> result = verifyFind(compressed_index, dynamic_index, input_base, queries);

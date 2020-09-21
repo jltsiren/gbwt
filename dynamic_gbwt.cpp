@@ -58,6 +58,46 @@ DynamicGBWT::DynamicGBWT(const DynamicGBWT& source)
   this->copy(source);
 }
 
+DynamicGBWT::DynamicGBWT(const GBWT& source) :
+  header(source.header),
+  metadata(source.metadata)
+{
+  // Decompress the BWT.
+  this->bwt.resize(this->effective());
+  {
+    source.bwt.forEach([&](size_type comp, const CompressedRecord& record)
+    {
+      DynamicRecord& current = this->bwt[comp];
+      current.outgoing = record.outgoing;
+      if(current.outdegree() > 0)
+      {
+        for(CompressedRecordIterator iter(record); !(iter.end()); ++iter)
+        {
+          current.body.push_back(*iter);
+          current.body_size += iter->second;
+        }
+      }
+    });
+  }
+
+  // Decompress the samples.
+  {
+    SampleIterator sample_iter(source.da_samples);
+    for(SampleRangeIterator range_iter(source.da_samples); !(range_iter.end()); ++range_iter)
+    {
+      DynamicRecord& current = this->bwt[range_iter.record()];
+      while(!(sample_iter.end()) && sample_iter.offset() < range_iter.limit())
+      {
+        current.ids.push_back(sample_type(sample_iter.offset() - range_iter.start(), *sample_iter));
+        ++sample_iter;
+      }
+    }
+  }
+
+  // Rebuild the incoming edges.
+  this->rebuildIncoming();
+}
+
 DynamicGBWT::DynamicGBWT(DynamicGBWT&& source)
 {
   *this = std::move(source);
