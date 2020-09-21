@@ -61,6 +61,7 @@ public:
 
   void swap(DynamicGBWT& another);
   DynamicGBWT& operator=(const DynamicGBWT& source);
+  DynamicGBWT& operator=(const GBWT& source);
   DynamicGBWT& operator=(DynamicGBWT&& source);
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
@@ -323,6 +324,7 @@ public:
 
 private:
   void copy(const DynamicGBWT& source);
+  void copy(const GBWT& source);
 
   // Change offset and alphabet size.
   void forceResize(size_type new_offset, size_type new_sigma);

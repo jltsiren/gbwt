@@ -58,44 +58,9 @@ DynamicGBWT::DynamicGBWT(const DynamicGBWT& source)
   this->copy(source);
 }
 
-DynamicGBWT::DynamicGBWT(const GBWT& source) :
-  header(source.header),
-  metadata(source.metadata)
+DynamicGBWT::DynamicGBWT(const GBWT& source)
 {
-  // Decompress the BWT.
-  this->bwt.resize(this->effective());
-  {
-    source.bwt.forEach([&](size_type comp, const CompressedRecord& record)
-    {
-      DynamicRecord& current = this->bwt[comp];
-      current.outgoing = record.outgoing;
-      if(current.outdegree() > 0)
-      {
-        for(CompressedRecordIterator iter(record); !(iter.end()); ++iter)
-        {
-          current.body.push_back(*iter);
-          current.body_size += iter->second;
-        }
-      }
-    });
-  }
-
-  // Decompress the samples.
-  {
-    SampleIterator sample_iter(source.da_samples);
-    for(SampleRangeIterator range_iter(source.da_samples); !(range_iter.end()); ++range_iter)
-    {
-      DynamicRecord& current = this->bwt[range_iter.record()];
-      while(!(sample_iter.end()) && sample_iter.offset() < range_iter.limit())
-      {
-        current.ids.push_back(sample_type(sample_iter.offset() - range_iter.start(), *sample_iter));
-        ++sample_iter;
-      }
-    }
-  }
-
-  // Rebuild the incoming edges.
-  this->rebuildIncoming();
+  this->copy(source);
 }
 
 DynamicGBWT::DynamicGBWT(DynamicGBWT&& source)
@@ -122,6 +87,13 @@ DynamicGBWT&
 DynamicGBWT::operator=(const DynamicGBWT& source)
 {
   if(this != &source) { this->copy(source); }
+  return *this;
+}
+
+DynamicGBWT&
+DynamicGBWT::operator=(const GBWT& source)
+{
+  this->copy(source);
   return *this;
 }
 
@@ -224,6 +196,46 @@ DynamicGBWT::copy(const DynamicGBWT& source)
 {
   this->header = source.header;
   this->bwt = source.bwt;
+  this->metadata = source.metadata;
+}
+
+void
+DynamicGBWT::copy(const GBWT& source)
+{
+  this->header = source.header;
+
+  // Decompress the BWT.
+  this->bwt.resize(this->effective());
+  source.bwt.forEach([&](size_type comp, const CompressedRecord& record)
+  {
+    DynamicRecord& current = this->bwt[comp];
+    current.clear();
+    current.outgoing = record.outgoing;
+    if(current.outdegree() > 0)
+    {
+      for(CompressedRecordIterator iter(record); !(iter.end()); ++iter)
+      {
+        current.body.push_back(*iter);
+        current.body_size += iter->second;
+      }
+    }
+  });
+
+  // Decompress the samples.
+  SampleIterator sample_iter(source.da_samples);
+  for(SampleRangeIterator range_iter(source.da_samples); !(range_iter.end()); ++range_iter)
+  {
+    DynamicRecord& current = this->bwt[range_iter.record()];
+    while(!(sample_iter.end()) && sample_iter.offset() < range_iter.limit())
+    {
+      current.ids.push_back(sample_type(sample_iter.offset() - range_iter.start(), *sample_iter));
+      ++sample_iter;
+    }
+  }
+
+  // Rebuild the incoming edges.
+  this->rebuildIncoming();
+
   this->metadata = source.metadata;
 }
 
