@@ -308,7 +308,7 @@ size_type memoryUsage();  // Peak memory usage in bytes.
   remaining temporary files are deleted when the program exits (normally or
   with std::exit()).
 
-  TempFile is not thread-safe!
+  TempFile is thread-safe.
 */
 
 namespace TempFile

@@ -27,6 +27,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <mutex>
 #include <set>
 
 #include <sys/resource.h>
@@ -175,8 +176,6 @@ memoryUsage()
 
 namespace TempFile
 {
-  size_type counter = 0;
-
   const std::string DEFAULT_TEMP_DIR = ".";
   std::string temp_dir = DEFAULT_TEMP_DIR;
 
@@ -184,19 +183,30 @@ namespace TempFile
   // temporary files when std::exit() is called.
   struct Handler
   {
+    std::mutex tempfile_lock;
+    size_type counter;
     std::set<std::string> filenames;
+
+    Handler() :
+      counter(0)
+    {
+    }
+
     ~Handler()
     {
+      std::lock_guard<std::mutex>(this->tempfile_lock);
       for(auto& filename : this->filenames)
       {
         std::remove(filename.c_str());
       }
+      this->filenames.clear();
     }
   } handler;
 
   void
   setDirectory(const std::string& directory)
   {
+    std::lock_guard<std::mutex>(handler.tempfile_lock);
     if(directory.empty()) { temp_dir = DEFAULT_TEMP_DIR; }
     else if(directory[directory.length() - 1] != '/') { temp_dir = directory; }
     else { temp_dir = directory.substr(0, directory.length() - 1); }
@@ -208,12 +218,16 @@ namespace TempFile
     char hostname[32];
     gethostname(hostname, 32); hostname[31] = 0;
 
-    std::string filename = temp_dir + '/' + name_part + '_'
-      + std::string(hostname) + '_'
-      + sdsl::util::to_string(sdsl::util::pid()) + '_'
-      + sdsl::util::to_string(counter);
-    handler.filenames.insert(filename);
-    counter++;
+    std::string filename;
+    {
+      std::lock_guard<std::mutex>(handler.tempfile_lock);
+      filename = temp_dir + '/' + name_part + '_'
+        + std::string(hostname) + '_'
+        + sdsl::util::to_string(sdsl::util::pid()) + '_'
+        + sdsl::util::to_string(handler.counter);
+      handler.filenames.insert(filename);
+      handler.counter++;
+    }
 
     return filename;
   }
@@ -224,7 +238,10 @@ namespace TempFile
     if(!(filename.empty()))
     {
       std::remove(filename.c_str());
-      handler.filenames.erase(filename);
+      {
+        std::lock_guard<std::mutex>(handler.tempfile_lock);
+        handler.filenames.erase(filename);
+      }
       filename.clear();
     }
   }
