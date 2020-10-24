@@ -29,6 +29,7 @@
 #include <cstdlib>
 #include <mutex>
 #include <set>
+#include <string>
 
 #include <sys/resource.h>
 #include <unistd.h>
@@ -178,12 +179,12 @@ namespace TempFile
 {
   const std::string DEFAULT_TEMP_DIR = ".";
   std::string temp_dir = DEFAULT_TEMP_DIR;
+  std::mutex tempfile_lock;
 
   // By storing the filenames in a static object, we can delete the remaining
   // temporary files when std::exit() is called.
   struct Handler
   {
-    std::mutex tempfile_lock;
     size_type counter;
     std::set<std::string> filenames;
 
@@ -194,7 +195,7 @@ namespace TempFile
 
     ~Handler()
     {
-      std::lock_guard<std::mutex>(this->tempfile_lock);
+      std::lock_guard<std::mutex> lock(tempfile_lock);
       for(auto& filename : this->filenames)
       {
         std::remove(filename.c_str());
@@ -206,7 +207,7 @@ namespace TempFile
   void
   setDirectory(const std::string& directory)
   {
-    std::lock_guard<std::mutex>(handler.tempfile_lock);
+    std::lock_guard<std::mutex> lock(tempfile_lock);
     if(directory.empty()) { temp_dir = DEFAULT_TEMP_DIR; }
     else if(directory[directory.length() - 1] != '/') { temp_dir = directory; }
     else { temp_dir = directory.substr(0, directory.length() - 1); }
@@ -220,11 +221,11 @@ namespace TempFile
 
     std::string filename;
     {
-      std::lock_guard<std::mutex>(handler.tempfile_lock);
+      std::lock_guard<std::mutex> lock(tempfile_lock);
       filename = temp_dir + '/' + name_part + '_'
         + std::string(hostname) + '_'
-        + sdsl::util::to_string(sdsl::util::pid()) + '_'
-        + sdsl::util::to_string(handler.counter);
+        + std::to_string(sdsl::util::pid()) + '_'
+        + std::to_string(handler.counter);
       handler.filenames.insert(filename);
       handler.counter++;
     }
@@ -239,7 +240,7 @@ namespace TempFile
     {
       std::remove(filename.c_str());
       {
-        std::lock_guard<std::mutex>(handler.tempfile_lock);
+        std::lock_guard<std::mutex> lock(tempfile_lock);
         handler.filenames.erase(filename);
       }
       filename.clear();

@@ -288,7 +288,7 @@ struct PhasingInformation
 
   PhasingInformation();
 
-  // Supported by a temporary file. Thread-safe with C++ threads but not with OpenMP threads.
+  // Supported by a temporary file.
   PhasingInformation(size_type first_sample, size_type num_samples);
 
   // Supported by a permanent file [base_name]_[first_sample]_[num_samples].

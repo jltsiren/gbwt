@@ -308,10 +308,7 @@ size_type memoryUsage();  // Peak memory usage in bytes.
   remaining temporary files are deleted when the program exits (normally or
   with std::exit()).
 
-  TempFile is thread-safe if used with C++ threads but not necessarily with
-  OpenMP threads. The memory models are not always compatible. With
-  simultaneous calls to getName(), OpenMP threads may not see the updated
-  value of the internal counter immediately.
+  TempFile is thread-safe.
 */
 
 namespace TempFile
