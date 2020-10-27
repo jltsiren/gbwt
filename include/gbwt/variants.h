@@ -311,6 +311,11 @@ struct PhasingInformation
   const std::string& name() const { return this->filename; }
   bool isTemporary() const { return this->temp_file; }
 
+  // If the structure is backed by a temporary file, make it persistent so that it
+  // will not be deleted with the object. The file will still be deleted when the
+  // program exits. No effect if the structure was backed by a permenent file.
+  void makePersistent() { this->temp_file = false; }
+
   // Append the phasings for a new site.
   void append(const std::vector<Phasing>& new_site);
 
