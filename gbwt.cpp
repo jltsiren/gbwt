@@ -205,8 +205,9 @@ GBWT::GBWT(const std::vector<GBWT>& sources)
   for(size_type source_id = 0; source_id < sources.size(); source_id++)
   {
     const GBWT& source = sources[source_id];
-    for(comp_type source_comp = 1; source_comp < source.effective(); source_comp++)
+    source.bwt.forEach([&](size_type source_comp, const CompressedRecord& record)
     {
+      if(source_comp == 0 || record.empty()) { return; }
       comp_type merged_comp = source_comp + record_offsets[source_id];
       if(origins[merged_comp] != sources.size())
       {
@@ -214,7 +215,7 @@ GBWT::GBWT(const std::vector<GBWT>& sources)
         std::exit(EXIT_FAILURE);
       }
       origins[merged_comp] = source_id;
-    }
+    });
   }
 
   // Interleave the BWTs.

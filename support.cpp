@@ -1006,13 +1006,15 @@ RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sd
   size_type data_size = 0;
   for(auto source : sources) { data_size += source->data.size(); }
 
-  // Initialize the iterators.
+  // Initialize the iterators. An iterator becomes active when we see the first record
+  // from that source and inactive once we reach the end of the source.
   std::vector<SDIterator> iters;
   iters.reserve(sources.size());
   for(size_type i = 0; i < sources.size(); i++)
   {
     iters.emplace_back(sources[i]->index);
   }
+  std::vector<bool> active(sources.size(), false);
 
   // Merge the endmarkers.
   {
@@ -1046,11 +1048,16 @@ RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sd
     size_type origin = origins[comp];
     if(origin >= sources.size())
     {
-      this->data.push_back(0);  // Empty record, outdegree 0.
+      // An empty record with outdegree 0. We must advance all active iterators.
+      this->data.push_back(0);
+      for(size_t i = 0; i < iters.size(); i++)
+      {
+        if(active[i]) { ++(iters[i]); active[i] = !(iters[i].end()); }
+      }
       continue;
     }
     size_type start = *(iters[origin]);
-    ++(iters[origin]);
+    ++(iters[origin]); active[origin] = !(iters[origin].end());
     size_type limit = *(iters[origin]);
     for(size_type i = start; i < limit; i++)
     {
