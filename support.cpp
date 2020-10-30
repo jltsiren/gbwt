@@ -25,6 +25,8 @@
 
 #include <gbwt/internal.h>
 
+#include <unordered_set>
+
 namespace gbwt
 {
 
@@ -1006,15 +1008,13 @@ RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sd
   size_type data_size = 0;
   for(auto source : sources) { data_size += source->data.size(); }
 
-  // Initialize the iterators. An iterator becomes active when we see the first record
-  // from that source and inactive once we reach the end of the source.
+  // Initialize the iterators.
   std::vector<SDIterator> iters;
   iters.reserve(sources.size());
   for(size_type i = 0; i < sources.size(); i++)
   {
     iters.emplace_back(sources[i]->index);
   }
-  std::vector<bool> active(sources.size(), false);
 
   // Merge the endmarkers.
   {
@@ -1042,27 +1042,31 @@ RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sd
   // Merge the BWTs.
   this->data.reserve(data_size + this->data.size());
   std::vector<size_type> offsets(origins.size(), 0);
+  std::unordered_set<size_type> active; // These sources cover the current comp.
   for(comp_type comp = 1; comp < origins.size(); comp++)
   {
     offsets[comp] = this->data.size();
     size_type origin = origins[comp];
-    if(origin >= sources.size())
+    if(origin < sources.size()) { active.insert(origin); }
+    else { this->data.push_back(0); } // Empty record.
+    std::vector<size_type> to_remove;
+    // Advance active iterators and copy the record from the origin.
+    for(size_type source : active)
     {
-      // An empty record with outdegree 0. We must advance all active iterators.
-      this->data.push_back(0);
-      for(size_t i = 0; i < iters.size(); i++)
+      if(source == origin)
       {
-        if(active[i]) { ++(iters[i]); active[i] = !(iters[i].end()); }
+        size_type start = *(iters[source]);
+        ++(iters[source]);
+        size_type limit = *(iters[source]);
+        for(size_type i = start; i < limit; i++)
+        {
+          this->data.push_back(sources[source]->data[i]);
+        }
       }
-      continue;
+      else { ++(iters[source]); }
+      if(iters[source].end()) { to_remove.push_back(source); }
     }
-    size_type start = *(iters[origin]);
-    ++(iters[origin]); active[origin] = !(iters[origin].end());
-    size_type limit = *(iters[origin]);
-    for(size_type i = start; i < limit; i++)
-    {
-      this->data.push_back(sources[origin]->data[i]);
-    }
+    for(size_type source : to_remove) { active.erase(source); }
   }
 
   // Build the index for the BWT.
