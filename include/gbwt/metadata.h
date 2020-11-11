@@ -55,6 +55,14 @@ struct PathName
   }
 
   bool operator!=(const PathName& another) const { return !(this->operator==(another)); }
+
+  bool operator<(const PathName& another) const
+  {
+    if(this->sample != another.sample) { return (this->sample < another.sample); }
+    if(this->contig != another.contig) { return (this->contig < another.contig); }
+    if(this->phase != another.phase) { return (this->phase < another.phase); }
+    return (this->count < another.count);
+  }
 };
 
 //------------------------------------------------------------------------------
