@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019 Jouni Siren
+  Copyright (c) 2019, 2020 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -144,6 +144,7 @@ public:
   std::vector<size_type> pathsForSample(size_type sample_id) const;
   std::vector<size_type> pathsForContig(size_type contig_id) const;
   void addPath(const PathName& path);
+  void addPath(size_type sample, size_type contig, size_type phase, size_type count);
   void clearPathNames();
 
   // Sample operations.

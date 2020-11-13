@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019 Jouni Siren
+  Copyright (c) 2019, 2020 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -251,6 +251,20 @@ void
 Metadata::addPath(const PathName& path)
 {
   this->set(FLAG_PATH_NAMES);
+  this->path_names.emplace_back(path);
+}
+
+void
+Metadata::addPath(size_type sample, size_type contig, size_type phase, size_type count)
+{
+  this->set(FLAG_PATH_NAMES);
+  PathName path =
+  {
+    static_cast<PathName::path_name_type>(sample),
+    static_cast<PathName::path_name_type>(contig),
+    static_cast<PathName::path_name_type>(phase),
+    static_cast<PathName::path_name_type>(count)
+  };
   this->path_names.emplace_back(path);
 }
 
