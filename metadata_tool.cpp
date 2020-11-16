@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2019 Jouni Siren
+  Copyright (c) 2018, 2019, 2020 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -40,34 +40,21 @@ main(int argc, char** argv)
   if(argc < 2) { printUsage(); }
 
   int c = 0;
-  bool set_samples = false, set_haplotypes = false, set_contigs = false;
-  size_type new_samples = 0, new_haplotypes = 0, new_contigs = 0;
-  bool clear_paths = false, clear_samples = false, clear_contigs = false;
+  bool print_metadata = true;
+  bool list_samples = false, list_contigs = false, list_paths = false;
   bool remove_metadata = false;
-  while((c = getopt(argc, argv, "s:h:c:PSCr")) != -1)
+  while((c = getopt(argc, argv, "scpr")) != -1)
   {
     switch(c)
     {
     case 's':
-      set_samples = true;
-      new_samples = std::stoul(optarg);
-      break;
-    case 'h':
-      set_haplotypes = true;
-      new_haplotypes = std::stoul(optarg);
+      list_samples = true; print_metadata = false;
       break;
     case 'c':
-      set_contigs = true;
-      new_contigs = std::stoul(optarg);
+      list_contigs = true; print_metadata = false;
       break;
-    case 'P':
-      clear_paths = true;
-      break;
-    case 'S':
-      clear_samples = true;
-      break;
-    case 'C':
-      clear_contigs = true;
+    case 'p':
+      list_paths = true; print_metadata = false;
       break;
     case 'r':
       remove_metadata = true;
@@ -82,56 +69,75 @@ main(int argc, char** argv)
   if(optind >= argc) { printUsage(EXIT_FAILURE); }
   std::string index_base = argv[optind];
 
-  Version::print(std::cout, tool_name);
-  GBWT gbwt;
-  if(!sdsl::load_from_file(gbwt, index_base + GBWT::EXTENSION))
+  GBWT index;
+  if(!sdsl::load_from_file(index, index_base + GBWT::EXTENSION))
   {
-    std::cerr << "metadata: Cannot load the index from " << (index_base + GBWT::EXTENSION) << std::endl;
+    std::cerr << "metadata_tool: Cannot load the index from " << (index_base + GBWT::EXTENSION) << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  if(!(index.hasMetadata()))
+  {
+    std::cerr << "metadata_tool: No metadata in the GBWT index" << std::endl;
     std::exit(EXIT_FAILURE);
   }
 
   bool modified = false;
-  if(clear_paths)
+  if(print_metadata)
   {
-    gbwt.metadata.clearPathNames();
-    modified = true;
+    std::cout << index.metadata << std::endl;
   }
-  if(clear_samples)
+  if(list_samples)
   {
-    gbwt.metadata.clearSampleNames();
-    modified = true;
+    if(!(index.metadata.hasSampleNames()))
+    {
+      std::cerr << "metadata_tool: No sample names in the GBWT index" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    for(size_type i = 0; i < index.metadata.samples(); i++)
+    {
+      std::cout << index.metadata.sample(i) << std::endl;
+    }
   }
-  if(set_samples)
+  if(list_contigs)
   {
-    gbwt.metadata.setSamples(new_samples);
-    modified = true;
+    if(!(index.metadata.hasContigNames()))
+    {
+      std::cerr << "metadata_tool: No contig names in the GBWT index" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    for(size_type i = 0; i < index.metadata.contigs(); i++)
+    {
+      std::cout << index.metadata.contig(i) << std::endl;
+    }
   }
-  if(set_haplotypes)
+  if(list_paths)
   {
-    gbwt.metadata.setHaplotypes(new_haplotypes);
-    modified = true;
-  }
-  if(clear_contigs)
-  {
-    gbwt.metadata.clearContigNames();
-    modified = true;
-  }
-  if(set_contigs)
-  {
-    gbwt.metadata.setContigs(new_contigs);
-    modified = true;
+    if(!(index.metadata.hasPathNames()))
+    {
+      std::cerr << "metadata_tool: No path names in the GBWT index" << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+    for(size_type i = 0; i < index.metadata.paths(); i++)
+    {
+      PathName path = index.metadata.path(i);
+      std::cout << "(";
+      if(index.metadata.hasSampleNames()) { std::cout << index.metadata.sample(path.sample); }
+      else { std::cout << path.sample; }
+      std::cout << ", ";
+      if(index.metadata.hasContigNames()) { std::cout << index.metadata.contig(path.contig); }
+      else { std::cout << path.contig; }
+      std::cout << ", " << path.phase << ", " << path.count << ")" << std::endl;
+    }
   }
   if(remove_metadata)
   {
-    gbwt.clearMetadata();
+    index.clearMetadata();
     modified = true;
   }
-  if(modified && !remove_metadata) { gbwt.addMetadata(); }
 
-  printStatistics(gbwt, index_base);
   if(modified)
   {
-    if(!sdsl::store_to_file(gbwt, index_base + GBWT::EXTENSION))
+    if(!sdsl::store_to_file(index, index_base + GBWT::EXTENSION))
     {
       std::cerr << "metadata: Cannot write the index to " << (index_base + GBWT::EXTENSION) << std::endl;
       std::exit(EXIT_FAILURE);
@@ -149,12 +155,9 @@ printUsage(int exit_code)
   Version::print(std::cerr, tool_name);
 
   std::cerr << "Usage: metadata [options] basename" << std::endl;
-  std::cerr << "  -s N  Set the number of samples to N" << std::endl;
-  std::cerr << "  -h N  Set the number of haplotypes to N" << std::endl;
-  std::cerr << "  -c N  Set the number of contigs to N" << std::endl;
-  std::cerr << "  -P    Remove path names" << std::endl;
-  std::cerr << "  -S    Remove sample names" << std::endl;
-  std::cerr << "  -C    Remove contig names" << std::endl;
+  std::cerr << "  -s    List sample names" << std::endl;
+  std::cerr << "  -c    List contig names" << std::endl;
+  std::cerr << "  -p    List path names" << std::endl;
   std::cerr << "  -r    Remove all metadata" << std::endl;
   std::cerr << std::endl;
 
