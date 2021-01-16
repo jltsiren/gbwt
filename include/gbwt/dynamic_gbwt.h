@@ -47,6 +47,7 @@ public:
   typedef DynamicRecord::size_type size_type;
 
   constexpr static size_type INSERT_BATCH_SIZE = 100 * MILLION; // Nodes.
+  constexpr static size_type MIN_SEQUENCES_PER_BATCH = 20;      // A batch should contain at least this many sequences.
   constexpr static size_type REMOVE_CHUNK_SIZE = 1;             // Sequences.
   constexpr static size_type MERGE_BATCH_SIZE = 2000;           // Sequences.
   constexpr static size_type SAMPLE_INTERVAL = 1024;            // Positions in a sequence.

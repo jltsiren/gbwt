@@ -37,6 +37,7 @@ namespace gbwt
 // Numerical class constants.
 
 constexpr size_type DynamicGBWT::INSERT_BATCH_SIZE;
+constexpr size_type DynamicGBWT::MIN_SEQUENCES_PER_BATCH;
 constexpr size_type DynamicGBWT::REMOVE_CHUNK_SIZE;
 constexpr size_type DynamicGBWT::MERGE_BATCH_SIZE;
 constexpr size_type DynamicGBWT::SAMPLE_INTERVAL;
