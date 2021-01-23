@@ -105,9 +105,8 @@ constexpr size_type invalid_node() { return ~(node_type)0; }
 constexpr size_type invalid_sequence() { return ~(size_type)0; }
 constexpr size_type invalid_offset() { return ~(size_type)0; }
 
-// FIXME Replace these with constexpr after moving to C++14.
-inline edge_type invalid_edge() { return edge_type(invalid_node(), invalid_offset()); }
-inline sample_type invalid_sample() { return sample_type(invalid_offset(), invalid_sequence()); }
+inline constexpr edge_type invalid_edge() { return edge_type(invalid_node(), invalid_offset()); }
+inline constexpr sample_type invalid_sample() { return sample_type(invalid_offset(), invalid_sequence()); }
 
 //------------------------------------------------------------------------------
 
@@ -157,8 +156,7 @@ struct Range
     return std::max(std::min(value, high), low);
   }
 
-  // FIXME Change to constexpr when moving to C++14.
-  static range_type empty_range()
+  static constexpr range_type empty_range()
   {
     return range_type(1, 0);
   }
@@ -220,7 +218,7 @@ struct Version
   static void print(std::ostream& out, const std::string& tool_name, bool verbose = false, size_type new_lines = 2);
 
   constexpr static size_type MAJOR_VERSION    = 1;
-  constexpr static size_type MINOR_VERSION    = 1;
+  constexpr static size_type MINOR_VERSION    = 2;
   constexpr static size_type PATCH_VERSION    = 0;
 
   constexpr static size_type GBWT_VERSION     = 4;
