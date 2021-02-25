@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018 Jouni Siren
+  Copyright (c) 2017, 2018, 2021 Jouni Siren
   Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -542,18 +542,18 @@ struct SampleIterator
 {
   explicit SampleIterator(const DASamples& source) :
     data(source),
-    iter(source.sampled_offsets)
+    iter(source.sampled_offsets.one_begin())
   {
   }
 
-  bool end() const { return this->iter.end(); }
+  bool end() const { return (this->iter == this->data.sampled_offsets.one_end()); }
   void operator++() { ++(this->iter); }
 
-  size_type operator*() const { return this->data.array[this->iter.rank()]; }
-  size_type offset() const { return *(this->iter); }
+  size_type operator*() const { return this->data.array[this->iter->first]; }
+  size_type offset() const { return this->iter->second; }
 
   const DASamples& data;
-  SDIterator       iter;
+  sdsl::sd_vector<>::one_iterator iter;
 };
 
 /*
@@ -565,7 +565,7 @@ struct SampleRangeIterator
   explicit SampleRangeIterator(const DASamples& source) :
     data(source),
     record_id(0), record_start(0),
-    iter(source.bwt_ranges)
+    iter(source.bwt_ranges.one_begin())
   {
     this->advance();
   }
@@ -574,14 +574,14 @@ struct SampleRangeIterator
   void operator++() { this->record_id++; this->advance(); }
 
   size_type record() const { return this->record_id; }
-  size_type rank() const { return this->iter.rank() - 1; }
+  size_type rank() const { return this->iter->first - 1; }
   size_type start() const { return this->record_start; }
-  size_type limit() const { return *(this->iter); }
+  size_type limit() const { return this->iter->second; }
   size_type length() const { return this->limit() - this->start(); }
 
-  const DASamples& data;
-  size_type        record_id, record_start;
-  SDIterator       iter;
+  const DASamples&                data;
+  size_type                       record_id, record_start;
+  sdsl::sd_vector<>::one_iterator iter;
 
 private:
   void advance()
@@ -590,7 +590,7 @@ private:
     {
       if(this->data.isSampled(this->record_id))
       {
-        this->record_start = *(this->iter);
+        this->record_start = this->iter->second;
         ++(this->iter);
         return;
       }

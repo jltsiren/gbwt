@@ -201,7 +201,7 @@ GBWT::GBWT(const std::vector<GBWT>& sources)
   }
 
   // Determine the origin of each record.
-  sdsl::int_vector<0> origins(this->effective(), sources.size(), bit_length(sources.size()));
+  sdsl::int_vector<0> origins(this->effective(), sources.size(), sdsl::bits::length(sources.size()));
   for(size_type source_id = 0; source_id < sources.size(); source_id++)
   {
     const GBWT& source = sources[source_id];

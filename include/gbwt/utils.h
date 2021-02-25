@@ -229,11 +229,12 @@ struct Version
 
 //------------------------------------------------------------------------------
 
+// NOTE: This is deprecated. Use `sdsl::bits::length` instead.
 template<class IntegerType>
 size_type
 bit_length(IntegerType val)
 {
-  return sdsl::bits::hi(val) + 1;
+  return sdsl::bits::length(val);
 }
 
 //------------------------------------------------------------------------------

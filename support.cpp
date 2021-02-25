@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019, 2020 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020, 2021 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -842,133 +842,6 @@ DecompressedRecord::hasEdge(node_type to) const
 
 //------------------------------------------------------------------------------
 
-SDIterator::SDIterator(const sdsl::sd_vector<>& v) :
-  vector(v), low_offset(0), high_offset(0)
-{
-  if(this->size() == 0) { this->toEnd(); return; }
-  while(this->vector.high[this->high_offset] == 0) { this->high_offset++; }
-  this->setOffset();
-}
-
-
-SDIterator::SDIterator(const sdsl::sd_vector<>& v, size_type i, query_type type) :
-  vector(v)
-{
-  if(this->size() == 0) { this->toEnd(); return; }
-  switch(type)
-  {
-    case query_select:
-      this->select(i); break;
-    case query_predecessor:
-      this->predecessor(i); break;
-    case query_successor:
-      this->successor(i); break;
-  }
-}
-
-void
-SDIterator::select(size_type i)
-{
-  this->low_offset = i - 1;
-  this->high_offset = this->vector.high_1_select(i);
-  this->setOffset();
-}
-
-void
-SDIterator::predecessor(size_type i)
-{
-  size_type high_part = (i >> (this->vector.wl));
-  size_type low_part = i & sdsl::bits::lo_set[this->vector.wl];
-
-  // Bitvector 'high' has an 1 for each value in the sparse bitvector and a 0
-  // after all values sharing the same high_part. The low_offset we get is a
-  // strict upper bound for the rank.
-  this->high_offset = this->vector.high_0_select(high_part + 1);
-  this->low_offset = this->high_offset - high_part;
-  if(this->low_offset == 0) { this->toEnd(); return; }
-
-  // Iterate backward until we find a value no larger than i or we run out of
-  // values that share the same high_part.
-  do
-  {
-    if(this->high_offset == 0) { this->toEnd(); return; }
-    this->high_offset--; this->low_offset--;
-  }
-  while(this->vector.high[this->high_offset] == 1 && this->vector.low[this->low_offset] > low_part);
-
-  // The predecessor may have a lower high_part. In that case, we iterate backward
-  // until we find a value.
-  while(this->vector.high[this->high_offset] == 0)
-  {
-    if(this->high_offset == 0) { this->toEnd(); return; }
-    this->high_offset--;
-  }
-
-  this->setOffset();
-}
-
-void
-SDIterator::successor(size_type i)
-{
-  size_type high_part = (i >> (this->vector.wl));
-  size_type low_part = i & sdsl::bits::lo_set[this->vector.wl];
-
-  // Bitvector 'high' has an 1 for each value in the sparse bitvector and a 0
-  // after all values sharing the same high_part. The low_offset we get is a
-  // strict upper bound for the rank.
-  this->high_offset = this->vector.high_0_select(high_part + 1);
-  this->low_offset = this->high_offset - high_part;
-
-  // There is a value with the same or lower high_part that could be the
-  // successor. Find the smallest value with the same high_part and with
-  // the same or greater low_part.
-  bool found = false;
-  while(this->low_offset > 0 && this->vector.high[this->high_offset - 1] == 1 && this->vector.low[this->low_offset - 1] >= low_part)
-  {
-    this->high_offset--; this->low_offset--;
-    found = true;
-  }
-  if(found) { this->setOffset(); return; }
-
-  // If there is a value > i, its high_part must be greater than that of i.
-  // Find the correct high_part.
-  if(this->low_offset >= this->size()) { this->toEnd(); return; }
-  do
-  {
-    this->high_offset++;
-  }
-  while(this->vector.high[this->high_offset] == 0);
-  this->setOffset();
-}
-
-void
-SDIterator::operator++()
-{
-  this->low_offset++;
-  if(this->end()) { this->toEnd(); return; }
-  do
-  {
-    this->high_offset++;
-  }
-  while(this->vector.high[this->high_offset] != 1);
-  this->setOffset();
-}
-
-void
-SDIterator::setOffset()
-{
-  this->vector_offset = this->vector.low[low_offset] + ((this->high_offset - this->low_offset) << this->vector.wl);
-}
-
-void
-SDIterator::toEnd()
-{
-  this->low_offset = this->size();
-  this->vector_offset = this->vector.size();
-}
-
-//------------------------------------------------------------------------------
-
 RecordArray::RecordArray() :
   records(0)
 {
@@ -1009,11 +882,11 @@ RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sd
   for(auto source : sources) { data_size += source->data.size(); }
 
   // Initialize the iterators.
-  std::vector<SDIterator> iters;
+  std::vector<sdsl::sd_vector<>::one_iterator> iters;
   iters.reserve(sources.size());
   for(size_type i = 0; i < sources.size(); i++)
   {
-    iters.emplace_back(sources[i]->index);
+    iters.emplace_back(sources[i]->index.one_begin());
   }
 
   // Merge the endmarkers.
@@ -1022,9 +895,9 @@ RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sd
     for(size_type i = 0; i < sources.size(); i++)
     {
       if(sources[i]->empty()) { continue; }
-      size_type start = *(iters[i]);
+      size_type start = iters[i]->second;
       ++(iters[i]);
-      CompressedRecord record(sources[i]->data, start, *(iters[i]));
+      CompressedRecord record(sources[i]->data, start, iters[i]->second);
       for(CompressedRecordIterator iter(record); !(iter.end()); ++iter)
       {
         run_type run = *iter; run.first += merged.outdegree();
@@ -1055,16 +928,16 @@ RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sd
     {
       if(source == origin)
       {
-        size_type start = *(iters[source]);
+        size_type start = iters[source]->second;
         ++(iters[source]);
-        size_type limit = *(iters[source]);
+        size_type limit = iters[source]->second;
         for(size_type i = start; i < limit; i++)
         {
           this->data.push_back(sources[source]->data[i]);
         }
       }
       else { ++(iters[source]); }
-      if(iters[source].end()) { to_remove.push_back(source); }
+      if(iters[source] == sources[source]->index.one_end()) { to_remove.push_back(source); }
     }
     for(size_type source : to_remove) { active.erase(source); }
   }
@@ -1083,7 +956,7 @@ void
 RecordArray::buildIndex(const std::vector<size_type>& offsets)
 {
   sdsl::sd_vector_builder builder(this->data.size(), offsets.size());
-  for(size_type offset : offsets) { builder.set(offset); }
+  for(size_type offset : offsets) { builder.set_unsafe(offset); }
   this->index = sdsl::sd_vector<>(builder);
   sdsl::util::init_support(this->select, &(this->index));
 }
@@ -1159,10 +1032,10 @@ RecordArray::load(std::istream& in)
 std::pair<size_type, size_type>
 RecordArray::getRange(size_type record) const
 {
-  SDIterator iter(this->index, record + 1);
-  size_type start = *iter;
+  auto iter = this->index.select_iter(record + 1);
+  size_type start = iter->second;
   ++iter;
-  return std::pair<size_type, size_type>(start, *iter);
+  return std::pair<size_type, size_type>(start, iter->second);
 }
 
 void
@@ -1170,14 +1043,14 @@ RecordArray::forEach(std::function<void(size_type, const CompressedRecord&)> ite
 {
   if(this->empty()) { return; }
 
-  SDIterator iter(this->index);
-  while(!(iter.end()))
+  auto iter = this->index.one_begin();
+  while(iter != this->index.one_end())
   {
-    size_type start = *iter;
+    size_type start = iter->second;
     ++iter;
-    size_type limit = *iter;
+    size_type limit = iter->second;
     CompressedRecord record(this->data, start, limit);
-    iteratee(iter.rank() - 1, record);
+    iteratee(iter->first - 1, record);
   }
 }
 
@@ -1233,10 +1106,10 @@ DASamples::DASamples(const std::vector<DynamicRecord>& bwt)
   {
     if(record.samples() > 0)
     {
-      range_builder.set(offset);
+      range_builder.set_unsafe(offset);
       for(sample_type sample : record.ids)
       {
-        offset_builder.set(offset + sample.first);
+        offset_builder.set_unsafe(offset + sample.first);
         max_sample = std::max(max_sample, (size_type)(sample.second));
       }
       offset += record.size();
@@ -1247,7 +1120,7 @@ DASamples::DASamples(const std::vector<DynamicRecord>& bwt)
   this->sampled_offsets = sdsl::sd_vector<>(offset_builder);
 
   // Store the samples.
-  this->array = sdsl::int_vector<0>(sample_count, 0, bit_length(max_sample));
+  this->array = sdsl::int_vector<0>(sample_count, 0, sdsl::bits::length(max_sample));
   size_type curr = 0;
   for(const DynamicRecord& record : bwt)
   {
@@ -1318,17 +1191,17 @@ DASamples::DASamples(const std::vector<DASamples const*> sources, const sdsl::in
   // The endmarker requires special treatment again.
   sdsl::sd_vector_builder range_builder(bwt_offsets, record_count);
   sdsl::sd_vector_builder offset_builder(bwt_offsets, sample_count);
-  this->array = sdsl::int_vector<0>(sample_count, 0, bit_length(total_sequences - 1));
+  this->array = sdsl::int_vector<0>(sample_count, 0, sdsl::bits::length(total_sequences - 1));
   size_type record_start = 0, curr = 0;
   if(sample_endmarker)
   {
-    range_builder.set(record_start);
+    range_builder.set_unsafe(record_start);
     for(size_type origin = 0; origin < sources.size(); origin++)
     {
       if(!(sources[origin]->isSampled(ENDMARKER))) { continue; }
       while(!(sample_iterators[origin].end()) && sample_iterators[origin].offset() < range_iterators[origin].limit())
       {
-        offset_builder.set((sample_iterators[origin]).offset() + sequence_offsets[origin]);
+        offset_builder.set_unsafe((sample_iterators[origin]).offset() + sequence_offsets[origin]);
         this->array[curr] = *(sample_iterators[origin]) + sequence_offsets[origin]; curr++;
         ++sample_iterators[origin];
       }
@@ -1340,10 +1213,10 @@ DASamples::DASamples(const std::vector<DASamples const*> sources, const sdsl::in
   {
     if(!(this->isSampled(i))) { continue; }
     size_type origin = origins[i];
-    range_builder.set(record_start);
+    range_builder.set_unsafe(record_start);
     while(!(sample_iterators[origin].end()) && sample_iterators[origin].offset() < range_iterators[origin].limit())
     {
-      offset_builder.set((sample_iterators[origin].offset() - range_iterators[origin].start()) + record_start);
+      offset_builder.set_unsafe((sample_iterators[origin].offset() - range_iterators[origin].start()) + record_start);
       this->array[curr] = *(sample_iterators[origin]) + sequence_offsets[origin]; curr++;
       ++sample_iterators[origin];
     }
@@ -1462,10 +1335,10 @@ DASamples::tryLocate(size_type record, size_type offset) const
   if(!(this->isSampled(record))) { return invalid_sequence(); }
 
   size_type record_start = this->start(record);
-  SDIterator iter(this->sampled_offsets, record_start + offset, SDIterator::query_predecessor);
-  if(*iter == record_start + offset)
+  auto iter = this->sampled_offsets.predecessor(record_start + offset);
+  if(iter->second == record_start + offset)
   {
-    return this->array[iter.rank()];
+    return this->array[iter->first];
   }
   return invalid_sequence();
 }
@@ -1476,10 +1349,10 @@ DASamples::nextSample(size_type record, size_type offset) const
   if(!(this->isSampled(record))) { return invalid_sample(); }
 
   size_type record_start = this->start(record);
-  SDIterator iter(this->sampled_offsets, record_start + offset, SDIterator::query_successor);
-  if(iter.rank() < this->array.size())
+  auto iter = this->sampled_offsets.successor(record_start + offset);
+  if(iter->first < this->array.size())
   {
-    return sample_type(*iter - record_start, this->array[iter.rank()]);
+    return sample_type(iter->second - record_start, this->array[iter->first]);
   }
   return invalid_sample();
 }
@@ -1553,7 +1426,7 @@ Dictionary::Dictionary(const std::vector<std::string>& source)
 
   size_type total_length = 0;
   for(const std::string& s : source) { total_length += s.length(); }
-  this->offsets = sdsl::int_vector<0>(source.size() + 1, 0, bit_length(total_length));
+  this->offsets = sdsl::int_vector<0>(source.size() + 1, 0, sdsl::bits::length(total_length));
   this->data.reserve(total_length);
 
   // Initialize the arrays.
@@ -1593,7 +1466,7 @@ Dictionary::Dictionary(const Dictionary& first, const Dictionary& second)
     std::string key = second[i];
     if(first.find(key) >= first.size()) { total_size++; total_length += key.size(); }
   }
-  this->offsets = sdsl::int_vector<0>(total_size + 1, 0, bit_length(total_length));
+  this->offsets = sdsl::int_vector<0>(total_size + 1, 0, sdsl::bits::length(total_length));
   this->data.reserve(total_length);
 
   // Copy keys from the first source.
@@ -1689,7 +1562,7 @@ void Dictionary::sortKeys()
     return;
   }
 
-  this->sorted_ids = sdsl::int_vector<0>(this->offsets.size() - 1, 0, bit_length(this->offsets.size() - 2));
+  this->sorted_ids = sdsl::int_vector<0>(this->offsets.size() - 1, 0, sdsl::bits::length(this->offsets.size() - 2));
   for(size_type i = 0; i < this->sorted_ids.size(); i++) { this->sorted_ids[i] = i; }
   sequentialSort(this->sorted_ids.begin(), this->sorted_ids.end(), [this](size_type a, size_type b) -> bool
   {
@@ -1776,7 +1649,7 @@ Dictionary::append(const Dictionary& source)
 
   // Concatenate the starting offsets
   {
-    sdsl::int_vector<0> new_offsets(new_size + 1, 0, bit_length(new_data_size));
+    sdsl::int_vector<0> new_offsets(new_size + 1, 0, sdsl::bits::length(new_data_size));
     for(size_type i = 0; i < old_size; i++) { new_offsets[i] = this->offsets[i]; }
     for(size_type i = 0; i < source.size(); i++) { new_offsets[old_size + i] = old_data_size + source.offsets[i]; }
     new_offsets[new_size] = new_data_size;

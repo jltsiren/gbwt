@@ -255,7 +255,7 @@ VariantPaths::nodeWidth(bool both_orientations) const
     max_node = std::max(temp, max_node);
     if(both_orientations) { max_node = std::max(Node::reverse(temp), max_node); }
   }
-  return bit_length(max_node);
+  return sdsl::bits::length(max_node);
 }
 
 void

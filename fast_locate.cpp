@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2020 Jouni Siren
+  Copyright (c) 2020, 2021 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -305,7 +305,7 @@ FastLocate::FastLocate(const GBWT& source) :
   {
     return (a.run_id < b.run_id);
   });
-  this->samples.width(bit_length(this->pack(this->index->sequences() - 1, this->header.max_length - 1)));
+  this->samples.width(sdsl::bits::length(this->pack(this->index->sequences() - 1, this->header.max_length - 1)));
   this->samples.resize(total_runs);
   for(size_type i = 0; i < total_runs; i++)
   {
@@ -320,11 +320,11 @@ FastLocate::FastLocate(const GBWT& source) :
   }
   parallelQuickSort(tail_samples.begin(), tail_samples.end());
   sdsl::sd_vector_builder builder(this->index->sequences() * this->header.max_length, total_runs);
-  this->last_to_run.width(bit_length(total_runs - 1));
+  this->last_to_run.width(sdsl::bits::length(total_runs - 1));
   this->last_to_run.resize(total_runs);
   for(size_type i = 0; i < total_runs; i++)
   {
-    builder.set(this->pack(tail_samples[i].seq_id, tail_samples[i].seq_offset));
+    builder.set_unsafe(this->pack(tail_samples[i].seq_id, tail_samples[i].seq_offset));
     this->last_to_run[i] = tail_samples[i].run_id;
   }
   sdsl::util::clear(tail_samples);
@@ -425,8 +425,8 @@ FastLocate::locate(SearchState state, size_type first) const
 size_type
 FastLocate::locateNext(size_type prev) const
 {
-  SDIterator iter(this->last, prev, SDIterator::query_predecessor);
-  return this->samples[this->last_to_run[iter.rank()] + 1] + (prev - *iter);
+  auto iter = this->last.predecessor(prev);
+  return this->samples[this->last_to_run[iter->first] + 1] + (prev - iter->second);
 }
 
 //------------------------------------------------------------------------------

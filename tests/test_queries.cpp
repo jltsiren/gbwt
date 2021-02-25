@@ -73,7 +73,7 @@ buildGBWT(const std::vector<vector_type>& paths)
   size_type node_width = 1, total_length = 0;
   for(auto& path : paths)
   {
-    for(auto node : path) { node_width = std::max(node_width, bit_length(Node::encode(node, true))); }
+    for(auto node : path) { node_width = std::max(node_width, size_type(sdsl::bits::length(Node::encode(node, true)))); }
     total_length += 2 * (path.size() + 1);
   }
 

@@ -317,49 +317,6 @@ private:
 
 //------------------------------------------------------------------------------
 
-/*
-  An iterator over the 1-bits in sdsl::sd_vector<>. The iterator can be initialized
-  with a number of queries:
-
-  - query_select: 1-based select(), as with SDSL bitvectors.
-  - query_predecessor: Largest i' <= i such that vector[i'] = 1.
-  - query_successor: Smallest i' >= i such that vector[i'] = 1.
-
-  If a predecessor/successor query fails, the iterator is initialized at the end.
-  An iterator at the end is still valid, with *iter == vector.size() and
-  iter.rank() == iter.size().
-*/
-struct SDIterator
-{
-  const sdsl::sd_vector<>& vector;
-
-  size_type low_offset, high_offset;
-  size_type vector_offset;
-
-  enum query_type { query_select, query_predecessor, query_successor };
-
-  // select(1)
-  explicit SDIterator(const sdsl::sd_vector<>& v);
-
-  SDIterator(const sdsl::sd_vector<>& v, size_type i, query_type type = query_select);
-
-  size_type operator*() const { return this->vector_offset; }
-  size_type rank() const { return this->low_offset; }
-  size_type size() const { return this->vector.low.size(); }
-  bool end() const { return (this->rank() >= this->size()); }
-
-  void select(size_type i);
-  void predecessor(size_type i);
-  void successor(size_type i);
-  void operator++();
-
-private:
-  void setOffset();
-  void toEnd();
-};
-
-//------------------------------------------------------------------------------
-
 struct RecordArray
 {
   typedef gbwt::size_type size_type;
