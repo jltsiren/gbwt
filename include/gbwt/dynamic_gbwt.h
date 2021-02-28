@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019, 2020 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020, 2021 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -370,7 +370,7 @@ public:
 
 //------------------------------------------------------------------------------
 
-void printStatistics(const DynamicGBWT& gbwt, const std::string& name);
+void printStatistics(const DynamicGBWT& gbwt, const std::string& name, std::ostream& out = std::cout);
 std::string indexType(const DynamicGBWT&);
 
 //------------------------------------------------------------------------------

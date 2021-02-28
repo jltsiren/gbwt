@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019, 2020 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020, 2021 Jouni Siren
   Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -129,28 +129,30 @@ Version::print(std::ostream& out, const std::string& tool_name, bool verbose, si
 
 //------------------------------------------------------------------------------
 
-void
-printHeader(const std::string& header, size_type indent)
+std::ostream&
+printHeader(const std::string& header, std::ostream& out)
 {
+  size_type indent = DEFAULT_INDENT;
   std::string padding;
   if(header.length() + 1 < indent) { padding = std::string(indent - 1 - header.length(), ' '); }
-  std::cout << header << ":" << padding;
+  out << header << ":" << padding;
+  return out;
 }
 
 void
-printTime(const std::string& header, size_type queries, double seconds, size_type indent)
+printTime(const std::string& header, size_type queries, double seconds, std::ostream& out)
 {
-  printHeader(header, indent);
-  std::cout << queries << " queries in " << seconds << " seconds ("
-            << inMicroseconds(seconds / queries) << " µs/query)" << std::endl;
+  printHeader(header, out);
+  out << queries << " queries in " << seconds << " seconds ("
+      << inMicroseconds(seconds / queries) << " µs/query)" << std::endl;
 }
 
 void
-printTimeLength(const std::string& header, size_type queries, size_type total_length, double seconds, size_type indent)
+printTimeLength(const std::string& header, size_type queries, size_type total_length, double seconds, std::ostream& out)
 {
-  printHeader(header, indent);
-  std::cout << queries << " queries of total length " << total_length << " in " << seconds << " seconds ("
-            << inMicroseconds(seconds / total_length) << " µs/character)" << std::endl;
+  printHeader(header, out);
+  out << queries << " queries of total length " << total_length << " in " << seconds << " seconds ("
+      << inMicroseconds(seconds / total_length) << " µs/character)" << std::endl;
 }
 
 //------------------------------------------------------------------------------

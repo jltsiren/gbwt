@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019, 2020 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020, 2021 Jouni Siren
   Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -285,9 +285,9 @@ inMicroseconds(double seconds)
 
 constexpr size_type DEFAULT_INDENT = 18;
 
-void printHeader(const std::string& header, size_type indent = DEFAULT_INDENT);
-void printTime(const std::string& header, size_type queries, double seconds, size_type indent = DEFAULT_INDENT);
-void printTimeLength(const std::string& header, size_type queries, size_type total_length, double seconds, size_type indent = DEFAULT_INDENT);
+std::ostream& printHeader(const std::string& header, std::ostream& out = std::cout);
+void printTime(const std::string& header, size_type queries, double seconds, std::ostream& out = std::cout);
+void printTimeLength(const std::string& header, size_type queries, size_type total_length, double seconds, std::ostream& out = std::cout);
 
 //------------------------------------------------------------------------------
 

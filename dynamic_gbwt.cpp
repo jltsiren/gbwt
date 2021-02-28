@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019, 2020 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020, 2021 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -1484,23 +1484,23 @@ DynamicGBWT::locate(SearchState state) const
 //------------------------------------------------------------------------------
 
 void
-printStatistics(const DynamicGBWT& gbwt, const std::string& name)
+printStatistics(const DynamicGBWT& gbwt, const std::string& name, std::ostream& out)
 {
-  printHeader(indexType(gbwt)); std::cout << name;
-  if(gbwt.bidirectional()) { std::cout << " (bidirectional)"; }
-  std::cout << std::endl;
-  printHeader("Total length"); std::cout << gbwt.size() << std::endl;
-  printHeader("Sequences"); std::cout << gbwt.sequences() << std::endl;
-  printHeader("Alphabet size"); std::cout << gbwt.sigma() << std::endl;
-  printHeader("Effective"); std::cout << gbwt.effective() << std::endl;
+  printHeader(indexType(gbwt), out) << name;
+  if(gbwt.bidirectional()) { out << " (bidirectional)"; }
+  out << std::endl;
+  printHeader("Total length", out) << gbwt.size() << std::endl;
+  printHeader("Sequences", out) << gbwt.sequences() << std::endl;
+  printHeader("Alphabet size", out) << gbwt.sigma() << std::endl;
+  printHeader("Effective", out) << gbwt.effective() << std::endl;
   std::pair<size_type, size_type> runs = gbwt.runs();
-  printHeader("Runs"); std::cout << runs.first << " concrete / " << runs.second << " logical" << std::endl;
-  printHeader("DA samples"); std::cout << gbwt.samples() << std::endl;
+  printHeader("Runs", out) << runs.first << " concrete / " << runs.second << " logical" << std::endl;
+  printHeader("DA samples", out) << gbwt.samples() << std::endl;
   if(gbwt.hasMetadata())
   {
-    printHeader("Metadata"); std::cout << gbwt.metadata << std::endl;
+    printHeader("Metadata", out) << gbwt.metadata << std::endl;
   }
-  std::cout << std::endl;
+  out << std::endl;
 }
 
 std::string
