@@ -33,3 +33,6 @@ metadata
 
 # cmake
 build
+
+# vscode
+.vscode

@@ -25,6 +25,12 @@ The GBWT uses three main construction algorithms:
 
 The implementation is based on the [vgteam fork](https://github.com/vgteam/sdsl-lite) of the Succinct Data Structure Library 2.0 (SDSL). As the implementation uses C++14, OpenMP, and libstdc++ parallel mode, you need g++ 6.1 or newer to compile. On Apple systems, GBWT can also be built with Apple Clang, but libomp must be installed via Macports or Homebrew, and the lack of libstdc++'s parallel mode extensions will result in slower index construction.
 
+GBWT is frequently tested in the following environments:
+
+* Intel Linux (Ubuntu) with GCC.
+* Intel macOS with GCC and Apple Clang.
+* ARM macOS with Apple Clang.
+
 Before compiling, set `SDSL_DIR` in the Makefile to point to your SDSL directory (the default is `../sdsl-lite`). To compile, simply run `make`. Use `install.sh` to compile GBWT and install the headers and library to your home directory, or `install.sh prefix` to specify another install prefix.
 
 ## Citing GBWT
