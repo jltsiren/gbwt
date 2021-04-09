@@ -13,7 +13,7 @@ ifeq ($(shell uname -s), Darwin)
         PARALLEL_FLAGS = -Xpreprocessor -fopenmp -pthread
 
         # If HOMEBREW_PREFIX is specified, libomp probably cannot be found automatically.
-        ifneq ($(HOMEBREW_PREFIX), "")
+        ifdef HOMEBREW_PREFIX
             PARALLEL_FLAGS += -I$(HOMEBREW_PREFIX)/include
             LIBS += -L$(HOMEBREW_PREFIX)/lib
         # Macports installs libomp to /opt/local/lib/libomp
