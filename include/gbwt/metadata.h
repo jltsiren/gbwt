@@ -165,6 +165,9 @@ public:
 
   // Remove metadata corresponding to the sample/contig and return the set of removed
   // path identifiers.
+  // NOTE: This may invalidate existing sample/contig ids and path ids. When removing
+  // multiple samples/contigs, remove the corresponding sequences from the GBWT
+  // before proceeding to the next sample/contig.
   std::vector<size_type> removeSample(size_type sample_id);
   std::vector<size_type> removeContig(size_type contig_id);
 
