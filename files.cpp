@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019 Jouni Sirén
+  Copyright (c) 2017, 2018, 2019, 2021 Jouni Sirén
   Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -37,6 +37,10 @@ constexpr std::uint32_t GBWTHeader::VERSION;
 constexpr std::uint64_t GBWTHeader::FLAG_MASK;
 constexpr std::uint64_t GBWTHeader::FLAG_BIDIRECTIONAL;
 constexpr std::uint64_t GBWTHeader::FLAG_METADATA;
+constexpr std::uint64_t GBWTHeader::FLAG_SIMPLE_SDS;
+
+constexpr std::uint32_t GBWTHeader::META2_VERSION;
+constexpr std::uint64_t GBWTHeader::META2_FLAG_MASK;
 constexpr std::uint32_t GBWTHeader::META_VERSION;
 constexpr std::uint64_t GBWTHeader::META_FLAG_MASK;
 constexpr std::uint32_t GBWTHeader::BD_VERSION;
@@ -93,6 +97,8 @@ GBWTHeader::check() const
   {
   case VERSION:
     return ((this->flags & FLAG_MASK) == this->flags);
+  case META2_VERSION:
+    return ((this->flags & META2_FLAG_MASK) == this->flags);
   case META_VERSION:
     return ((this->flags & META_FLAG_MASK) == this->flags);
   case BD_VERSION:

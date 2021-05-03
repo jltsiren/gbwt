@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2020 Jouni Siren
+  Copyright (c) 2019, 2020, 2021 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -68,6 +68,10 @@ struct PathName
 //------------------------------------------------------------------------------
 
 /*
+  Version 2:
+  - Work in progress.
+  - Compatible with versions 0 to 1.
+
   Version 1:
   - Sample names, contig names, path names.
   - Compatible with version 0.
@@ -107,6 +111,8 @@ public:
   constexpr static std::uint64_t FLAG_CONTIG_NAMES = 0x0004;
 
   // Flag masks for old compatible versions.
+  constexpr static std::uint32_t NAMES_VERSION     = 1;
+  constexpr static std::uint64_t NAMES_FLAG_MASK   = 0x0007;
   constexpr static std::uint32_t INITIAL_VERSION   = 0;
   constexpr static std::uint64_t INITIAL_FLAG_MASK = 0x0000;
 

@@ -233,8 +233,8 @@ struct Version
   constexpr static size_type MINOR_VERSION    = 2;
   constexpr static size_type PATCH_VERSION    = 0;
 
-  constexpr static size_type GBWT_VERSION     = 4;
-  constexpr static size_type METADATA_VERSION = 1;
+  constexpr static size_type GBWT_VERSION     = 5;
+  constexpr static size_type METADATA_VERSION = 2;
   constexpr static size_type VARIANT_VERSION  = 1;
   constexpr static size_type R_INDEX_VERSION  = 1;
 };

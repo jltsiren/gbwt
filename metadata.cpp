@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2020 Jouni Siren
+  Copyright (c) 2019, 2020, 2021 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -40,6 +40,9 @@ constexpr std::uint64_t Metadata::FLAG_MASK;
 constexpr std::uint64_t Metadata::FLAG_PATH_NAMES;
 constexpr std::uint64_t Metadata::FLAG_SAMPLE_NAMES;
 constexpr std::uint64_t Metadata::FLAG_CONTIG_NAMES;
+
+constexpr std::uint32_t Metadata::NAMES_VERSION;
+constexpr std::uint64_t Metadata::NAMES_FLAG_MASK;
 constexpr std::uint32_t Metadata::INITIAL_VERSION;
 constexpr std::uint64_t Metadata::INITIAL_FLAG_MASK;
 
@@ -135,6 +138,8 @@ Metadata::check() const
   {
   case VERSION:
     return ((this->flags & FLAG_MASK) == this->flags);
+  case NAMES_VERSION:
+    return ((this->flags & NAMES_FLAG_MASK) == this->flags);
   case INITIAL_VERSION:
     return ((this->flags & INITIAL_FLAG_MASK) == this->flags);
   default:
