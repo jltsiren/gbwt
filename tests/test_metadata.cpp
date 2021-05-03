@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019 Jouni Siren
+  Copyright (c) 2019, 2021 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -112,7 +112,6 @@ public:
 
     Metadata merged = first;
     merged.merge(second, same_samples, false);
-    ASSERT_TRUE(merged.check()) << "Merged metadata object is not in a valid state " << test_name;
     ASSERT_EQ(merged.samples(), correct_count) << "Expected " << correct_count << " samples, got " << merged.samples() << " " << test_name;
     testMergeConstructor(first, second, merged, same_samples, false, test_name);
 
@@ -175,7 +174,6 @@ public:
 
     Metadata merged = first;
     merged.merge(second, false, same_contigs);
-    ASSERT_TRUE(merged.check()) << "Merged metadata object is not in a valid state " << test_name;
     ASSERT_EQ(merged.contigs(), correct_count) << "Expected " << correct_count << " contigs, got " << merged.contigs() << " " << test_name;
     testMergeConstructor(first, second, merged, false, same_contigs, test_name);
 
@@ -228,7 +226,6 @@ public:
 
     Metadata merged = first;
     merged.merge(second, same, same);
-    ASSERT_TRUE(merged.check()) << "Merged metadata object is not in a valid state " << test_name;
     ASSERT_TRUE(merged.hasPathNames()) << "Merged metadata object does not have path names" << test_name;
     ASSERT_EQ(merged.paths(), correct_count) << "Expected " << correct_count << " paths, got " << merged.paths() << " " << test_name;
     testMergeConstructor(first, second, merged, same, same, test_name);
@@ -293,7 +290,6 @@ TEST_F(MetadataTest, BasicTest)
 {
   // Empty metadata.
   Metadata empty;
-  ASSERT_TRUE(empty.check()) << "Empty metadata object is not in a valid state";
   EXPECT_EQ(empty.samples(), static_cast<size_type>(0)) << "Empty metadata object contains samples";
   EXPECT_EQ(empty.haplotypes(), static_cast<size_type>(0)) << "Empty metadata object contains haplotypes";
   EXPECT_EQ(empty.contigs(), static_cast<size_type>(0)) << "Empty metadata object contains contigs";
@@ -307,7 +303,6 @@ TEST_F(MetadataTest, BasicTest)
   nonempty.setSamples(samples);
   nonempty.setHaplotypes(haplotypes);
   nonempty.setContigs(contigs);
-  ASSERT_TRUE(nonempty.check()) << "Metadata object is not in a valid state";
   EXPECT_EQ(nonempty.samples(), samples) << "Expected " << samples << " samples, got " << nonempty.samples();
   EXPECT_EQ(nonempty.haplotypes(), haplotypes) << "Expected " << haplotypes << " haplotypes, got " << nonempty.haplotypes();
   EXPECT_EQ(nonempty.contigs(), contigs) << "Expected " << contigs << " contigs, got " << nonempty.contigs();
@@ -324,7 +319,6 @@ TEST_F(MetadataTest, Samples)
 {
   Metadata metadata;
   metadata.setSamples(keys);
-  ASSERT_TRUE(metadata.check()) << "Metadata object with sample names is not in a valid state";
   EXPECT_TRUE(metadata.hasSampleNames()) << "Metadata object does not contain sample names";
   ASSERT_EQ(metadata.samples(), static_cast<size_type>(keys.size())) << "Sample count is incorrect";
   bool ok = true;
@@ -345,7 +339,6 @@ TEST_F(MetadataTest, Samples)
   }
 
   metadata.clearSampleNames();
-  ASSERT_TRUE(metadata.check()) << "Metadata object is not in a valid state after clearing sample names";
   EXPECT_FALSE(metadata.hasSampleNames()) << "Metadata object contains sample names";
   EXPECT_EQ(metadata.samples(), static_cast<size_type>(keys.size())) << "Clearing sample names also cleared sample count";
 }
@@ -410,7 +403,6 @@ TEST_F(MetadataTest, Contigs)
 {
   Metadata metadata;
   metadata.setContigs(keys);
-  ASSERT_TRUE(metadata.check()) << "Metadata object with contig names is not in a valid state";
   EXPECT_TRUE(metadata.hasContigNames()) << "Metadata object does not contain contig names";
   ASSERT_EQ(metadata.contigs(), static_cast<size_type>(keys.size())) << "Contig count is incorrect";
   bool ok = true;
@@ -431,7 +423,6 @@ TEST_F(MetadataTest, Contigs)
   }
 
   metadata.clearContigNames();
-  ASSERT_TRUE(metadata.check()) << "Metadata object is not in a valid state after clearing contig names";
   EXPECT_FALSE(metadata.hasContigNames()) << "Metadata object contains contig names";
   EXPECT_EQ(metadata.contigs(), static_cast<size_type>(keys.size())) << "Clearing contig names also cleared contig count";
 }
@@ -497,7 +488,6 @@ TEST_F(MetadataTest, Paths)
 {
   Metadata metadata;
   for(const PathName& path : paths) { metadata.addPath(path); }
-  ASSERT_TRUE(metadata.check()) << "Metadata object with path names is not in a valid state";
   EXPECT_TRUE(metadata.hasPathNames()) << "Metadata object does not contain path names";
   ASSERT_EQ(metadata.paths(), static_cast<size_type>(paths.size())) << "Path count is incorrect";
   bool ok = true;
@@ -541,7 +531,6 @@ TEST_F(MetadataTest, Paths)
   }
 
   metadata.clearPathNames();
-  ASSERT_TRUE(metadata.check()) << "Metadata object is not in a valid state after clearing path names";
   EXPECT_FALSE(metadata.hasPathNames()) << "Metadata object contains path names";
 }
 

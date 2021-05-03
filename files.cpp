@@ -38,7 +38,6 @@ constexpr std::uint64_t GBWTHeader::FLAG_MASK;
 constexpr std::uint64_t GBWTHeader::FLAG_BIDIRECTIONAL;
 constexpr std::uint64_t GBWTHeader::FLAG_METADATA;
 constexpr std::uint64_t GBWTHeader::FLAG_SIMPLE_SDS;
-
 constexpr std::uint32_t GBWTHeader::META2_VERSION;
 constexpr std::uint64_t GBWTHeader::META2_FLAG_MASK;
 constexpr std::uint32_t GBWTHeader::META_VERSION;
@@ -47,6 +46,17 @@ constexpr std::uint32_t GBWTHeader::BD_VERSION;
 constexpr std::uint64_t GBWTHeader::BD_FLAG_MASK;
 constexpr std::uint32_t GBWTHeader::OLD_VERSION;
 constexpr std::uint64_t GBWTHeader::OLD_FLAG_MASK;
+
+constexpr std::uint32_t MetadataHeader::TAG;
+constexpr std::uint32_t MetadataHeader::VERSION;
+constexpr std::uint64_t MetadataHeader::FLAG_MASK;
+constexpr std::uint64_t MetadataHeader::FLAG_PATH_NAMES;
+constexpr std::uint64_t MetadataHeader::FLAG_SAMPLE_NAMES;
+constexpr std::uint64_t MetadataHeader::FLAG_CONTIG_NAMES;
+constexpr std::uint32_t MetadataHeader::NAMES_VERSION;
+constexpr std::uint64_t MetadataHeader::NAMES_FLAG_MASK;
+constexpr std::uint32_t MetadataHeader::INITIAL_VERSION;
+constexpr std::uint64_t MetadataHeader::INITIAL_FLAG_MASK;
 
 //------------------------------------------------------------------------------
 
@@ -142,6 +152,85 @@ std::ostream& operator<<(std::ostream& stream, const GBWTHeader& header)
   return stream << "GBWT v" << header.version << ": "
                 << header.sequences << " sequences of total length " << header.size
                 << ", alphabet size " << header.alphabet_size << " with offset " << header.offset;
+}
+
+//------------------------------------------------------------------------------
+
+MetadataHeader::MetadataHeader() :
+  tag(TAG), version(VERSION),
+  sample_count(0), haplotype_count(0), contig_count(0),
+  flags(0)
+{
+}
+
+size_type
+MetadataHeader::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
+{
+  sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
+  size_type written_bytes = 0;
+
+  written_bytes += sdsl::write_member(this->tag, out, child, "tag");
+  written_bytes += sdsl::write_member(this->version, out, child, "version");
+  written_bytes += sdsl::write_member(this->sample_count, out, child, "sample_count");
+  written_bytes += sdsl::write_member(this->haplotype_count, out, child, "haplotype_count");
+  written_bytes += sdsl::write_member(this->contig_count, out, child, "contig_count");
+  written_bytes += sdsl::write_member(this->flags, out, child, "flags");
+
+  sdsl::structure_tree::add_size(child, written_bytes);
+  return written_bytes;
+}
+
+void
+MetadataHeader::load(std::istream& in)
+{
+  sdsl::read_member(this->tag, in);
+  sdsl::read_member(this->version, in);
+  sdsl::read_member(this->sample_count, in);
+  sdsl::read_member(this->haplotype_count, in);
+  sdsl::read_member(this->contig_count, in);
+  sdsl::read_member(this->flags, in);
+}
+
+bool
+MetadataHeader::check() const
+{
+  if(this->tag != TAG) { return false; }
+  switch(this->version)
+  {
+  case VERSION:
+    return ((this->flags & FLAG_MASK) == this->flags);
+  case NAMES_VERSION:
+    return ((this->flags & NAMES_FLAG_MASK) == this->flags);
+  case INITIAL_VERSION:
+    return ((this->flags & INITIAL_FLAG_MASK) == this->flags);
+  default:
+    return false;
+  }
+}
+
+void
+MetadataHeader::swap(MetadataHeader& another)
+{
+  if(this != &another)
+  {
+    std::swap(this->tag, another.tag);
+    std::swap(this->version, another.version);
+    std::swap(this->sample_count, another.sample_count);
+    std::swap(this->haplotype_count, another.haplotype_count);
+    std::swap(this->contig_count, another.contig_count);
+    std::swap(this->flags, another.flags);
+  }
+}
+
+bool
+MetadataHeader::operator==(const MetadataHeader& another) const
+{
+  return (this->tag == another.tag &&
+          this->version == another.version &&
+          this->sample_count == another.sample_count &&
+          this->haplotype_count == another.haplotype_count &&
+          this->contig_count == another.contig_count &&
+          this->flags == another.flags);
 }
 
 //------------------------------------------------------------------------------

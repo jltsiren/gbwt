@@ -32,7 +32,7 @@ namespace gbwt
 {
 
 /*
-  files.h: Public interface for file formats.
+  files.h: File format headers.
 */
 
 //------------------------------------------------------------------------------
@@ -116,6 +116,66 @@ struct GBWTHeader
 };
 
 std::ostream& operator<<(std::ostream& stream, const GBWTHeader& header);
+
+//------------------------------------------------------------------------------
+
+/*
+  Metadata structure header.
+
+  Version 2:
+  - Work in progress.
+  - Compatible with versions 0 to 1.
+
+  Version 1:
+  - Sample names, contig names, path names.
+  - Compatible with version 0.
+
+  Version 0:
+  - Preliminary version with sample/haplotype/contig counts.
+*/
+
+struct MetadataHeader
+{
+  typedef gbwt::size_type size_type; // Needed for SDSL serialization.
+
+  std::uint32_t tag;
+  std::uint32_t version;
+  std::uint64_t sample_count;
+  std::uint64_t haplotype_count;
+  std::uint64_t contig_count;
+  std::uint64_t flags;
+
+  constexpr static std::uint32_t TAG = 0x6B375E7A;
+  constexpr static std::uint32_t VERSION = Version::METADATA_VERSION;
+
+  constexpr static std::uint64_t FLAG_MASK         = 0x0007;
+  constexpr static std::uint64_t FLAG_PATH_NAMES   = 0x0001;
+  constexpr static std::uint64_t FLAG_SAMPLE_NAMES = 0x0002;
+  constexpr static std::uint64_t FLAG_CONTIG_NAMES = 0x0004;
+
+  // Flag masks for old compatible versions.
+  constexpr static std::uint32_t NAMES_VERSION     = 1;
+  constexpr static std::uint64_t NAMES_FLAG_MASK   = 0x0007;
+  constexpr static std::uint32_t INITIAL_VERSION   = 0;
+  constexpr static std::uint64_t INITIAL_FLAG_MASK = 0x0000;
+
+  MetadataHeader();
+
+  size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
+  void load(std::istream& in);
+  bool check() const;
+
+  void setVersion() { this->version = VERSION; }
+
+  void set(std::uint64_t flag) { this->flags |= flag; }
+  void unset(std::uint64_t flag) { this->flags &= ~flag; }
+  bool get(std::uint64_t flag) const { return (this->flags & flag); }
+
+  void swap(MetadataHeader& another);
+
+  bool operator==(const MetadataHeader& another) const;
+  bool operator!=(const MetadataHeader& another) const { return !(this->operator==(another)); }
+};
 
 //------------------------------------------------------------------------------
 
