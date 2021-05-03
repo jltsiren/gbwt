@@ -1546,6 +1546,12 @@ StringArray::simple_sds_load(std::istream& in)
     for(auto iter = v.one_begin(); iter != v.one_end(); ++iter, i++) { this->offsets[i] = iter->second; }
     sdsl::util::bit_compress(this->offsets);
   }
+
+  // FIXME sanity checks
+  if(this->offsets.size() == 0 || this->offsets[0] != 0 || this->offsets[this->offsets.size() - 1] != this->sequences.size())
+  {
+    throw sdsl::simple_sds::InvalidData("StringArray: offsets and sequences do not match");
+  }
 }
 
 size_t
