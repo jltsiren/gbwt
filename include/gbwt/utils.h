@@ -121,6 +121,18 @@ typedef std::vector<node_type>     vector_type;
 
 //------------------------------------------------------------------------------
 
+// In-place view of the sequence: (start, length).
+// This is a quick replacement for std::string_view from C++17.
+typedef std::pair<const char*, size_t> view_type;
+
+inline view_type
+str_to_view(const std::string& str)
+{
+  return view_type(str.data(), str.length());
+}
+
+//------------------------------------------------------------------------------
+
 /*
   range_type stores a closed range [first, second]. Empty ranges are indicated by
   first > second. The emptiness check uses +1 to handle the common special case

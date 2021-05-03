@@ -25,6 +25,8 @@
 
 #include <gbwt/internal.h>
 
+#include <sdsl/simple_sds.hpp>
+
 #include <unordered_set>
 
 namespace gbwt
@@ -1393,6 +1395,200 @@ void
 MergeParameters::setMergeJobs(size_type n)
 {
   this->merge_jobs = Range::bound(n, 1, MAX_MERGE_JOBS);
+}
+
+//------------------------------------------------------------------------------
+
+StringArray::StringArray(const std::vector<std::string>& source)
+{
+  *this = StringArray(source.size(),
+  [&source](size_type i) -> size_type
+  {
+    return source[i].length();
+  },
+  [&source](size_type i) -> view_type
+  {
+    return str_to_view(source[i]);
+  });
+}
+
+StringArray::StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<view_type(size_type)>& sequence)
+{
+  size_type total_length = 0;
+  for(size_type i = 0; i < n; i++) { total_length += length(i); }
+  this->sequences.reserve(total_length);
+  this->offsets = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
+
+  size_type total = 0;
+  for(size_type i = 0; i < n; i++)
+  {
+    view_type view = sequence(i);
+    this->sequences.insert(this->sequences.end(), view.first, view.first + view.second);
+    this->offsets[i] = total;
+    total += view.second;
+  }
+  this->offsets[n] = total;
+}
+
+StringArray::StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence)
+{
+  size_type total_length = 0;
+  for(size_type i = 0; i < n; i++) { total_length += length(i); }
+  this->sequences.reserve(total_length);
+  this->offsets = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
+
+  size_type total = 0;
+  for(size_type i = 0; i < n; i++)
+  {
+    std::string str = sequence(i);
+    this->sequences.insert(this->sequences.end(), str.begin(), str.end());
+    this->offsets[i] = total;
+    total += str.length();
+  }
+  this->offsets[n] = total;
+}
+
+void
+StringArray::swap(StringArray& another)
+{
+  this->sequences.swap(another.sequences);
+  this->offsets.swap(another.offsets);
+}
+
+size_type
+StringArray::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
+{
+  sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
+  size_type written_bytes = 0;
+
+  written_bytes += serializeVector(this->sequences, out, child, "sequences");
+  this->offsets.serialize(out, child, "offsets");
+
+  sdsl::structure_tree::add_size(child, written_bytes);
+  return written_bytes;
+}
+
+void
+StringArray::load(std::istream& in)
+{
+  loadVector(this->sequences, in);
+  this->offsets.load(in);
+}
+
+void
+determine_alphabet(const std::vector<char>& sequences, std::vector<std::uint8_t>& char_to_comp, sdsl::int_vector<8>& comp_to_char, size_type& sigma)
+{
+  char_to_comp = std::vector<std::uint8_t>(256, 0);
+  for(char c : sequences) { char_to_comp[static_cast<std::uint8_t>(c)] = 1; }
+
+  sigma = 0;
+  for(auto c : char_to_comp) { sigma += c; }
+  sigma = std::max(sigma, size_type(1));
+
+  comp_to_char = sdsl::int_vector<8>(sigma, 0);
+  for(size_type i = 0, found = 0; i < char_to_comp.size(); i++)
+  {
+    if(char_to_comp[i] != 0)
+    {
+      comp_to_char[found] = i;
+      char_to_comp[i] = found;
+      found++;
+    }
+  }
+}
+
+void
+StringArray::simple_sds_serialize(std::ostream& out) const
+{
+  // Determine and serialize the alphabet.
+  std::vector<std::uint8_t> char_to_comp;
+  sdsl::int_vector<8> comp_to_char;
+  size_type sigma = 0;
+  determine_alphabet(this->sequences, char_to_comp, comp_to_char, sigma);
+  comp_to_char.simple_sds_serialize(out);
+
+  // Compress the sequences.
+  {
+    sdsl::int_vector<> compressed(this->sequences.size(), 0, sdsl::bits::length(sigma - 1));
+    for(size_type i = 0; i < this->sequences.size(); i++)
+    {
+      compressed[i] = char_to_comp[static_cast<uint8_t>(this->sequences[i])];
+    }
+    compressed.simple_sds_serialize(out);
+  }
+
+  // Compress the offsets.
+  {
+    sdsl::sd_vector<> v(this->offsets.begin(), this->offsets.end());
+    v.simple_sds_serialize(out);
+  }
+}
+
+void
+StringArray::simple_sds_load(std::istream& in)
+{
+  // Load the alphabet.
+  sdsl::int_vector<8> comp_to_char;
+  comp_to_char.simple_sds_load(in);
+
+  // Decompress the sequences.
+  {
+    sdsl::int_vector<> compressed; compressed.simple_sds_load(in);
+    this->sequences = std::vector<char>(); this->sequences.reserve(compressed.size());
+    for(auto c : compressed) { this->sequences.push_back(comp_to_char[c]); }
+  }
+
+  // Decompress the offsets.
+  {
+    sdsl::sd_vector<> v; v.simple_sds_load(in);
+    this->offsets = sdsl::int_vector<>(v.ones(), 0);
+    size_type i = 0;
+    for(auto iter = v.one_begin(); iter != v.one_end(); ++iter, i++) { this->offsets[i] = iter->second; }
+    sdsl::util::bit_compress(this->offsets);
+  }
+}
+
+size_t
+StringArray::simple_sds_size() const
+{
+  size_t result = 0;
+
+  // Determine the alphabet.
+  std::vector<std::uint8_t> char_to_comp;
+  sdsl::int_vector<8> comp_to_char;
+  size_type sigma = 0;
+  determine_alphabet(this->sequences, char_to_comp, comp_to_char, sigma);
+  result += comp_to_char.simple_sds_size();
+
+  // Compress the sequences.
+  {
+    sdsl::int_vector<> compressed(this->sequences.size(), 0, sdsl::bits::length(sigma - 1));
+    for(size_type i = 0; i < this->sequences.size(); i++)
+    {
+      compressed[i] = char_to_comp[static_cast<uint8_t>(this->sequences[i])];
+    }
+    result += compressed.simple_sds_size();
+  }
+
+  // Compress the offsets.
+  {
+    sdsl::sd_vector<> v(this->offsets.begin(), this->offsets.end());
+    result += v.simple_sds_size();
+  }
+
+  return result;
+}
+
+bool
+StringArray::operator==(const StringArray& another) const
+{
+  return (this->sequences == another.sequences && this->offsets == another.offsets);
+}
+
+bool
+StringArray::operator!=(const StringArray& another) const
+{
+  return !(this->operator==(another));
 }
 
 //------------------------------------------------------------------------------

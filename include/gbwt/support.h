@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019, 2020 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020, 2021 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -440,6 +440,55 @@ struct MergeParameters
   size_type merge_buffers;
   size_type chunk_size;
   size_type merge_jobs;
+};
+
+//------------------------------------------------------------------------------
+
+/*
+  An array of strings stored in a single character vector, with starting offsets
+  stored in an integer vector. This can be serialized and loaded much faster than
+  an array of actual strings.
+*/
+class StringArray
+{
+public:
+  typedef gbwt::size_type size_type;
+
+  StringArray() : offsets(1, 0) {}
+  StringArray(const std::vector<std::string>& source);
+  StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<view_type(size_type)>& sequence);
+  StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence);
+
+  void swap(StringArray& another);
+
+  size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
+  void load(std::istream& in);
+
+  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_load(std::istream& in);
+  size_t simple_sds_size() const;
+
+  bool operator==(const StringArray& another) const;
+  bool operator!=(const StringArray& another) const;
+
+  size_type size() const { return this->offsets.size() - 1; }
+  bool empty() const { return (this->size() == 0); }
+  size_type length() const { return this->sequences.size(); }
+  size_type length(size_type i) const { return (this->offsets[i + 1] - this->offsets[i]); }
+  size_type length(size_type start, size_t limit) const { return (this->offsets[limit] - this->offsets[start]); }
+
+  std::string str(size_type i) const
+  {
+    return std::string(this->sequences.data() + this->offsets[i], this->sequences.data() + this->offsets[i + 1]);
+  }
+
+  view_type view(size_type i) const
+  {
+    return view_type(this->sequences.data() + this->offsets[i], this->length(i));
+  }
+
+  std::vector<char>   sequences;
+  sdsl::int_vector<0> offsets;
 };
 
 //------------------------------------------------------------------------------
