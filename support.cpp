@@ -1585,6 +1585,30 @@ StringArray::simple_sds_size() const
   return result;
 }
 
+void
+StringArray::remove(size_type i)
+{
+  if(i >= this->size()) { return; }
+
+  // Update sequences.
+  size_type tail = this->offsets[i];
+  size_type diff = this->offsets[i + 1] - tail;
+  while(tail + diff < this->sequences.size())
+  {
+    this->sequences[tail] = this->sequences[tail + diff];
+    tail++;
+  }
+  this->sequences.resize(tail);
+
+  // Update offsets.
+  for(size_type j = i; j + 1 < this->offsets.size(); j++)
+  {
+    this->offsets[j] = this->offsets[j + 1] - diff;
+  }
+  this->offsets.resize(this->offsets.size() - 1);
+  sdsl::util::bit_compress(this->offsets);
+}
+
 bool
 StringArray::operator==(const StringArray& another) const
 {

@@ -57,6 +57,17 @@ public:
     }
   }
 
+  void try_remove(const std::vector<std::string>& original, size_type i) const
+  {
+    std::vector<std::string> copy = original;
+    if(i < original.size()) { copy.erase(copy.begin() + i); }
+    StringArray truth(copy);
+
+    StringArray removed(original);
+    removed.remove(i);
+    EXPECT_EQ(removed, truth) << "Remove failed for " << i << " / " << original.size();
+  }
+
   void check_file_size(const StringArray& original, std::ifstream& in) const
   {
     size_type expected_size = original.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
@@ -90,6 +101,29 @@ TEST_F(StringArrayTest, NonEmptyArray)
   };
   StringArray array(truth);
   this->check_array(array, truth);
+}
+
+TEST_F(StringArrayTest, Remove)
+{
+  // Try removing the string at each position of the original array.
+  std::vector<std::string> original
+  {
+    "first",
+    "second",
+    "third",
+    "fourth"
+  };
+  for(size_type i = 0; i <= original.size(); i++)
+  {
+    this->try_remove(original, i);
+  }
+
+  // Try removing the only string.
+  std::vector<std::string> one
+  {
+    "one"
+  };
+  this->try_remove(one, 0);
 }
 
 TEST_F(StringArrayTest, SerializeEmpty)

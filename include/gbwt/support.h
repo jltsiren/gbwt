@@ -487,6 +487,8 @@ public:
     return view_type(this->sequences.data() + this->offsets[i], this->length(i));
   }
 
+  void remove(size_type i);
+
   std::vector<char>   sequences;
   sdsl::int_vector<0> offsets;
 };
