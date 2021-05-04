@@ -25,6 +25,8 @@
 #include <gbwt/fast_locate.h>
 #include <gbwt/internal.h>
 
+#include <sdsl/simple_sds.hpp>
+
 namespace gbwt
 {
 
@@ -159,9 +161,7 @@ FastLocate::load(std::istream& in)
   this->header.load(in);
   if(!(this->header.check()))
   {
-    std::cerr << "FastLocate::load(): Invalid or old header" << std::endl;
-    std::cerr << "FastLocate::load(): Header version is " << this->header.version << "; expected " << Header::VERSION << std::endl;
-    return;
+    throw sdsl::simple_sds::InvalidData("FastLocate: Invalid header");
   }
   this->header.setVersion(); // Update to the current version.
 

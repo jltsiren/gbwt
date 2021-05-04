@@ -25,6 +25,8 @@
 #include <gbwt/variants.h>
 #include <gbwt/internal.h>
 
+#include <sdsl/simple_sds.hpp>
+
 #include <string>
 
 namespace gbwt
@@ -183,8 +185,7 @@ VariantPaths::load(std::istream& in)
   // Check header.
   if(!(this->check()))
   {
-    std::cerr << "VariantPaths::load(): Invalid header: ("
-              << this->tag << ", " << this->version << ", " << this->flags << ")" << std::endl;
+    throw sdsl::simple_sds::InvalidData("VariantPaths: Invalid header");
   }
   this->setVersion(); // Update to the current version.
 

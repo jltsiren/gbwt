@@ -28,6 +28,8 @@
 #include <gbwt/dynamic_gbwt.h>
 #include <gbwt/internal.h>
 
+#include <sdsl/simple_sds.hpp>
+
 namespace gbwt
 {
 
@@ -140,7 +142,7 @@ GBWT::load(std::istream& in)
   this->header.load(in);
   if(!(this->header.check()))
   {
-    std::cerr << "GBWT::load(): Invalid header: " << this->header << std::endl;
+    throw sdsl::simple_sds::InvalidData("GBWT: Invalid header");
   }
   this->header.setVersion();  // Update to the current version.
 

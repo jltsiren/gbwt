@@ -25,6 +25,8 @@
 #include <gbwt/internal.h>
 #include <gbwt/metadata.h>
 
+#include <sdsl/simple_sds.hpp>
+
 #include <set>
 
 namespace gbwt
@@ -79,7 +81,7 @@ Metadata::load(std::istream& in)
   this->header.load(in);
   if(!(this->header.check()))
   {
-    std::cerr << "Metadata::load(): Invalid metadata: " << *this << std::endl;
+    throw sdsl::simple_sds::InvalidData("Metadata: Invalid header");
   }
   bool old_version = (this->header.version < MetadataHeader::VERSION);
   this->header.setVersion(); // Update to the current version.

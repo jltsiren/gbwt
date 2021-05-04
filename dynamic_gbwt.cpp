@@ -26,6 +26,8 @@
 #include <gbwt/dynamic_gbwt.h>
 #include <gbwt/bwtmerge.h>
 
+#include <sdsl/simple_sds.hpp>
+
 #include <memory>
 #include <unordered_map>
 
@@ -144,7 +146,7 @@ DynamicGBWT::load(std::istream& in)
   this->header.load(in);
   if(!(this->header.check()))
   {
-    std::cerr << "DynamicGBWT::load(): Invalid header: " << this->header << std::endl;
+    throw sdsl::simple_sds::InvalidData("DynamicGBWT: Invalid header");
   }
   this->header.setVersion();  // Update to the current version.
   this->bwt.resize(this->effective());
