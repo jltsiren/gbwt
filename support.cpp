@@ -1770,7 +1770,7 @@ Dictionary::simple_sds_load(std::istream& in)
 
   if(this->sorted_ids.size() != this->strings.size())
   {
-    throw sdsl::simple_sds::InvalidData("Dictionary: size mismatch between strings and sorted ids");
+    throw sdsl::simple_sds::InvalidData("Dictionary: Size mismatch between strings and sorted ids");
   }
 }
 

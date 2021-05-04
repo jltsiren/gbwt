@@ -123,7 +123,7 @@ std::ostream& operator<<(std::ostream& stream, const GBWTHeader& header);
   Metadata structure header.
 
   Version 2:
-  - Work in progress.
+  - Uses Dictionary based on StringArray.
   - Compatible with versions 0 to 1.
 
   Version 1:
@@ -164,6 +164,9 @@ struct MetadataHeader
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
   bool check() const;
+
+  // Simple-SDS serialization sees the header as a serializable value.
+  bool check_simple_sds() const;
 
   void setVersion() { this->version = VERSION; }
 

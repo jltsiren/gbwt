@@ -101,6 +101,46 @@ Metadata::load(std::istream& in)
 }
 
 void
+Metadata::simple_sds_serialize(std::ostream& out) const
+{
+  sdsl::simple_sds::serialize_value(this->header, out);
+  sdsl::simple_sds::serialize_vector(this->path_names, out);
+  this->sample_names.simple_sds_serialize(out);
+  this->contig_names.simple_sds_serialize(out);
+}
+
+void
+Metadata::simple_sds_load(std::istream& in)
+{
+  this->header = sdsl::simple_sds::load_value<MetadataHeader>(in);
+  if(!(this->header.check_simple_sds()))
+  {
+    throw sdsl::simple_sds::InvalidData("Metadata: Invalid header");
+  }
+
+  this->path_names = sdsl::simple_sds::load_vector<PathName>(in);
+  this->sample_names.simple_sds_load(in);
+  if(this->header.sample_count != this->sample_names.size())
+  {
+    throw sdsl::simple_sds::InvalidData("Metadata: Invalid number of sample names");
+  }
+  this->contig_names.simple_sds_load(in);
+  if(this->header.contig_count != this->contig_names.size())
+  {
+    throw sdsl::simple_sds::InvalidData("Metadata: Invalid number of contig names");
+  }
+}
+
+size_t
+Metadata::simple_sds_size() const
+{
+  return sdsl::simple_sds::value_size(this->header) +
+    sdsl::simple_sds::vector_size(this->path_names) +
+    this->sample_names.simple_sds_size() +
+    this->contig_names.simple_sds_size();
+}
+
+void
 Metadata::swap(Metadata& another)
 {
   if(this != &another)

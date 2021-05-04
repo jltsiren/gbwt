@@ -634,14 +634,23 @@ TEST_F(MetadataTest, Serialization)
   original.setHaplotypes(path_haplotypes);
   original.setContigs(std::vector<std::string>(keys.begin(), keys.begin() + path_contigs));
   for(const PathName& path : paths) { original.addPath(path); }
+  size_t expected_size = original.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
 
-  std::string filename = TempFile::getName("Metadata");
-  sdsl::store_to_file(original, filename);
-  Metadata copy;
-  sdsl::load_from_file(copy, filename);
-  TempFile::remove(filename);
+  std::string sdsl_filename = TempFile::getName("Metadata");
+  sdsl::store_to_file(original, sdsl_filename);
+  Metadata sdsl_copy; sdsl::load_from_file(sdsl_copy, sdsl_filename);
+  TempFile::remove(sdsl_filename);
+  EXPECT_EQ(original, sdsl_copy) << "SDSL serialization failed";
 
-  EXPECT_EQ(original, copy) << "Metadata serialization failed";
+  std::string simple_sds_filename = TempFile::getName("Metadata");
+  sdsl::simple_sds::serialize_to(original, simple_sds_filename);
+  std::ifstream in(simple_sds_filename, std::ios_base::binary);
+  size_t bytes = fileSize(in);
+  ASSERT_EQ(bytes, expected_size) << "Invalid Simple-SDS file size";
+  Metadata simple_sds_copy; simple_sds_copy.simple_sds_load(in);
+  in.close();
+  TempFile::remove(simple_sds_filename);
+  EXPECT_EQ(original, simple_sds_copy) << "Simple-SDS serialization failed";
 }
 
 //------------------------------------------------------------------------------

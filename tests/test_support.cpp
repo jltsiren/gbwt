@@ -389,18 +389,21 @@ TEST(DictionaryTest, Serialization)
     "first", "second", "third", "fourth", "fifth"
   };
   Dictionary original(keys);
+  size_t expected_size = original.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
 
   std::string sdsl_filename = TempFile::getName("Dictionary");
   sdsl::store_to_file(original, sdsl_filename);
-  Dictionary sdsl_copy;
-  sdsl::load_from_file(sdsl_copy, sdsl_filename);
+  Dictionary sdsl_copy; sdsl::load_from_file(sdsl_copy, sdsl_filename);
   TempFile::remove(sdsl_filename);
   EXPECT_EQ(original, sdsl_copy) << "SDSL serialization failed";
 
   std::string simple_sds_filename = TempFile::getName("Dictionary");
   sdsl::simple_sds::serialize_to(original, simple_sds_filename);
-  Dictionary simple_sds_copy;
-  sdsl::simple_sds::load_from(simple_sds_copy, simple_sds_filename);
+  std::ifstream in(simple_sds_filename, std::ios_base::binary);
+  size_t bytes = fileSize(in);
+  ASSERT_EQ(bytes, expected_size) << "Invalid Simple-SDS file size";
+  Dictionary simple_sds_copy; simple_sds_copy.simple_sds_load(in);
+  in.close();
   TempFile::remove(simple_sds_filename);
   EXPECT_EQ(original, simple_sds_copy) << "Simple-SDS serialization failed";
 }

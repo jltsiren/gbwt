@@ -208,6 +208,19 @@ MetadataHeader::check() const
   }
 }
 
+bool
+MetadataHeader::check_simple_sds() const
+{
+  if(this->tag != TAG) { return false; }
+  switch(this->version)
+  {
+  case VERSION:
+    return ((this->flags & FLAG_MASK) == this->flags);
+  default:
+    return false;
+  }
+}
+
 void
 MetadataHeader::swap(MetadataHeader& another)
 {
