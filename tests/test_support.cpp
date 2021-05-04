@@ -390,13 +390,19 @@ TEST(DictionaryTest, Serialization)
   };
   Dictionary original(keys);
 
-  std::string filename = TempFile::getName("Dictionary");
-  sdsl::store_to_file(original, filename);
-  Dictionary copy;
-  sdsl::load_from_file(copy, filename);
-  TempFile::remove(filename);
+  std::string sdsl_filename = TempFile::getName("Dictionary");
+  sdsl::store_to_file(original, sdsl_filename);
+  Dictionary sdsl_copy;
+  sdsl::load_from_file(sdsl_copy, sdsl_filename);
+  TempFile::remove(sdsl_filename);
+  EXPECT_EQ(original, sdsl_copy) << "SDSL serialization failed";
 
-  EXPECT_EQ(original, copy) << "Dictionary serialization failed";
+  std::string simple_sds_filename = TempFile::getName("Dictionary");
+  sdsl::simple_sds::serialize_to(original, simple_sds_filename);
+  Dictionary simple_sds_copy;
+  sdsl::simple_sds::load_from(simple_sds_copy, simple_sds_filename);
+  TempFile::remove(simple_sds_filename);
+  EXPECT_EQ(original, simple_sds_copy) << "Simple-SDS serialization failed";
 }
 
 //------------------------------------------------------------------------------

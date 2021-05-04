@@ -1756,6 +1756,31 @@ Dictionary::load_v1(std::istream& in)
 }
 
 void
+Dictionary::simple_sds_serialize(std::ostream& out) const
+{
+  this->strings.simple_sds_serialize(out);
+  this->sorted_ids.simple_sds_serialize(out);
+}
+
+void
+Dictionary::simple_sds_load(std::istream& in)
+{
+  this->strings.simple_sds_load(in);
+  this->sorted_ids.simple_sds_load(in);
+
+  if(this->sorted_ids.size() != this->strings.size())
+  {
+    throw sdsl::simple_sds::InvalidData("Dictionary: size mismatch between strings and sorted ids");
+  }
+}
+
+size_t
+Dictionary::simple_sds_size() const
+{
+  return this->strings.simple_sds_size() + this->sorted_ids.simple_sds_size();
+}
+
+void
 Dictionary::copy(const Dictionary& source)
 {
   this->strings = source.strings;

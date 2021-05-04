@@ -525,7 +525,9 @@ public:
   // Load the version of Dictionary used in Metadata version 1.
   void load_v1(std::istream& in);
 
-  // FIXME simple-sds
+  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_load(std::istream& in);
+  size_t simple_sds_size() const;
 
   bool operator==(const Dictionary& another) const;
   bool operator!=(const Dictionary& another) const { return !(this->operator==(another)); }
