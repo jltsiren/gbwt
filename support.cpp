@@ -1596,9 +1596,9 @@ StringArray::simple_sds_serialize(std::ostream& out) const
     compressed.simple_sds_serialize(out);
   }
 
-  // Compress the offsets.
+  // Compress the offsets without the past-the-end sentinel.
   {
-    sdsl::sd_vector<> v(this->offsets.begin(), this->offsets.end());
+    sdsl::sd_vector<> v(this->offsets.begin(), this->offsets.end() - 1);
     v.simple_sds_serialize(out);
   }
 }
@@ -1617,16 +1617,16 @@ StringArray::simple_sds_load(std::istream& in)
     for(auto c : compressed) { this->sequences.push_back(comp_to_char[c]); }
   }
 
-  // Decompress the offsets.
+  // Decompress the offsets and add the past-the-end sentinel
   {
     sdsl::sd_vector<> v; v.simple_sds_load(in);
-    this->offsets = sdsl::int_vector<>(v.ones(), 0);
+    this->offsets = sdsl::int_vector<>(v.ones() + 1, 0, sdsl::bits::length(this->sequences.size()));
     size_type i = 0;
     for(auto iter = v.one_begin(); iter != v.one_end(); ++iter, i++) { this->offsets[i] = iter->second; }
-    sdsl::util::bit_compress(this->offsets);
+    this->offsets[v.ones()] = this->sequences.size();
   }
 
-  if(this->offsets.size() == 0 || this->offsets[0] != 0 || this->offsets[this->offsets.size() - 1] != this->sequences.size())
+  if(this->offsets.size() == 0 || this->offsets[0] != 0)
   {
     throw sdsl::simple_sds::InvalidData("StringArray: Offsets and sequences do not match");
   }
@@ -1654,9 +1654,9 @@ StringArray::simple_sds_size() const
     result += compressed.simple_sds_size();
   }
 
-  // Compress the offsets.
+  // Compress the offsets without the past-the-end sentinel.
   {
-    sdsl::sd_vector<> v(this->offsets.begin(), this->offsets.end());
+    sdsl::sd_vector<> v(this->offsets.begin(), this->offsets.end() - 1);
     result += v.simple_sds_size();
   }
 
