@@ -321,7 +321,7 @@ struct RecordArray
 {
   typedef gbwt::size_type size_type;
 
-  size_type                        records;
+  size_type                        records; // This is redundant, as we could use `index.ones()`.
   sdsl::sd_vector<>                index;
   sdsl::sd_vector<>::select_1_type select;
   std::vector<byte_type>           data;
@@ -344,6 +344,10 @@ struct RecordArray
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
+
+  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_load(std::istream& in);
+  size_t simple_sds_size() const;
 
   size_type size() const { return this->records; }
   bool empty() const { return (this->size() == 0); }
@@ -390,6 +394,10 @@ struct DASamples
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
+
+  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_load(std::istream& in);
+  size_t simple_sds_size() const;
 
   size_type records() const { return this->sampled_records.size(); }
   size_type size() const { return this->array.size(); }

@@ -1031,6 +1031,33 @@ RecordArray::load(std::istream& in)
   if(this->data.size() > 0) { DiskIO::read(in, this->data.data(), this->data.size()); }
 }
 
+void
+RecordArray::simple_sds_serialize(std::ostream& out) const
+{
+  this->index.simple_sds_serialize(out);
+  sdsl::simple_sds::serialize_vector(this->data, out);
+}
+
+void
+RecordArray::simple_sds_load(std::istream& in)
+{
+  this->index.simple_sds_load(in);
+  this->records = this->index.ones();
+  sdsl::util::init_support(this->select, &(this->index));
+  this->data = sdsl::simple_sds::load_vector<byte_type>(in);
+
+  if(this->index.size() != this->data.size())
+  {
+    throw sdsl::simple_sds::InvalidData("RecordArray: Index / data size mismatch");
+  }
+}
+
+size_t
+RecordArray::simple_sds_size() const
+{
+  return this->index.simple_sds_size() + sdsl::simple_sds::vector_size(this->data);
+}
+
 std::pair<size_type, size_type>
 RecordArray::getRange(size_type record) const
 {
@@ -1309,6 +1336,50 @@ DASamples::load(std::istream& in)
 }
 
 void
+DASamples::simple_sds_serialize(std::ostream& out) const
+{
+  this->sampled_records.simple_sds_serialize(out);
+  this->bwt_ranges.simple_sds_serialize(out);
+  this->sampled_offsets.simple_sds_serialize(out);
+  this->array.simple_sds_serialize(out);
+}
+
+void
+DASamples::simple_sds_load(std::istream& in)
+{
+  this->sampled_records.simple_sds_load(in);
+  sdsl::util::init_support(this->record_rank, &(this->sampled_records));
+
+  this->bwt_ranges.simple_sds_load(in);
+  sdsl::util::init_support(this->bwt_select, &(this->bwt_ranges));
+
+  this->sampled_offsets.simple_sds_load(in);
+  this->array.simple_sds_load(in);
+
+  if(this->record_rank(this->sampled_records.size()) != this->bwt_ranges.ones())
+  {
+    throw sdsl::simple_sds::InvalidData("DASamples: Sampled record / BWT range count mismatch");
+  }
+  if(this->bwt_ranges.size() != this->sampled_offsets.size())
+  {
+    throw sdsl::simple_sds::InvalidData("DASamples: BWT range / sampled offsets size mismatch");
+  }
+  if(this->sampled_offsets.ones() != this->array.size())
+  {
+    throw sdsl::simple_sds::InvalidData("DASamples: Sampled offset / sample count mismatch");
+  }
+}
+
+size_t
+DASamples::simple_sds_size() const
+{
+  return this->sampled_records.simple_sds_size() +
+    this->bwt_ranges.simple_sds_size() +
+    this->sampled_offsets.simple_sds_size() +
+    this->array.simple_sds_size();
+}
+
+void
 DASamples::copy(const DASamples& source)
 {
   this->sampled_records = source.sampled_records;
@@ -1557,7 +1628,7 @@ StringArray::simple_sds_load(std::istream& in)
 
   if(this->offsets.size() == 0 || this->offsets[0] != 0 || this->offsets[this->offsets.size() - 1] != this->sequences.size())
   {
-    throw sdsl::simple_sds::InvalidData("StringArray: offsets and sequences do not match");
+    throw sdsl::simple_sds::InvalidData("StringArray: Offsets and sequences do not match");
   }
 }
 
