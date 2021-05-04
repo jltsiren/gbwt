@@ -94,12 +94,34 @@ TEST_F(StringArrayTest, NonEmptyArray)
 {
   std::vector<std::string> truth
   {
-    "first",
-    "second",
-    "third",
-    "fourth"
+    "first", "second", "third", "fourth"
   };
   StringArray array(truth);
+  this->check_array(array, truth);
+}
+
+TEST_F(StringArrayTest, Choose)
+{
+  std::vector<std::string> original
+  {
+    "first", "second", "third", "fourth"
+  };
+  std::vector<std::string> truth
+  {
+    "second", "fourth"
+  };
+
+  // Choose odd positions (that contain even numbers).
+  StringArray array(original.size(), [](size_type i) -> bool
+  {
+    return ((i & 1) != 0);
+  }, [&original](size_type i) -> size_type
+  {
+    return original[i].length();
+  }, [&original](size_type i) -> view_type
+  {
+    return str_to_view(original[i]);
+  });
   this->check_array(array, truth);
 }
 
@@ -108,10 +130,7 @@ TEST_F(StringArrayTest, Remove)
   // Try removing the string at each position of the original array.
   std::vector<std::string> original
   {
-    "first",
-    "second",
-    "third",
-    "fourth"
+    "first", "second", "third", "fourth"
   };
   for(size_type i = 0; i <= original.size(); i++)
   {

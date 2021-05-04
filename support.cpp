@@ -1401,7 +1401,10 @@ MergeParameters::setMergeJobs(size_type n)
 
 StringArray::StringArray(const std::vector<std::string>& source)
 {
-  *this = StringArray(source.size(),
+  *this = StringArray(source.size(), [](size_type) -> bool
+  {
+    return true;
+  },
   [&source](size_type i) -> size_type
   {
     return source[i].length();
@@ -1414,38 +1417,43 @@ StringArray::StringArray(const std::vector<std::string>& source)
 
 StringArray::StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<view_type(size_type)>& sequence)
 {
-  size_type total_length = 0;
-  for(size_type i = 0; i < n; i++) { total_length += length(i); }
-  this->sequences.reserve(total_length);
-  this->offsets = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
+  *this = StringArray(n, [](size_type) -> bool
+  {
+    return true;
+  }, length, sequence);
+}
 
-  size_type total = 0;
+StringArray::StringArray(size_type n, const std::function<bool(size_type)>& choose, const std::function<size_type(size_type)>& length, const std::function<view_type(size_type)>& sequence)
+{
+  size_type chosen = 0, total_length = 0;
   for(size_type i = 0; i < n; i++)
   {
+    if(choose(i)) { chosen++; total_length += length(i); }
+  }
+  this->sequences.reserve(total_length);
+  this->offsets = sdsl::int_vector<0>(chosen + 1, 0, sdsl::bits::length(total_length));
+
+  size_type curr = 0, total = 0;
+  for(size_type i = 0; i < n; i++)
+  {
+    if(!choose(i)) { continue; }
     view_type view = sequence(i);
     this->sequences.insert(this->sequences.end(), view.first, view.first + view.second);
-    this->offsets[i] = total;
+    this->offsets[curr] = total; curr++;
     total += view.second;
   }
-  this->offsets[n] = total;
+  this->offsets[chosen] = total;
 }
 
 StringArray::StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence)
 {
-  size_type total_length = 0;
-  for(size_type i = 0; i < n; i++) { total_length += length(i); }
-  this->sequences.reserve(total_length);
-  this->offsets = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
-
-  size_type total = 0;
-  for(size_type i = 0; i < n; i++)
+  *this = StringArray(n, [](size_type) -> bool
   {
-    std::string str = sequence(i);
-    this->sequences.insert(this->sequences.end(), str.begin(), str.end());
-    this->offsets[i] = total;
-    total += str.length();
-  }
-  this->offsets[n] = total;
+    return true;
+  }, length, [&](size_type i) -> view_type
+  {
+    return str_to_view(sequence(i));
+  });
 }
 
 void
@@ -1547,7 +1555,6 @@ StringArray::simple_sds_load(std::istream& in)
     sdsl::util::bit_compress(this->offsets);
   }
 
-  // FIXME sanity checks
   if(this->offsets.size() == 0 || this->offsets[0] != 0 || this->offsets[this->offsets.size() - 1] != this->sequences.size())
   {
     throw sdsl::simple_sds::InvalidData("StringArray: offsets and sequences do not match");
@@ -1623,8 +1630,7 @@ StringArray::operator!=(const StringArray& another) const
 
 //------------------------------------------------------------------------------
 
-Dictionary::Dictionary() :
-  offsets(1, 0), sorted_ids(), data()
+Dictionary::Dictionary()
 {
 }
 
@@ -1642,27 +1648,9 @@ Dictionary::~Dictionary()
 {
 }
 
-Dictionary::Dictionary(const std::vector<std::string>& source)
+Dictionary::Dictionary(const std::vector<std::string>& source) :
+  strings(source)
 {
-  if(source.empty())
-  {
-    *this = Dictionary();
-    return;
-  }
-
-  size_type total_length = 0;
-  for(const std::string& s : source) { total_length += s.length(); }
-  this->offsets = sdsl::int_vector<0>(source.size() + 1, 0, sdsl::bits::length(total_length));
-  this->data.reserve(total_length);
-
-  // Initialize the arrays.
-  for(size_type i = 0; i < source.size(); i++)
-  {
-    this->offsets[i] = this->data.size();
-    this->data.insert(this->data.end(), source[i].begin(), source[i].end());
-  }
-  this->offsets[source.size()] = this->data.size();
-
   // Build sorted_ids and check for duplicates.
   this->sortKeys();
   if(this->hasDuplicates() && Verbosity::level >= Verbosity::FULL)
@@ -1684,33 +1672,17 @@ Dictionary::Dictionary(const Dictionary& first, const Dictionary& second)
     return;
   }
 
-  // Determine the total number of keys and their total length.
-  size_type total_size = first.size();
-  size_type total_length = first.length();
-  for(size_type i = 0; i < second.size(); i++)
+  // Add all strings from the first and missing strings from the second.
+  this->strings = StringArray(first.size() + second.size(), [&](size_type i) -> bool
   {
-    std::string key = second[i];
-    if(first.find(key) >= first.size()) { total_size++; total_length += key.size(); }
-  }
-  this->offsets = sdsl::int_vector<0>(total_size + 1, 0, sdsl::bits::length(total_length));
-  this->data.reserve(total_length);
-
-  // Copy keys from the first source.
-  this->data.insert(this->data.end(), first.data.begin(), first.data.end());
-  for(size_type i = 0; i < first.size(); i++) { this->offsets[i] = first.offsets[i]; }
-
-  // Add missing keys from the second source.
-  for(size_type i = 0, id = first.size(); i < second.size(); i++)
+    return (i < first.size() || first.find(second.strings.view(i - first.size())) >= first.size());
+  }, [&](size_type i) -> size_type
   {
-    std::string key = second[i];
-    if(first.find(key) >= first.size())
-    {
-      this->offsets[id] = this->data.size();
-      this->data.insert(this->data.end(), key.begin(), key.end());
-      id++;
-    }
-  }
-  this->offsets[total_size] = this->data.size();
+    return (i < first.size() ? first.strings.length(i) : second.strings.length(i - first.size()));
+  }, [&](size_type i) -> view_type
+  {
+    return (i < first.size() ? first.strings.view(i) : second.strings.view(i - first.size()));
+  });
 
   // Build sorted_ids and check for duplicates.
   this->sortKeys();
@@ -1725,9 +1697,8 @@ Dictionary::swap(Dictionary& another)
 {
   if(this != &another)
   {
-    this->offsets.swap(another.offsets);
+    this->strings.swap(another.strings);
     this->sorted_ids.swap(another.sorted_ids);
-    this->data.swap(another.data);
   }
 }
 
@@ -1743,9 +1714,8 @@ Dictionary::operator=(Dictionary&& source)
 {
   if(this != &source)
   {
-    this->offsets = std::move(source.offsets);
+    this->strings = std::move(source.strings);
     this->sorted_ids = std::move(source.sorted_ids);
-    this->data = std::move(source.data);
   }
   return *this;
 }
@@ -1756,9 +1726,8 @@ Dictionary::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::stri
   sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
   size_type written_bytes = 0;
 
-  written_bytes += this->offsets.serialize(out, child, "offsets");
+  written_bytes += this->strings.serialize(out, child, "strings");
   written_bytes += this->sorted_ids.serialize(out, child, "sorted_ids");
-  written_bytes += serializeVector(this->data, out, child, "data");
 
   sdsl::structure_tree::add_size(child, written_bytes);
   return written_bytes;
@@ -1767,29 +1736,42 @@ Dictionary::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::stri
 void
 Dictionary::load(std::istream& in)
 {
-  this->offsets.load(in);
+  this->strings.load(in);
   this->sorted_ids.load(in);
-  loadVector(this->data, in);
+}
+
+void
+Dictionary::load_v1(std::istream& in)
+{
+  sdsl::int_vector<0> offsets; offsets.load(in);
+  this->sorted_ids.load(in);
+  std::vector<char> data; loadVector(data, in);
+  this->strings = StringArray(offsets.size() - 1, [&](size_type i) -> size_type
+  {
+    return offsets[i + 1] - offsets[i];
+  }, [&](size_type i) -> view_type
+  {
+    return view_type(data.data() + offsets[i], offsets[i + 1] - offsets[i]);
+  });
 }
 
 void
 Dictionary::copy(const Dictionary& source)
 {
-  this->offsets = source.offsets;
+  this->strings = source.strings;
   this->sorted_ids = source.sorted_ids;
-  this->data = source.data;
 }
 
 void Dictionary::sortKeys()
 {
-  if(this->offsets.size() <= 1)
+  if(this->empty())
   {
     this->sorted_ids = sdsl::int_vector<0>();
     return;
   }
 
-  this->sorted_ids = sdsl::int_vector<0>(this->offsets.size() - 1, 0, sdsl::bits::length(this->offsets.size() - 2));
-  for(size_type i = 0; i < this->sorted_ids.size(); i++) { this->sorted_ids[i] = i; }
+  this->sorted_ids = sdsl::int_vector<0>(this->size(), 0, sdsl::bits::length(this->size() - 1));
+  for(size_type i = 0; i < this->size(); i++) { this->sorted_ids[i] = i; }
   sequentialSort(this->sorted_ids.begin(), this->sorted_ids.end(), [this](size_type a, size_type b) -> bool
   {
     return this->smaller_by_id(a, b);
@@ -1799,7 +1781,7 @@ void Dictionary::sortKeys()
 bool
 Dictionary::operator==(const Dictionary& another) const
 {
-  return (this->offsets == another.offsets && this->sorted_ids == another.sorted_ids && this->data == another.data);
+  return (this->strings == another.strings && this->sorted_ids == another.sorted_ids);
 }
 
 void
@@ -1809,14 +1791,14 @@ Dictionary::clear()
 }
 
 size_type
-Dictionary::find(const std::string& s) const
+Dictionary::find(view_type view) const
 {
   size_type low = 0, high = this->size();
   while(low < high)
   {
     size_type mid = low + (high - low) / 2;
-    if(this->smaller_by_order(s, mid)) { high = mid; }
-    else if(this->smaller_by_order(mid, s)) { low = mid + 1; }
+    if(this->smaller_by_order(view, mid)) { high = mid; }
+    else if(this->smaller_by_order(mid, view)) { low = mid + 1; }
     else { return this->sorted_ids[mid]; }
   }
   return this->size();
@@ -1827,25 +1809,11 @@ Dictionary::remove(size_type i)
 {
   if(i >= this->size()) { return; }
 
-  // Update data.
-  size_type tail = this->offsets[i];
-  size_type diff = this->offsets[i + 1] - tail;
-  while(tail + diff < this->data.size())
-  {
-    this->data[tail] = this->data[tail + diff];
-    tail++;
-  }
-  this->data.resize(tail);
-
-  // Update offsets.
-  for(size_type j = i; j + 1 < this->offsets.size(); j++)
-  {
-    this->offsets[j] = this->offsets[j + 1] - diff;
-  }
-  this->offsets.resize(this->offsets.size() - 1);
+  // Update strings.
+  this->strings.remove(i);
 
   // Update sorted_ids.
-  diff = 0;
+  size_type diff = 0;
   for(size_type j = 0; j + 1 < this->sorted_ids.size(); j++)
   {
     if(this->sorted_ids[j] == i) { diff = 1; }
@@ -1858,36 +1826,7 @@ Dictionary::remove(size_type i)
 void
 Dictionary::append(const Dictionary& source)
 {
-  if(source.empty()) { return; }
-
-  size_type old_data_size = this->length();
-  size_type new_data_size = this->length() + source.length();
-  size_type old_size = this->size();
-  size_type new_size = this->size() + source.size();
-
-  // Concatenate the sequences.
-  {
-    std::vector<char> new_data; new_data.reserve(new_data_size);
-    new_data.insert(new_data.end(), this->data.begin(), this->data.end());
-    new_data.insert(new_data.end(), source.data.begin(), source.data.end());
-    this->data.swap(new_data);
-  }
-
-  // Concatenate the starting offsets
-  {
-    sdsl::int_vector<0> new_offsets(new_size + 1, 0, sdsl::bits::length(new_data_size));
-    for(size_type i = 0; i < old_size; i++) { new_offsets[i] = this->offsets[i]; }
-    for(size_type i = 0; i < source.size(); i++) { new_offsets[old_size + i] = old_data_size + source.offsets[i]; }
-    new_offsets[new_size] = new_data_size;
-    this->offsets.swap(new_offsets);
-  }
-
-  // Build sorted_ids and check for duplicates.
-  this->sortKeys();
-  if(this->hasDuplicates() && Verbosity::level >= Verbosity::FULL)
-  {
-    std::cerr << "Dictionary::append(): Warning: The dictionary contains duplicate strings" << std::endl;
-  }
+  *this = Dictionary(*this, source);
 }
 
 bool
@@ -1900,9 +1839,8 @@ Dictionary::hasDuplicates() const
   return false;
 }
 
-template<class AIter, class BIter>
 bool
-stringCompare(AIter a_pos, AIter a_lim, BIter b_pos, BIter b_lim)
+stringCompare(const char* a_pos, const char* a_lim, const char* b_pos, const char* b_lim)
 {
   while(a_pos != a_lim && b_pos != b_lim)
   {
@@ -1915,55 +1853,45 @@ stringCompare(AIter a_pos, AIter a_lim, BIter b_pos, BIter b_lim)
 bool
 Dictionary::smaller_by_order(size_type a, size_type b) const
 {
-  return stringCompare(this->data.begin() + this->offsets[this->sorted_ids[a]],
-                       this->data.begin() + this->offsets[this->sorted_ids[a] + 1],
-                       this->data.begin() + this->offsets[this->sorted_ids[b]],
-                       this->data.begin() + this->offsets[this->sorted_ids[b] + 1]);
+  view_type first = this->strings.view(this->sorted_ids[a]);
+  view_type second = this->strings.view(this->sorted_ids[b]);
+  return stringCompare(first.first, first.first + first.second, second.first, second.first + second.second);
 }
 
 bool
-Dictionary::smaller_by_order(size_type a, const std::string& b) const
+Dictionary::smaller_by_order(size_type a, view_type b) const
 {
-  return stringCompare(this->data.begin() + this->offsets[this->sorted_ids[a]],
-                       this->data.begin() + this->offsets[this->sorted_ids[a] + 1],
-                       b.begin(),
-                       b.end());
+  view_type first = this->strings.view(this->sorted_ids[a]);
+  return stringCompare(first.first, first.first + first.second, b.first, b.first + b.second);
 }
 
 bool
-Dictionary::smaller_by_order(const std::string& a, size_type b) const
+Dictionary::smaller_by_order(view_type a, size_type b) const
 {
-  return stringCompare(a.begin(),
-                       a.end(),
-                       this->data.begin() + this->offsets[this->sorted_ids[b]],
-                       this->data.begin() + this->offsets[this->sorted_ids[b] + 1]);
+  view_type second = this->strings.view(this->sorted_ids[b]);
+  return stringCompare(a.first, a.first + a.second, second.first, second.first + second.second);
 }
 
 bool
 Dictionary::smaller_by_id(size_type a, size_type b) const
 {
-  return stringCompare(this->data.begin() + this->offsets[a],
-                       this->data.begin() + this->offsets[a + 1],
-                       this->data.begin() + this->offsets[b],
-                       this->data.begin() + this->offsets[b + 1]);
+  view_type first = this->strings.view(a);
+  view_type second = this->strings.view(b);
+  return stringCompare(first.first, first.first + first.second, second.first, second.first + second.second);
 }
 
 bool
-Dictionary::smaller_by_id(size_type a, const std::string& b) const
+Dictionary::smaller_by_id(size_type a, view_type b) const
 {
-  return stringCompare(this->data.begin() + this->offsets[a],
-                       this->data.begin() + this->offsets[a + 1],
-                       b.begin(),
-                       b.end());
+  view_type first = this->strings.view(a);
+  return stringCompare(first.first, first.first + first.second, b.first, b.first + b.second);
 }
 
 bool
-Dictionary::smaller_by_id(const std::string& a, size_type b) const
+Dictionary::smaller_by_id(view_type a, size_type b) const
 {
-  return stringCompare(a.begin(),
-                       a.end(),
-                       this->data.begin() + this->offsets[this->sorted_ids[b]],
-                       this->data.begin() + this->offsets[this->sorted_ids[b] + 1]);
+  view_type second = this->strings.view(b);
+  return stringCompare(a.first, a.first + a.second, second.first, second.first + second.second);
 }
 
 //------------------------------------------------------------------------------

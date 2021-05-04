@@ -81,6 +81,7 @@ Metadata::load(std::istream& in)
   {
     std::cerr << "Metadata::load(): Invalid metadata: " << *this << std::endl;
   }
+  bool old_version = (this->header.version < MetadataHeader::VERSION);
   this->header.setVersion(); // Update to the current version.
 
   if(this->hasPathNames())
@@ -89,11 +90,13 @@ Metadata::load(std::istream& in)
   }
   if(this->hasSampleNames())
   {
-    this->sample_names.load(in);
+    if(old_version) { this->sample_names.load_v1(in); }
+    else { this->sample_names.load(in); }
   }
   if(this->hasContigNames())
   {
-    this->contig_names.load(in);
+    if(old_version) { this->contig_names.load_v1(in); }
+    else { this->contig_names.load(in); }
   }
 }
 
