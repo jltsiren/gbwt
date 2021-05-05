@@ -26,8 +26,6 @@
 #ifndef GBWT_ALGORITHMS_H
 #define GBWT_ALGORITHMS_H
 
-#include <map>
-
 #include <gbwt/support.h>
 
 namespace gbwt

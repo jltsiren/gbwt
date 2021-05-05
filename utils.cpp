@@ -57,6 +57,13 @@ constexpr size_type Version::R_INDEX_VERSION;
 
 //------------------------------------------------------------------------------
 
+// Other class variables.
+
+const std::string Version::SOURCE_KEY = "Source";
+const std::string Version::SOURCE_VALUE = "jltsiren/gbwt";
+
+//------------------------------------------------------------------------------
+
 std::vector<range_type>
 Range::partition(range_type range, size_type blocks)
 {

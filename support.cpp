@@ -1499,6 +1499,16 @@ StringArray::StringArray(const std::vector<std::string>& source)
   });
 }
 
+StringArray::StringArray(const std::map<std::string, std::string>& source)
+{
+  std::vector<std::string> linearized;
+  for(auto iter = source.begin(); iter != source.end(); ++iter)
+  {
+    linearized.push_back(iter->first); linearized.push_back(iter->second);
+  }
+  *this = StringArray(linearized);
+}
+
 StringArray::StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<view_type(size_type)>& sequence)
 {
   *this = StringArray(n, [](size_type) -> bool

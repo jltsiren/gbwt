@@ -100,6 +100,22 @@ TEST_F(StringArrayTest, NonEmptyArray)
   this->check_array(array, truth);
 }
 
+TEST_F(StringArrayTest, FromMap)
+{
+  std::map<std::string, std::string> source
+  {
+    { "A-key", "A-value" },
+    { "C-key", "C-value" },
+    { "B-key", "B-value" },
+  };
+  std::vector<std::string> truth
+  {
+    "A-key", "A-value", "B-key", "B-value", "C-key", "C-value"
+  };
+  StringArray array(source);
+  this->check_array(array, truth);
+}
+
 TEST_F(StringArrayTest, Choose)
 {
   std::vector<std::string> original
