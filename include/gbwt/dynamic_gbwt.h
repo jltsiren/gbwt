@@ -317,9 +317,10 @@ public:
 
 //------------------------------------------------------------------------------
 
-  GBWTHeader                 header;
-  std::vector<DynamicRecord> bwt;
-  Metadata                   metadata;
+  GBWTHeader                         header;
+  std::map<std::string, std::string> tags;
+  std::vector<DynamicRecord>         bwt;
+  Metadata                           metadata;
 
 //------------------------------------------------------------------------------
 
@@ -330,6 +331,8 @@ public:
 private:
   void copy(const DynamicGBWT& source);
   void copy(const GBWT& source);
+  void resetTags();
+  void addSource();
 
   // Change offset and alphabet size.
   void forceResize(size_type new_offset, size_type new_sigma);

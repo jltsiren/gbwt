@@ -266,10 +266,11 @@ public:
 
 //------------------------------------------------------------------------------
 
-  GBWTHeader  header;
-  RecordArray bwt;
-  DASamples   da_samples;
-  Metadata    metadata;
+  GBWTHeader                         header;
+  std::map<std::string, std::string> tags;
+  RecordArray                        bwt;
+  DASamples                          da_samples;
+  Metadata                           metadata;
 
   // Decompress and cache the endmarker, because decompressing it is expensive.
   DecompressedRecord endmarker_record;
@@ -282,6 +283,8 @@ public:
 
 private:
   void copy(const GBWT& source);
+  void resetTags();
+  void addSource();
   void cacheEndmarker();
 
 public:

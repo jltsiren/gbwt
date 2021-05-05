@@ -28,6 +28,8 @@
 #include <gbwt/dynamic_gbwt.h>
 #include <gbwt/internal.h>
 
+#include <cctype>
+
 namespace gbwt
 {
 
@@ -41,6 +43,7 @@ const std::string GBWT::EXTENSION = ".gbwt";
 
 GBWT::GBWT()
 {
+  this->addSource();
 }
 
 GBWT::GBWT(const GBWT& source)
@@ -50,6 +53,7 @@ GBWT::GBWT(const GBWT& source)
 
 GBWT::GBWT(const DynamicGBWT& source) :
   header(source.header),
+  tags(source.tags),
   bwt(source.bwt), da_samples(source.bwt),
   metadata(source.metadata)
 {
@@ -71,6 +75,7 @@ GBWT::swap(GBWT& another)
   if(this != &another)
   {
     this->header.swap(another.header);
+    this->tags.swap(another.tags);
     this->bwt.swap(another.bwt);
     this->da_samples.swap(another.da_samples);
     this->metadata.swap(another.metadata);
@@ -93,6 +98,7 @@ GBWT::operator=(const DynamicGBWT& source)
   this->da_samples = DASamples();
 
   this->header = source.header;
+  this->tags = source.tags;
   this->bwt = RecordArray(source.bwt);
   this->da_samples = DASamples(source.bwt);
   this->metadata = source.metadata;
@@ -107,6 +113,7 @@ GBWT::operator=(GBWT&& source)
   if(this != &source)
   {
     this->header = std::move(source.header);
+    this->tags = std::move(source.tags);
     this->bwt = std::move(source.bwt);
     this->da_samples = std::move(source.da_samples);
     this->metadata = std::move(source.metadata);
@@ -122,6 +129,12 @@ GBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string nam
   size_type written_bytes = 0;
 
   written_bytes += this->header.serialize(out, child, "header");
+
+  {
+    StringArray linearized(this->tags);
+    written_bytes += linearized.serialize(out, child, "tags");
+  }
+
   written_bytes += this->bwt.serialize(out, child, "bwt");
   written_bytes += this->da_samples.serialize(out, child, "da_samples");
 
@@ -144,9 +157,35 @@ GBWT::load(std::istream& in)
     throw sdsl::simple_sds::InvalidData("GBWT: Invalid header");
   }
   bool simple_sds = h.get(GBWTHeader::FLAG_SIMPLE_SDS);
+  bool has_tags = h.version >= 5; // FIXME Replace with symbolic constant.
   h.unset(GBWTHeader::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
   h.setVersion(); // Update to the current version.
   this->header = h;
+
+  // Read the tags and set the source to Version::SOURCE_VALUE.
+  if(has_tags)
+  {
+    StringArray linearized;
+    if(simple_sds) { linearized.simple_sds_load(in); }
+    else { linearized.load(in); }
+    if(linearized.size() % 2 != 0)
+    {
+      throw sdsl::simple_sds::InvalidData("GBWT: Tag without a value");
+    }
+    this->tags.clear();
+    for(size_type i = 0; i < linearized.size(); i += 2)
+    {
+      std::string key = linearized.str(i);
+      for(auto iter = key.begin(); iter != key.end(); ++iter) { *iter = std::tolower(*iter); }
+      this->tags[key] = linearized.str(i + 1);
+    }
+    if(this->tags.size() != linearized.size() / 2)
+    {
+      throw sdsl::simple_sds::InvalidData("GBWT: Duplicate tags");
+    }
+    this->addSource();
+  }
+  else { this->resetTags(); }
 
   // Read the BWT.
   if(simple_sds) { this->bwt.simple_sds_load(in); }
@@ -193,6 +232,11 @@ GBWT::simple_sds_serialize(std::ostream& out) const
   h.set(GBWTHeader::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
   sdsl::simple_sds::serialize_value(h, out);
 
+  {
+    StringArray linearized(this->tags);
+    linearized.simple_sds_serialize(out);
+  }
+
   this->bwt.simple_sds_serialize(out);
   this->da_samples.simple_sds_serialize(out);
   if(this->hasMetadata()) { sdsl::simple_sds::serialize_option(this->metadata, out); }
@@ -210,6 +254,10 @@ size_t
 GBWT::simple_sds_size() const
 {
   size_t result = sdsl::simple_sds::value_size(this->header);
+  {
+    StringArray linearized(this->tags);
+    result += linearized.simple_sds_size();
+  }
   result += this->bwt.simple_sds_size();
   result += this->da_samples.simple_sds_size();
   if(this->hasMetadata()) { result += sdsl::simple_sds::option_size(this->metadata); }
@@ -221,10 +269,24 @@ void
 GBWT::copy(const GBWT& source)
 {
   this->header = source.header;
+  this->tags = source.tags;
   this->bwt = source.bwt;
   this->da_samples = source.da_samples;
   this->metadata = source.metadata;
   this->endmarker_record = source.endmarker_record;
+}
+
+void
+GBWT::resetTags()
+{
+  this->tags.clear();
+  this->addSource();
+}
+
+void
+GBWT::addSource()
+{
+  this->tags[Version::SOURCE_KEY] = Version::SOURCE_VALUE;
 }
 
 //------------------------------------------------------------------------------
@@ -232,6 +294,9 @@ GBWT::copy(const GBWT& source)
 GBWT::GBWT(const std::vector<GBWT>& sources)
 {
   if(sources.empty()) { return; }
+
+  // We cannot know what to do with the tags in the sources.
+  this->addSource();
 
   // Merge the headers.
   size_type valid_sources = 0;

@@ -52,6 +52,7 @@ const std::string DynamicGBWT::EXTENSION = ".gbwt";
 
 DynamicGBWT::DynamicGBWT()
 {
+  this->addSource();
 }
 
 DynamicGBWT::DynamicGBWT(const DynamicGBWT& source)
@@ -79,6 +80,7 @@ DynamicGBWT::swap(DynamicGBWT& another)
   if(this != &another)
   {
     this->header.swap(another.header);
+    this->tags.swap(another.tags);
     this->bwt.swap(another.bwt);
     this->metadata.swap(another.metadata);
   }
@@ -104,6 +106,7 @@ DynamicGBWT::operator=(DynamicGBWT&& source)
   if(this != &source)
   {
     this->header = std::move(source.header);
+    this->tags = std::move(source.tags);
     this->bwt = std::move(source.bwt);
     this->metadata = std::move(source.metadata);
   }
@@ -117,6 +120,11 @@ DynamicGBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::str
   size_type written_bytes = 0;
 
   written_bytes += this->header.serialize(out, child, "header");
+
+  {
+    StringArray linearized(this->tags);
+    written_bytes += linearized.serialize(out, child, "tags");
+  }
 
   {
     RecordArray array(this->bwt);
@@ -147,9 +155,35 @@ DynamicGBWT::load(std::istream& in)
     throw sdsl::simple_sds::InvalidData("DynamicGBWT: Invalid header");
   }
   bool simple_sds = h.get(GBWTHeader::FLAG_SIMPLE_SDS);
+  bool has_tags = h.version >= 5; // FIXME Replace with symbolic constant.
   h.unset(GBWTHeader::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
   h.setVersion(); // Update to the current version.
   this->header = h;
+
+  // Read the tags and set the source to Version::SOURCE_VALUE.
+  if(has_tags)
+  {
+    StringArray linearized;
+    if(simple_sds) { linearized.simple_sds_load(in); }
+    else { linearized.load(in); }
+    if(linearized.size() % 2 != 0)
+    {
+      throw sdsl::simple_sds::InvalidData("DynamicGBWT: Tag without a value");
+    }
+    this->tags.clear();
+    for(size_type i = 0; i < linearized.size(); i += 2)
+    {
+      std::string key = linearized.str(i);
+      for(auto iter = key.begin(); iter != key.end(); ++iter) { *iter = std::tolower(*iter); }
+      this->tags[key] = linearized.str(i + 1);
+    }
+    if(this->tags.size() != linearized.size() / 2)
+    {
+      throw sdsl::simple_sds::InvalidData("DynamicGBWT: Duplicate tags");
+    }
+    this->addSource();
+  }
+  else { this->resetTags(); }
 
   // Read and decompress the BWT.
   this->bwt.resize(this->effective());
@@ -229,6 +263,10 @@ DynamicGBWT::simple_sds_serialize(std::ostream& out) const
   sdsl::simple_sds::serialize_value(h, out);
 
   {
+    StringArray linearized(this->tags);
+    linearized.simple_sds_serialize(out);
+  }
+  {
     RecordArray array(this->bwt);
     array.simple_sds_serialize(out);
   }
@@ -252,6 +290,10 @@ DynamicGBWT::simple_sds_size() const
 {
   size_t result = sdsl::simple_sds::value_size(this->header);
   {
+    StringArray linearized(this->tags);
+    result += linearized.simple_sds_size();
+  }
+  {
     RecordArray array(this->bwt);
     result += array.simple_sds_size();
   }
@@ -268,6 +310,7 @@ void
 DynamicGBWT::copy(const DynamicGBWT& source)
 {
   this->header = source.header;
+  this->tags = source.tags;
   this->bwt = source.bwt;
   this->metadata = source.metadata;
 }
@@ -276,6 +319,7 @@ void
 DynamicGBWT::copy(const GBWT& source)
 {
   this->header = source.header;
+  this->tags = source.tags;
 
   // Decompress the BWT.
   this->bwt.resize(this->effective());
@@ -310,6 +354,19 @@ DynamicGBWT::copy(const GBWT& source)
   this->rebuildIncoming();
 
   this->metadata = source.metadata;
+}
+
+void
+DynamicGBWT::resetTags()
+{
+  this->tags.clear();
+  this->addSource();
+}
+
+void
+DynamicGBWT::addSource()
+{
+  this->tags[Version::SOURCE_KEY] = Version::SOURCE_VALUE;
 }
 
 //------------------------------------------------------------------------------
