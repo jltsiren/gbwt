@@ -25,8 +25,6 @@
 #include <gbwt/internal.h>
 #include <gbwt/metadata.h>
 
-#include <sdsl/simple_sds.hpp>
-
 #include <set>
 
 namespace gbwt

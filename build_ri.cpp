@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2020 Jouni Siren
+  Copyright (c) 2018, 2020, 2021 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -83,11 +83,7 @@ main(int argc, char** argv)
 
   std::string gbwt_name = base_name + GBWT::EXTENSION;
   GBWT gbwt_index;
-  if(!sdsl::load_from_file(gbwt_index, gbwt_name))
-  {
-    std::cerr << "build_ri: Cannot load the GBWT index from " << gbwt_name << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  sdsl::simple_sds::load_from(gbwt_index, gbwt_name);
   printStatistics(gbwt_index, base_name);
 
   FastLocate r_index(gbwt_index);

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2019, 2020 Jouni Siren
+  Copyright (c) 2018, 2019, 2020, 2021 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -43,7 +43,8 @@ main(int argc, char** argv)
   bool print_metadata = true;
   bool list_samples = false, list_contigs = false, list_paths = false;
   bool remove_metadata = false;
-  while((c = getopt(argc, argv, "scpr")) != -1)
+  bool sdsl_format = false;
+  while((c = getopt(argc, argv, "scprO")) != -1)
   {
     switch(c)
     {
@@ -59,6 +60,9 @@ main(int argc, char** argv)
     case 'r':
       remove_metadata = true;
       break;
+    case 'O':
+      sdsl_format = true;
+      break;
     case '?':
       std::exit(EXIT_FAILURE);
     default:
@@ -70,11 +74,7 @@ main(int argc, char** argv)
   std::string index_base = argv[optind];
 
   GBWT index;
-  if(!sdsl::load_from_file(index, index_base + GBWT::EXTENSION))
-  {
-    std::cerr << "metadata_tool: Cannot load the index from " << (index_base + GBWT::EXTENSION) << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  sdsl::simple_sds::load_from(index, index_base + GBWT::EXTENSION);
   if(!(index.hasMetadata()))
   {
     std::cerr << "metadata_tool: No metadata in the GBWT index" << std::endl;
@@ -137,11 +137,15 @@ main(int argc, char** argv)
 
   if(modified)
   {
-    if(!sdsl::store_to_file(index, index_base + GBWT::EXTENSION))
+    if(sdsl_format)
     {
-      std::cerr << "metadata: Cannot write the index to " << (index_base + GBWT::EXTENSION) << std::endl;
-      std::exit(EXIT_FAILURE);
+      if(!sdsl::store_to_file(index, index_base + GBWT::EXTENSION))
+      {
+        std::cerr << "metadata: Cannot write the index to " << (index_base + GBWT::EXTENSION) << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
     }
+    else { sdsl::simple_sds::serialize_to(index, index_base + GBWT::EXTENSION); }
   }
 
   return 0;
@@ -159,6 +163,7 @@ printUsage(int exit_code)
   std::cerr << "  -c    List contig names" << std::endl;
   std::cerr << "  -p    List path names" << std::endl;
   std::cerr << "  -r    Remove all metadata" << std::endl;
+  std::cerr << "  -O    Output SDSL format instead of simple-sds format" << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);

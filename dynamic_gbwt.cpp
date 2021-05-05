@@ -26,8 +26,6 @@
 #include <gbwt/dynamic_gbwt.h>
 #include <gbwt/bwtmerge.h>
 
-#include <sdsl/simple_sds.hpp>
-
 #include <memory>
 #include <unordered_map>
 

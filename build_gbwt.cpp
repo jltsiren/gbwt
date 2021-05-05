@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2019, 2020 Jouni Siren
+  Copyright (c) 2018, 2019, 2020, 2021 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -62,8 +62,9 @@ main(int argc, char** argv)
   std::string index_base, output_base;
   std::set<std::string> phasing_files;
   std::vector<std::string> input_files;
+  bool sdsl_format = false;
   int c = 0;
-  while((c = getopt(argc, argv, "b:cefF:i:lL:o:pP:rs:Sv")) != -1)
+  while((c = getopt(argc, argv, "b:cefF:i:lL:o:OpP:rs:Sv")) != -1)
   {
     switch(c)
     {
@@ -90,6 +91,8 @@ main(int argc, char** argv)
       break;
     case 'o':
       output_base = optarg; break;
+    case 'O':
+      sdsl_format = true; break;
     case 'p':
       build_from_parse = true; break;
     case 'P':
@@ -161,7 +164,7 @@ main(int argc, char** argv)
     std::cout << ")";
   }
   std::cout << std::endl;
-  printHeader("Output name"); std::cout << output_base << std::endl;
+  printHeader("Output name"); std::cout << output_base << (sdsl_format ? " (SDSL format)" : " (simple-sds format)") << std::endl;
   if(batch_size != 0) { printHeader("Batch size"); std::cout << batch_size << " million" << std::endl; }
   printHeader("Orientation"); std::cout << (both_orientations ? "both" : "forward only") << std::endl;
   printHeader("Sample interval"); std::cout << sample_interval << std::endl;
@@ -184,11 +187,7 @@ main(int argc, char** argv)
     }
     else
     {
-      if(!sdsl::load_from_file(dynamic_index, index_base + DynamicGBWT::EXTENSION))
-      {
-        std::cerr << "build_gbwt: Cannot load the index from " << (index_base + DynamicGBWT::EXTENSION) << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
+      sdsl::simple_sds::load_from(dynamic_index, index_base + DynamicGBWT::EXTENSION);
       printStatistics(dynamic_index, index_base);
       need_sample_names = false;
       use_contig_names = (dynamic_index.hasMetadata() && dynamic_index.metadata.hasContigNames());
@@ -308,11 +307,15 @@ main(int argc, char** argv)
       }
     }
 
-    if(!sdsl::store_to_file(dynamic_index, gbwt_name))
+    if(sdsl_format)
     {
-      std::cerr << "build_gbwt: Cannot write the index to " << gbwt_name << std::endl;
-      std::exit(EXIT_FAILURE);
+      if(!sdsl::store_to_file(dynamic_index, gbwt_name))
+      {
+        std::cerr << "build_gbwt: Cannot write the index to " << gbwt_name << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
     }
+    else { sdsl::simple_sds::serialize_to(dynamic_index, gbwt_name); }
     printStatistics(dynamic_index, output_base);
 
     double seconds = readTimer() - start;
@@ -330,11 +333,7 @@ main(int argc, char** argv)
     std::cout << std::endl;
 
     GBWT compressed_index;
-    if(!sdsl::load_from_file(compressed_index, gbwt_name))
-    {
-      std::cerr << "build_gbwt: Cannot load the index from " << gbwt_name << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
+    sdsl::simple_sds::load_from(compressed_index, gbwt_name);
     DynamicGBWT dynamic_index(compressed_index);
 
     std::vector<vector_type> queries;
@@ -373,6 +372,7 @@ printUsage(int exit_code)
   std::cerr << "  -l    Load an existing index instead of building it" << std::endl;
   std::cerr << "  -L X  Read a list of phasing files from X, one file per line (use with -p; may repeat)" << std::endl;
   std::cerr << "  -o X  Use base name X for output (default: the only input)" << std::endl;
+  std::cerr << "  -O    Output SDSL format instead of simple-sds format" << std::endl;
   std::cerr << "  -p    The input is a parsed VCF file" << std::endl;
   std::cerr << "  -P X  Only use the phasing information in file X (use with -p; may repeat)" << std::endl;
   std::cerr << "  -r    Index the sequences also in reverse orientation" << std::endl;

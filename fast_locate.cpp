@@ -25,8 +25,6 @@
 #include <gbwt/fast_locate.h>
 #include <gbwt/internal.h>
 
-#include <sdsl/simple_sds.hpp>
-
 namespace gbwt
 {
 

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2019, 2020 Jouni Siren
+  Copyright (c) 2017, 2019, 2020, 2021 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -27,8 +27,6 @@
 
 #include <gbwt/dynamic_gbwt.h>
 #include <gbwt/internal.h>
-
-#include <sdsl/simple_sds.hpp>
 
 namespace gbwt
 {

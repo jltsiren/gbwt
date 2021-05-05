@@ -25,8 +25,6 @@
 #include <gbwt/variants.h>
 #include <gbwt/internal.h>
 
-#include <sdsl/simple_sds.hpp>
-
 #include <string>
 
 namespace gbwt

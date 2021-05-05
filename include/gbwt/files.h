@@ -82,7 +82,7 @@ struct GBWTHeader
   constexpr static std::uint64_t FLAG_MASK          = 0x0007;
   constexpr static std::uint64_t FLAG_BIDIRECTIONAL = 0x0001; // The index is bidirectional.
   constexpr static std::uint64_t FLAG_METADATA      = 0x0002; // The index contains metadata.
-  constexpr static std::uint64_t FLAG_SIMPLE_SDS    = 0x0004; // Simple-SDS file format.
+  constexpr static std::uint64_t FLAG_SIMPLE_SDS    = 0x0004; // simple-sds file format.
 
   // Flag masks for old compatible versions.
   constexpr static std::uint32_t META2_VERSION      = 4;
@@ -99,6 +99,7 @@ struct GBWTHeader
 
   GBWTHeader();
 
+  // simple-sds serialization sees the header as a serializable value.
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
   bool check() const;
@@ -161,11 +162,10 @@ struct MetadataHeader
 
   MetadataHeader();
 
+  // simple-sds serialization sees the header as a serializable value.
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
   bool check() const;
-
-  // Simple-SDS serialization sees the header as a serializable value.
   bool check_simple_sds() const;
 
   void setVersion() { this->version = VERSION; }

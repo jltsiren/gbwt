@@ -25,8 +25,6 @@
 
 #include <gbwt/internal.h>
 
-#include <sdsl/simple_sds.hpp>
-
 #include <unordered_set>
 
 namespace gbwt

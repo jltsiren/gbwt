@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2019 Jouni Siren
+  Copyright (c) 2018, 2019, 2021 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -47,7 +47,8 @@ main(int argc, char** argv)
   std::string output;
   size_type chunk_size = DynamicGBWT::REMOVE_CHUNK_SIZE;
   bool range = false, sample = false, contig = false;
-  while((c = getopt(argc, argv, "c:o:rSC")) != -1)
+  bool sdsl_format = false;
+  while((c = getopt(argc, argv, "c:o:OrSC")) != -1)
   {
     switch(c)
     {
@@ -56,6 +57,8 @@ main(int argc, char** argv)
       break;
     case 'o':
       output = optarg; break;
+    case 'O':
+      sdsl_format = true; break;
     case 'r':
       range = true; break;
     case 'S':
@@ -132,11 +135,7 @@ main(int argc, char** argv)
 
   // Load index.
   DynamicGBWT index;
-  if(!sdsl::load_from_file(index, base_name + DynamicGBWT::EXTENSION))
-  {
-    std::cerr << "remove_seq: Cannot load the index from " << (base_name + DynamicGBWT::EXTENSION) << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  sdsl::simple_sds::load_from(index, base_name + DynamicGBWT::EXTENSION);
   printStatistics(index, base_name);
 
   // Handle metadata.
@@ -183,11 +182,15 @@ main(int argc, char** argv)
   size_type total_length = index.remove(seq_ids, chunk_size);
   if(total_length > 0)
   {
-    if(!sdsl::store_to_file(index, output + DynamicGBWT::EXTENSION))
+    if(sdsl_format)
     {
-      std::cerr << "remove_seq: Cannot write the index to " << (output + DynamicGBWT::EXTENSION) << std::endl;
-      std::exit(EXIT_FAILURE);
+      if(!sdsl::store_to_file(index, output + DynamicGBWT::EXTENSION))
+      {
+        std::cerr << "remove_seq: Cannot write the index to " << (output + DynamicGBWT::EXTENSION) << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
     }
+    else { sdsl::simple_sds::serialize_to(index, output + DynamicGBWT::EXTENSION); }
     printStatistics(index, output);
   }
 
@@ -212,6 +215,7 @@ printUsage(int exit_code)
   std::cerr << std::endl;
   std::cerr << "  -c N  Build the RA in chunks of N sequences per thread (default: " << DynamicGBWT::REMOVE_CHUNK_SIZE << ")" << std::endl;
   std::cerr << "  -o X  Use X as the base name for output" << std::endl;
+  std::cerr << "  -O    Output SDSL format instead of simple-sds format" << std::endl;
   std::cerr << "  -r    Remove a range of sequences (inclusive; requires 2 sequence ids)" << std::endl;
   std::cerr << "  -S    Remove all sequences for the sample with name seq1 (cannot have seq2)" << std::endl;
   std::cerr << "  -C    Remove all sequences for the contig with name seq1 (cannot have seq2)" << std::endl;

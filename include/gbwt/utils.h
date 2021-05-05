@@ -32,7 +32,9 @@
 #include <iostream>
 #include <vector>
 
-#include <sdsl/bit_vectors.hpp>
+#include <sdsl/int_vector.hpp>
+#include <sdsl/sd_vector.hpp>
+#include <sdsl/simple_sds.hpp>
 
 #include <omp.h>
 
