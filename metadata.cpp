@@ -100,6 +100,8 @@ Metadata::load(std::istream& in)
     if(old_version) { this->contig_names.load_v1(in); }
     else { this->contig_names.load(in); }
   }
+
+  this->sanityChecks();
 }
 
 void
@@ -114,23 +116,20 @@ Metadata::simple_sds_serialize(std::ostream& out) const
 void
 Metadata::simple_sds_load(std::istream& in)
 {
+  // Header.
   this->header = sdsl::simple_sds::load_value<MetadataHeader>(in);
   if(!(this->header.check_simple_sds()))
   {
     throw sdsl::simple_sds::InvalidData("Metadata: Invalid header");
   }
+  this->header.setVersion(); // Update to the current version.
 
+  // Path / sample / contig names.
   this->path_names = sdsl::simple_sds::load_vector<PathName>(in);
   this->sample_names.simple_sds_load(in);
-  if(this->header.sample_count != this->sample_names.size())
-  {
-    throw sdsl::simple_sds::InvalidData("Metadata: Invalid number of sample names");
-  }
   this->contig_names.simple_sds_load(in);
-  if(this->header.contig_count != this->contig_names.size())
-  {
-    throw sdsl::simple_sds::InvalidData("Metadata: Invalid number of contig names");
-  }
+
+  this->sanityChecks();
 }
 
 size_t
@@ -161,6 +160,39 @@ Metadata::operator==(const Metadata& another) const
           this->path_names == another.path_names &&
           this->sample_names == another.sample_names &&
           this->contig_names == another.contig_names);
+}
+
+void
+Metadata::sanityChecks() const
+{
+  if(!(this->hasPathNames()) && this->path_names.size() > 0)
+  {
+    throw sdsl::simple_sds::InvalidData("Metadata: Invalid path name flag in the header");
+  }
+
+  if(this->hasSampleNames())
+  {
+    if(this->header.sample_count != this->sample_names.size())
+    {
+      throw sdsl::simple_sds::InvalidData("Metadata: Sample / sample name count mismatch");
+    }
+  }
+  else if(this->sample_names.size() > 0)
+  {
+    throw sdsl::simple_sds::InvalidData("Metadata: Invalid sample name flag in the header");
+  }
+
+  if(this->hasContigNames())
+  {
+    if(this->header.contig_count != this->contig_names.size())
+    {
+      throw sdsl::simple_sds::InvalidData("Metadata: Contig / contig name count mismatch");
+    }
+  }
+  else if(this->contig_names.size() > 0)
+  {
+    throw sdsl::simple_sds::InvalidData("Metadata: Invalid contig name flag in the header");
+  }
 }
 
 //------------------------------------------------------------------------------

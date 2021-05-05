@@ -145,6 +145,10 @@ public:
   void merge(const Metadata& source, bool same_samples, bool same_contigs);
 
   void clear();
+
+private:
+  // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
+  void sanityChecks() const;
 };
 
 std::ostream& operator<<(std::ostream& stream, const Metadata& metadata);

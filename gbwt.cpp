@@ -139,19 +139,84 @@ GBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string nam
 void
 GBWT::load(std::istream& in)
 {
-  this->header.load(in);
-  if(!(this->header.check()))
+  // Read the header.
+  GBWTHeader h = sdsl::simple_sds::load_value<GBWTHeader>(in);
+  if(!(h.check()))
   {
     throw sdsl::simple_sds::InvalidData("GBWT: Invalid header");
   }
-  this->header.setVersion();  // Update to the current version.
+  bool simple_sds = h.get(GBWTHeader::FLAG_SIMPLE_SDS);
+  h.unset(GBWTHeader::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
+  h.setVersion(); // Update to the current version.
+  this->header = h;
 
-  this->bwt.load(in);
-  this->da_samples.load(in);
+  // Read the BWT.
+  if(simple_sds) { this->bwt.simple_sds_load(in); }
+  else { this->bwt.load(in); }
+  if(this->bwt.size() != this->effective())
+  {
+    throw sdsl::simple_sds::InvalidData("GBWT: BWT record count / alphabet size mismatch");
+  }
 
-  if(this->hasMetadata()) { this->metadata.load(in); }
+  // Read the DA samples.
+  if(simple_sds) { this->da_samples.simple_sds_load(in); }
+  else { this->da_samples.load(in); }
+  if(this->da_samples.records() != this->effective())
+  {
+    throw sdsl::simple_sds::InvalidData("GBWT: Sample record count / alphabet size mismatch");
+  }
+
+  // Read the metadata.
+  if(simple_sds)
+  {
+    bool loaded_metadata = sdsl::simple_sds::load_option(this->metadata, in);
+    if(loaded_metadata != this->hasMetadata())
+    {
+      throw sdsl::simple_sds::InvalidData("GBWT: Invalid metadata flag in the header");
+    }
+  }
+  else if(this->hasMetadata()) { this->metadata.load(in); }
+  if(this->hasMetadata() && this->metadata.hasPathNames())
+  {
+    size_type expected_paths = (this->bidirectional() ? this->sequences() / 2 : this->sequences());
+    if(this->metadata.paths() != expected_paths)
+    {
+      throw sdsl::simple_sds::InvalidData("GBWT: Path name / sequence count mismatch");
+    }
+  }
 
   this->cacheEndmarker();
+}
+
+void
+GBWT::simple_sds_serialize(std::ostream& out) const
+{
+  GBWTHeader h = this->header;
+  h.set(GBWTHeader::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
+  sdsl::simple_sds::serialize_value(h, out);
+
+  this->bwt.simple_sds_serialize(out);
+  this->da_samples.simple_sds_serialize(out);
+  if(this->hasMetadata()) { sdsl::simple_sds::serialize_option(this->metadata, out); }
+  else { sdsl::simple_sds::empty_option(out); }
+}
+
+void
+GBWT::simple_sds_load(std::istream& in)
+{
+  // The same load() function can handle the SDSL and simple-sds formats.
+  this->load(in);
+}
+
+size_t
+GBWT::simple_sds_size() const
+{
+  size_t result = sdsl::simple_sds::value_size(this->header);
+  result += this->bwt.simple_sds_size();
+  result += this->da_samples.simple_sds_size();
+  if(this->hasMetadata()) { result += sdsl::simple_sds::option_size(this->metadata); }
+  else { result += sdsl::simple_sds::empty_option_size(); }
+  return result;
 }
 
 void

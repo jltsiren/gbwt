@@ -1029,6 +1029,8 @@ RecordArray::load(std::istream& in)
   // Read the data.
   this->data.resize(this->index.size());
   if(this->data.size() > 0) { DiskIO::read(in, this->data.data(), this->data.size()); }
+
+  this->sanityChecks();
 }
 
 void
@@ -1045,11 +1047,7 @@ RecordArray::simple_sds_load(std::istream& in)
   this->records = this->index.ones();
   sdsl::util::init_support(this->select, &(this->index));
   this->data = sdsl::simple_sds::load_vector<byte_type>(in);
-
-  if(this->index.size() != this->data.size())
-  {
-    throw sdsl::simple_sds::InvalidData("RecordArray: Index / data size mismatch");
-  }
+  this->sanityChecks();
 }
 
 size_t
@@ -1090,6 +1088,15 @@ RecordArray::copy(const RecordArray& source)
   this->index = source.index;
   this->select = source.select; this->select.set_vector(&(this->index));
   this->data = source.data;
+}
+
+void
+RecordArray::sanityChecks() const
+{
+  if(this->index.size() != this->data.size())
+  {
+    throw sdsl::simple_sds::InvalidData("RecordArray: Index / data size mismatch");
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -1333,6 +1340,8 @@ DASamples::load(std::istream& in)
   this->sampled_offsets.load(in);
 
   this->array.load(in);
+
+  this->sanityChecks();
 }
 
 void
@@ -1356,18 +1365,7 @@ DASamples::simple_sds_load(std::istream& in)
   this->sampled_offsets.simple_sds_load(in);
   this->array.simple_sds_load(in);
 
-  if(this->record_rank(this->sampled_records.size()) != this->bwt_ranges.ones())
-  {
-    throw sdsl::simple_sds::InvalidData("DASamples: Sampled record / BWT range count mismatch");
-  }
-  if(this->bwt_ranges.size() != this->sampled_offsets.size())
-  {
-    throw sdsl::simple_sds::InvalidData("DASamples: BWT range / sampled offsets size mismatch");
-  }
-  if(this->sampled_offsets.ones() != this->array.size())
-  {
-    throw sdsl::simple_sds::InvalidData("DASamples: Sampled offset / sample count mismatch");
-  }
+  this->sanityChecks();
 }
 
 size_t
@@ -1400,6 +1398,23 @@ DASamples::setVectors()
 {
   this->record_rank.set_vector(&(this->sampled_records));
   this->bwt_select.set_vector(&(this->bwt_ranges));
+}
+
+void
+DASamples::sanityChecks() const
+{
+  if(this->record_rank(this->sampled_records.size()) != this->bwt_ranges.ones())
+  {
+    throw sdsl::simple_sds::InvalidData("DASamples: Sampled record / BWT range count mismatch");
+  }
+  if(this->bwt_ranges.size() != this->sampled_offsets.size())
+  {
+    throw sdsl::simple_sds::InvalidData("DASamples: BWT range / sampled offsets size mismatch");
+  }
+  if(this->sampled_offsets.ones() != this->array.size())
+  {
+    throw sdsl::simple_sds::InvalidData("DASamples: Sampled offset / sample count mismatch");
+  }
 }
 
 size_type
@@ -1552,6 +1567,7 @@ StringArray::load(std::istream& in)
 {
   loadVector(this->sequences, in);
   this->offsets.load(in);
+  this->sanityChecks();
 }
 
 void
@@ -1626,10 +1642,7 @@ StringArray::simple_sds_load(std::istream& in)
     this->offsets[v.ones()] = this->sequences.size();
   }
 
-  if(this->offsets.size() == 0 || this->offsets[0] != 0)
-  {
-    throw sdsl::simple_sds::InvalidData("StringArray: Offsets and sequences do not match");
-  }
+  this->sanityChecks();
 }
 
 size_t
@@ -1697,6 +1710,15 @@ bool
 StringArray::operator!=(const StringArray& another) const
 {
   return !(this->operator==(another));
+}
+
+void
+StringArray::sanityChecks() const
+{
+  if(this->offsets.size() == 0 || this->offsets[0] != 0 || this->offsets[this->offsets.size() - 1] != this->sequences.size())
+  {
+    throw sdsl::simple_sds::InvalidData("StringArray: Offsets and sequences do not match");
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -1809,6 +1831,7 @@ Dictionary::load(std::istream& in)
 {
   this->strings.load(in);
   this->sorted_ids.load(in);
+  this->sanityChecks();
 }
 
 void
@@ -1824,6 +1847,7 @@ Dictionary::load_v1(std::istream& in)
   {
     return view_type(data.data() + offsets[i], offsets[i + 1] - offsets[i]);
   });
+  this->sanityChecks();
 }
 
 void
@@ -1838,11 +1862,7 @@ Dictionary::simple_sds_load(std::istream& in)
 {
   this->strings.simple_sds_load(in);
   this->sorted_ids.simple_sds_load(in);
-
-  if(this->sorted_ids.size() != this->strings.size())
-  {
-    throw sdsl::simple_sds::InvalidData("Dictionary: Size mismatch between strings and sorted ids");
-  }
+  this->sanityChecks();
 }
 
 size_t
@@ -1856,6 +1876,15 @@ Dictionary::copy(const Dictionary& source)
 {
   this->strings = source.strings;
   this->sorted_ids = source.sorted_ids;
+}
+
+void
+Dictionary::sanityChecks() const
+{
+  if(this->sorted_ids.size() != this->strings.size())
+  {
+    throw sdsl::simple_sds::InvalidData("Dictionary: Size mismatch between strings and sorted ids");
+  }
 }
 
 void Dictionary::sortKeys()

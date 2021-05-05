@@ -143,18 +143,26 @@ void
 DynamicGBWT::load(std::istream& in)
 {
   // Read the header.
-  this->header.load(in);
-  if(!(this->header.check()))
+  GBWTHeader h = sdsl::simple_sds::load_value<GBWTHeader>(in);
+  if(!(h.check()))
   {
     throw sdsl::simple_sds::InvalidData("DynamicGBWT: Invalid header");
   }
-  this->header.setVersion();  // Update to the current version.
-  this->bwt.resize(this->effective());
+  bool simple_sds = h.get(GBWTHeader::FLAG_SIMPLE_SDS);
+  h.unset(GBWTHeader::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
+  h.setVersion(); // Update to the current version.
+  this->header = h;
 
   // Read and decompress the BWT.
+  this->bwt.resize(this->effective());
   {
     RecordArray array;
-    array.load(in);
+    if(simple_sds) { array.simple_sds_load(in); }
+    else { array.load(in); }
+    if(array.size() != this->effective())
+    {
+      throw sdsl::simple_sds::InvalidData("DynamicGBWT: BWT record count / alphabet size mismatch");
+    }
     array.forEach([&](size_type comp, const CompressedRecord& record)
     {
       DynamicRecord& current = this->bwt[comp];
@@ -174,7 +182,12 @@ DynamicGBWT::load(std::istream& in)
   // Read and decompress the samples.
   {
     DASamples samples;
-    samples.load(in);
+    if(simple_sds) { samples.simple_sds_load(in); }
+    else { samples.load(in); }
+    if(samples.records() != this->effective())
+    {
+      throw sdsl::simple_sds::InvalidData("DynamicGBWT: Sample record count / alphabet size mismatch");
+    }
     SampleIterator sample_iter(samples);
     for(SampleRangeIterator range_iter(samples); !(range_iter.end()); ++range_iter)
     {
@@ -188,10 +201,69 @@ DynamicGBWT::load(std::istream& in)
   }
 
   // Read the metadata.
-  if(this->hasMetadata()) { this->metadata.load(in); }
+  if(simple_sds)
+  {
+    bool loaded_metadata = sdsl::simple_sds::load_option(this->metadata, in);
+    if(loaded_metadata != this->hasMetadata())
+    {
+      throw sdsl::simple_sds::InvalidData("DynamicGBWT: Invalid metadata flag in the header");
+    }
+  }
+  else if(this->hasMetadata()) { this->metadata.load(in); }
+  if(this->hasMetadata() && this->metadata.hasPathNames())
+  {
+    size_type expected_paths = (this->bidirectional() ? this->sequences() / 2 : this->sequences());
+    if(this->metadata.paths() != expected_paths)
+    {
+      throw sdsl::simple_sds::InvalidData("DynamicGBWT: Path name / sequence count mismatch");
+    }
+  }
 
   // Rebuild the incoming edges.
   this->rebuildIncoming();
+}
+
+void
+DynamicGBWT::simple_sds_serialize(std::ostream& out) const
+{
+  GBWTHeader h = this->header;
+  h.set(GBWTHeader::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
+  sdsl::simple_sds::serialize_value(h, out);
+
+  {
+    RecordArray array(this->bwt);
+    array.simple_sds_serialize(out);
+  }
+  {
+    DASamples compressed_samples(this->bwt);
+    compressed_samples.simple_sds_serialize(out);
+  }
+  if(this->hasMetadata()) { sdsl::simple_sds::serialize_option(this->metadata, out); }
+  else { sdsl::simple_sds::empty_option(out); }
+}
+
+void
+DynamicGBWT::simple_sds_load(std::istream& in)
+{
+  // The same load() function can handle the SDSL and simple-sds formats.
+  this->load(in);
+}
+
+size_t
+DynamicGBWT::simple_sds_size() const
+{
+  size_t result = sdsl::simple_sds::value_size(this->header);
+  {
+    RecordArray array(this->bwt);
+    result += array.simple_sds_size();
+  }
+  {
+    DASamples compressed_samples(this->bwt);
+    result += compressed_samples.simple_sds_size();
+  }
+  if(this->hasMetadata()) { result += sdsl::simple_sds::option_size(this->metadata); }
+  else { result += sdsl::simple_sds::empty_option_size(); }
+  return result;
 }
 
 void

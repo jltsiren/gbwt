@@ -359,6 +359,9 @@ struct RecordArray
 
 private:
   void copy(const RecordArray& source);
+
+  // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
+  void sanityChecks() const;
 };
 
 //------------------------------------------------------------------------------
@@ -416,6 +419,9 @@ struct DASamples
 private:
   void copy(const DASamples& source);
   void setVectors();
+
+  // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
+  void sanityChecks() const;
 };
 
 //------------------------------------------------------------------------------
@@ -500,6 +506,10 @@ public:
 
   std::vector<char>   sequences;
   sdsl::int_vector<0> offsets;
+
+private:
+  // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
+  void sanityChecks() const;
 };
 
 //------------------------------------------------------------------------------
@@ -566,6 +576,9 @@ public:
 
 private:
   void copy(const Dictionary& source);
+
+  // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
+  void sanityChecks() const;
 
   void sortKeys();
 
