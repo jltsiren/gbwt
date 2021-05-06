@@ -171,6 +171,7 @@ GBWT::load(std::istream& in)
   this->header = h;
 
   // Read the tags and set the source to Version::SOURCE_VALUE.
+  bool source_is_self = false; // We know how to read DASamples.
   if(has_tags)
   {
     StringArray linearized;
@@ -191,6 +192,8 @@ GBWT::load(std::istream& in)
     {
       throw sdsl::simple_sds::InvalidData("GBWT: Duplicate tags");
     }
+    auto iter = this->tags.find(Version::SOURCE_KEY);
+    if(iter != this->tags.end() && iter->second == Version::SOURCE_VALUE) { source_is_self = true; }
     this->addSource();
   }
   else { this->resetTags(); }
@@ -204,7 +207,14 @@ GBWT::load(std::istream& in)
   }
 
   // Read the DA samples.
-  if(simple_sds) { this->da_samples.simple_sds_load(in); }
+  if(simple_sds)
+  {
+    // The samples may be absent or from an unknown source.
+    bool found_samples = false;
+    if(source_is_self) { found_samples = sdsl::simple_sds::load_option(this->da_samples, in); }
+    else { sdsl::simple_sds::skip_option(in); }
+    if(!found_samples) { this->resample(DynamicGBWT::SAMPLE_INTERVAL); }
+  }
   else { this->da_samples.load(in); }
   if(this->da_samples.records() != this->effective())
   {
@@ -246,7 +256,7 @@ GBWT::simple_sds_serialize(std::ostream& out) const
   }
 
   this->bwt.simple_sds_serialize(out);
-  this->da_samples.simple_sds_serialize(out);
+  sdsl::simple_sds::serialize_option(this->da_samples, out);
   if(this->hasMetadata()) { sdsl::simple_sds::serialize_option(this->metadata, out); }
   else { sdsl::simple_sds::empty_option(out); }
 }

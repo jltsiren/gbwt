@@ -170,6 +170,7 @@ DynamicGBWT::load(std::istream& in)
   this->header = h;
 
   // Read the tags and set the source to Version::SOURCE_VALUE.
+  bool source_is_self = false; // We know how to read DASamples.
   if(has_tags)
   {
     StringArray linearized;
@@ -190,6 +191,8 @@ DynamicGBWT::load(std::istream& in)
     {
       throw sdsl::simple_sds::InvalidData("DynamicGBWT: Duplicate tags");
     }
+    auto iter = this->tags.find(Version::SOURCE_KEY);
+    if(iter != this->tags.end() && iter->second == Version::SOURCE_VALUE) { source_is_self = true; }
     this->addSource();
   }
   else { this->resetTags(); }
@@ -223,22 +226,32 @@ DynamicGBWT::load(std::istream& in)
   // Read and decompress the samples.
   {
     DASamples samples;
-    if(simple_sds) { samples.simple_sds_load(in); }
-    else { samples.load(in); }
-    if(samples.records() != this->effective())
+    bool found_samples = false;
+    if(simple_sds)
     {
-      throw sdsl::simple_sds::InvalidData("DynamicGBWT: Sample record count / alphabet size mismatch");
+      // The samples may be absent or from an unknown source.
+      if(source_is_self) { found_samples = sdsl::simple_sds::load_option(samples, in); }
+      else { sdsl::simple_sds::skip_option(in); }
     }
-    SampleIterator sample_iter(samples);
-    for(SampleRangeIterator range_iter(samples); !(range_iter.end()); ++range_iter)
+    else { samples.load(in); found_samples = true; }
+    if(found_samples)
     {
-      DynamicRecord& current = this->bwt[range_iter.record()];
-      while(!(sample_iter.end()) && sample_iter.offset() < range_iter.limit())
+      if(samples.records() != this->effective())
       {
-        current.ids.push_back(sample_type(sample_iter.offset() - range_iter.start(), *sample_iter));
-        ++sample_iter;
+        throw sdsl::simple_sds::InvalidData("DynamicGBWT: Sample record count / alphabet size mismatch");
+      }
+      SampleIterator sample_iter(samples);
+      for(SampleRangeIterator range_iter(samples); !(range_iter.end()); ++range_iter)
+      {
+        DynamicRecord& current = this->bwt[range_iter.record()];
+        while(!(sample_iter.end()) && sample_iter.offset() < range_iter.limit())
+        {
+          current.ids.push_back(sample_type(sample_iter.offset() - range_iter.start(), *sample_iter));
+          ++sample_iter;
+        }
       }
     }
+    else { this->resample(SAMPLE_INTERVAL); }
   }
 
   // Read the metadata.
@@ -281,7 +294,7 @@ DynamicGBWT::simple_sds_serialize(std::ostream& out) const
   }
   {
     DASamples compressed_samples(this->bwt);
-    compressed_samples.simple_sds_serialize(out);
+    sdsl::simple_sds::serialize_option(compressed_samples, out);
   }
   if(this->hasMetadata()) { sdsl::simple_sds::serialize_option(this->metadata, out); }
   else { sdsl::simple_sds::empty_option(out); }
