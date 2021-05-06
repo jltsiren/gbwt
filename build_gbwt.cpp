@@ -57,14 +57,14 @@ main(int argc, char** argv)
   if(argc < 2) { printUsage(); }
 
   size_type batch_size = DynamicGBWT::INSERT_BATCH_SIZE / MILLION, sample_interval = DynamicGBWT::SAMPLE_INTERVAL;
-  bool verify_index = false, both_orientations = false, build_index = true, build_empty = false;
+  bool verify_index = false, both_orientations = false, build_index = true, build_empty = false, resample = false;
   bool build_from_parse = false, skip_overlaps = false, check_overlaps = false;
   std::string index_base, output_base;
   std::set<std::string> phasing_files;
   std::vector<std::string> input_files;
   bool sdsl_format = false;
   int c = 0;
-  while((c = getopt(argc, argv, "b:cefF:i:lL:o:OpP:rs:Sv")) != -1)
+  while((c = getopt(argc, argv, "b:cefF:i:lL:o:OpP:rRs:Sv")) != -1)
   {
     switch(c)
     {
@@ -99,6 +99,8 @@ main(int argc, char** argv)
       phasing_files.insert(optarg); break;
     case 'r':
       both_orientations = true; break;
+    case 'R':
+      resample = true; build_index = false; break;
     case 's':
       sample_interval = std::stoul(optarg); break;
     case 'S':
@@ -116,15 +118,15 @@ main(int argc, char** argv)
   while(optind < argc) { input_files.push_back(argv[optind]); optind++; }
   if(index_base.empty() && output_base.empty() && input_files.size() == 1) { output_base = input_files.front(); }
   if(input_files.empty() || output_base.empty()) { printUsage(EXIT_FAILURE); }
+  if(resample && input_files.size() != 1)
+  {
+    std::cerr << "build_gbwt: Resampling only works with a single index" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
   if(verify_index && !(input_files.size() == 1 && index_base.empty() && !build_from_parse))
   {
     std::cerr << "build_gbwt: Verification only works with indexes for a single non-parse file" << std::endl;
     verify_index = false;
-  }
-  if(!build_index && !verify_index)
-  {
-    std::cerr << "build_gbwt: Index can only be loaded for verification" << std::endl;
-    std::exit(EXIT_FAILURE);
   }
   if(build_empty)
   {
@@ -325,6 +327,33 @@ main(int argc, char** argv)
     std::cout << std::endl;
   }
 
+  if(resample)
+  {
+    std::string input_base = input_files.front();
+    std::cout << "Resampling the index..." << std::endl;
+    double resample_start = readTimer();
+    std::cout << std::endl;
+
+    GBWT compressed_index;
+    sdsl::simple_sds::load_from(compressed_index, gbwt_name);
+    compressed_index.resample(sample_interval);
+    printStatistics(compressed_index, output_base);
+
+    if(sdsl_format)
+    {
+      if(!sdsl::store_to_file(compressed_index, gbwt_name))
+      {
+        std::cerr << "build_gbwt: Cannot write the index to " << gbwt_name << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+    }
+    else { sdsl::simple_sds::serialize_to(compressed_index, gbwt_name); }
+
+    double resample_seconds = readTimer() - resample_start;
+    std::cout << "Resampled the index in " << resample_seconds << " seconds" << std::endl;
+    std::cout << std::endl;
+  }
+
   if(verify_index)
   {
     std::string input_base = input_files.front();
@@ -376,6 +405,7 @@ printUsage(int exit_code)
   std::cerr << "  -p    The input is a parsed VCF file" << std::endl;
   std::cerr << "  -P X  Only use the phasing information in file X (use with -p; may repeat)" << std::endl;
   std::cerr << "  -r    Index the sequences also in reverse orientation" << std::endl;
+  std::cerr << "  -R    Resample sequence ids in the loaded index (implies -l)" << std::endl;
   std::cerr << "  -s N  Sample sequence ids at one out of N positions (default: " << DynamicGBWT::SAMPLE_INTERVAL << "; use 0 for no samples)" << std::endl;
   std::cerr << "  -S    Skip overlapping variants (use with -p)" << std::endl;
   std::cerr << "  -v    Verify the index after construction" << std::endl;

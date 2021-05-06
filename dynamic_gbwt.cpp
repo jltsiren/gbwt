@@ -113,6 +113,15 @@ DynamicGBWT::operator=(DynamicGBWT&& source)
   return *this;
 }
 
+void
+DynamicGBWT::resample(size_type sample_interval)
+{
+  // Delete old samples to save memory.
+  for(DynamicRecord& record : this->bwt) { record.ids = std::vector<sample_type>(); }
+  std::vector<std::pair<node_type, sample_type>> samples = gbwt::resample(*this, sample_interval);
+  for(auto sample : samples) { this->bwt[sample.first].ids.push_back(sample.second); }
+}
+
 size_type
 DynamicGBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
 {
@@ -569,6 +578,7 @@ swapBody(DynamicRecord& record, RunMerger& merger)
   - Set 'offset' to rank(next) within the record.
   - Update the predecessor count of 'curr' in the incoming edges of 'next'.
 
+  Note: Iteration is the distance from the initial endmarker to the next position.
   We do not maintain incoming edges to the endmarker, because it can be expensive
   and because searching with the endmarker does not work in a multi-string BWT.
 */
@@ -834,7 +844,7 @@ size_type
 insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source, size_type sample_interval)
 {
   // Sanity check sample interval only here.
-  if(sample_interval == 0) { sample_interval = ~(size_type)0; }
+  if(sample_interval == 0) { sample_interval = std::numeric_limits<size_type>::max(); }
 
   // The outgoing edges are not expected to be sorted during construction. As the endmarker
   // may have millions of outgoing edges, we need a faster way of mapping destination nodes
@@ -896,7 +906,7 @@ insertBatch(DynamicGBWT& index, const IntegerVector& text, size_type text_length
     Increase alphabet size and decrease offset if necessary.
   */
   bool seq_start = true;
-  node_type min_node = (index.empty() ? ~(node_type)0 : index.header.offset + 1);
+  node_type min_node = (index.empty() ? std::numeric_limits<node_type>::max() : index.header.offset + 1);
   node_type max_node = (index.empty() ? 0 : index.sigma() - 1);
   std::vector<Sequence> seqs;
   for(size_type i = 0; i < text_length; i++)

@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <vector>
 
 #include <sdsl/int_vector.hpp>
@@ -103,9 +104,10 @@ constexpr size_type BILLION      = 1000 * MILLION;
 
 constexpr node_type ENDMARKER    = 0;
 
-constexpr size_type invalid_node() { return ~(node_type)0; }
-constexpr size_type invalid_sequence() { return ~(size_type)0; }
-constexpr size_type invalid_offset() { return ~(size_type)0; }
+constexpr node_type invalid_node() { return std::numeric_limits<node_type>::max(); }
+constexpr comp_type invalid_comp() { return std::numeric_limits<comp_type>::max(); }
+constexpr size_type invalid_sequence() { return std::numeric_limits<size_type>::max(); }
+constexpr size_type invalid_offset() { return std::numeric_limits<size_type>::max(); }
 
 inline constexpr edge_type invalid_edge() { return edge_type(invalid_node(), invalid_offset()); }
 inline constexpr sample_type invalid_sample() { return sample_type(invalid_offset(), invalid_sequence()); }

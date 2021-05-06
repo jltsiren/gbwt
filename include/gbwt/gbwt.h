@@ -64,6 +64,8 @@ public:
   GBWT& operator=(const DynamicGBWT& source);
   GBWT& operator=(GBWT&& source);
 
+  void resample(size_type sample_interval);
+
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
 
@@ -188,7 +190,7 @@ public:
   comp_type toComp(node_type node) const { return (node == 0 ? node : node - this->header.offset); }
   node_type toNode(comp_type comp) const { return (comp == 0 ? comp : comp + this->header.offset); }
 
-  size_type nodeSize(node_type node) const { return this->record(node).size(); }
+  size_type nodeSize(node_type node) const { return this->bwt.size(this->toComp(node)); }
   bool empty(node_type node) const { return this->bwt.empty(this->toComp(node)); }
 
 //------------------------------------------------------------------------------

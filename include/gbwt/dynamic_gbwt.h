@@ -65,6 +65,8 @@ public:
   DynamicGBWT& operator=(const GBWT& source);
   DynamicGBWT& operator=(DynamicGBWT&& source);
 
+  void resample(size_type sample_interval);
+
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
 

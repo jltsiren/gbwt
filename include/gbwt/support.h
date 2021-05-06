@@ -214,6 +214,9 @@ struct CompressedRecord
   CompressedRecord();
   CompressedRecord(const std::vector<byte_type>& source, size_type start, size_type limit);
 
+  // Returns the size of the record corresponding to the given semiopen interval.
+  static size_type recordSize(const std::vector<byte_type>& source, size_type start, size_type limit);
+
   // Checks whether the record starting at the given position is empty.
   static bool emptyRecord(const std::vector<byte_type>& source, size_type start);
 
@@ -352,6 +355,8 @@ struct RecordArray
 
   size_type size() const { return this->records; }
   bool empty() const { return (this->size() == 0); }
+
+  size_type size(size_type record) const;
   bool empty(size_type record) const { return CompressedRecord::emptyRecord(this->data, this->select(record + 1)); }
 
   // Records use 0-based indexing and semiopen ranges [start, limit).
@@ -390,6 +395,10 @@ struct DASamples
   ~DASamples();
 
   explicit DASamples(const std::vector<DynamicRecord>& bwt);
+
+  // Assumes that the samples are in sorted order.
+  explicit DASamples(const RecordArray& bwt, const std::vector<std::pair<node_type, sample_type>>& samples);
+
   DASamples(const std::vector<DASamples const*> sources, const sdsl::int_vector<0>& origins, const std::vector<size_type>& record_offsets, const std::vector<size_type>& sequence_counts);
 
   void swap(DASamples& another);

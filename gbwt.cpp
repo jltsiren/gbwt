@@ -122,6 +122,14 @@ GBWT::operator=(GBWT&& source)
   return *this;
 }
 
+void
+GBWT::resample(size_type sample_interval)
+{
+  this->da_samples = DASamples(); // Delete samples to save memory.
+  std::vector<std::pair<node_type, sample_type>> samples = gbwt::resample(*this, sample_interval);
+  this->da_samples = DASamples(this->bwt, samples);
+}
+
 size_type
 GBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
 {

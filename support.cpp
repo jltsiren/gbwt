@@ -483,6 +483,24 @@ CompressedRecord::CompressedRecord(const std::vector<byte_type>& source, size_ty
   this->data_size = limit - start;
 }
 
+size_type
+CompressedRecord::recordSize(const std::vector<byte_type>& source, size_type start, size_type limit)
+{
+  size_type sigma = ByteCode::read(source, start);
+  if(sigma == 0) { return 0; }
+  for(size_type i = 0; i < sigma; i++)
+  {
+    ByteCode::read(source, start); // Destination node.
+    ByteCode::read(source, start); // Rank within the node.
+  }
+
+  size_type result = 0;
+  Run decoder(sigma);
+  while(start < limit) { result += decoder.read(source, start).second; }
+
+  return result;
+}
+
 bool
 CompressedRecord::emptyRecord(const std::vector<byte_type>& source, size_type start)
 {
@@ -1054,6 +1072,13 @@ RecordArray::simple_sds_size() const
   return this->index.simple_sds_size() + sdsl::simple_sds::vector_size(this->data);
 }
 
+size_type
+RecordArray::size(size_type record) const
+{
+  std::pair<size_type, size_type> range = this->getRange(record);
+  return CompressedRecord::recordSize(this->data, range.first, range.second);
+}
+
 std::pair<size_type, size_type>
 RecordArray::getRange(size_type record) const
 {
@@ -1144,7 +1169,7 @@ DASamples::DASamples(const std::vector<DynamicRecord>& bwt)
       for(sample_type sample : record.ids)
       {
         offset_builder.set_unsafe(offset + sample.first);
-        max_sample = std::max(max_sample, (size_type)(sample.second));
+        max_sample = std::max(max_sample, static_cast<size_type>(sample.second));
       }
       offset += record.size();
     }
@@ -1162,6 +1187,51 @@ DASamples::DASamples(const std::vector<DynamicRecord>& bwt)
     {
       for(sample_type sample : record.ids) { this->array[curr] = sample.second; curr++; }
     }
+  }
+}
+
+DASamples::DASamples(const RecordArray& bwt, const std::vector<std::pair<comp_type, sample_type>>& samples)
+{
+  // Determine the statistics and mark the sampled nodes.
+  size_type record_count = 0, bwt_offsets = 0;
+  this->sampled_records = sdsl::bit_vector(bwt.size(), 0);
+  comp_type prev = invalid_comp();
+  for(auto sample : samples)
+  {
+    if(sample.first != prev)
+    {
+      record_count++; bwt_offsets += bwt.size(sample.first);
+      this->sampled_records[sample.first] = 1;
+      prev = sample.first;
+    }
+  }
+  sdsl::util::init_support(this->record_rank, &(this->sampled_records));
+
+  // Build the bitvectors over BWT offsets.
+  sdsl::sd_vector_builder range_builder(bwt_offsets, record_count);
+  sdsl::sd_vector_builder offset_builder(bwt_offsets, samples.size());
+  size_type offset = 0, max_sample = 0;
+  prev = invalid_comp();
+  for(auto sample : samples)
+  {
+    if(sample.first != prev)
+    {
+      if(prev != invalid_comp()) { offset += bwt.size(prev); }
+      range_builder.set_unsafe(offset);
+      prev = sample.first;
+    }
+    offset_builder.set_unsafe(offset + sample.second.first);
+    max_sample = std::max(max_sample, static_cast<size_type>(sample.second.second));
+  }
+  this->bwt_ranges = sdsl::sd_vector<>(range_builder);
+  sdsl::util::init_support(this->bwt_select, &(this->bwt_ranges));
+  this->sampled_offsets = sdsl::sd_vector<>(offset_builder);
+
+  // Store the samples.
+  this->array = sdsl::int_vector<0>(samples.size(), 0, sdsl::bits::length(max_sample));
+  for(size_type i = 0; i < samples.size(); i++)
+  {
+    this->array[i] = samples[i].second.second;
   }
 }
 
