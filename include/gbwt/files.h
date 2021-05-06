@@ -41,7 +41,9 @@ namespace gbwt
   GBWT file header.
 
   Version 5:
-  - Work in progress.
+  - Uses metadata version 2.
+  - Includes tags.
+  - SDSL and simple-sds formats.
   - Compatible with versions 1 to 4.
 
   Version 4:
