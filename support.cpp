@@ -1594,19 +1594,19 @@ StringArray::StringArray(size_type n, const std::function<bool(size_type)>& choo
   {
     if(choose(i)) { chosen++; total_length += length(i); }
   }
-  this->sequences.reserve(total_length);
-  this->offsets = sdsl::int_vector<0>(chosen + 1, 0, sdsl::bits::length(total_length));
+  this->index = sdsl::int_vector<0>(chosen + 1, 0, sdsl::bits::length(total_length));
+  this->strings.reserve(total_length);
 
   size_type curr = 0, total = 0;
   for(size_type i = 0; i < n; i++)
   {
     if(!choose(i)) { continue; }
     view_type view = sequence(i);
-    this->sequences.insert(this->sequences.end(), view.first, view.first + view.second);
-    this->offsets[curr] = total; curr++;
+    this->index[curr] = total; curr++;
+    this->strings.insert(this->strings.end(), view.first, view.first + view.second);
     total += view.second;
   }
-  this->offsets[chosen] = total;
+  this->index[chosen] = total;
 }
 
 StringArray::StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence)
@@ -1623,8 +1623,8 @@ StringArray::StringArray(size_type n, const std::function<size_type(size_type)>&
 void
 StringArray::swap(StringArray& another)
 {
-  this->sequences.swap(another.sequences);
-  this->offsets.swap(another.offsets);
+  this->index.swap(another.index);
+  this->strings.swap(another.strings);
 }
 
 size_type
@@ -1633,8 +1633,10 @@ StringArray::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::str
   sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
   size_type written_bytes = 0;
 
-  written_bytes += serializeVector(this->sequences, out, child, "sequences");
-  this->offsets.serialize(out, child, "offsets");
+  // SDSL serialization format stores the strings before the index in order to be
+  // compatible with the old implementation in GBWTGraph.
+  written_bytes += serializeVector(this->strings, out, child, "strings");
+  this->index.serialize(out, child, "index");
 
   sdsl::structure_tree::add_size(child, written_bytes);
   return written_bytes;
@@ -1643,16 +1645,16 @@ StringArray::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::str
 void
 StringArray::load(std::istream& in)
 {
-  loadVector(this->sequences, in);
-  this->offsets.load(in);
+  loadVector(this->strings, in);
+  this->index.load(in);
   this->sanityChecks();
 }
 
 void
-determine_alphabet(const std::vector<char>& sequences, std::vector<std::uint8_t>& char_to_comp, sdsl::int_vector<8>& comp_to_char, size_type& sigma)
+determine_alphabet(const std::vector<char>& strings, std::vector<std::uint8_t>& char_to_comp, sdsl::int_vector<8>& comp_to_char, size_type& sigma)
 {
   char_to_comp = std::vector<std::uint8_t>(256, 0);
-  for(char c : sequences) { char_to_comp[static_cast<std::uint8_t>(c)] = 1; }
+  for(char c : strings) { char_to_comp[static_cast<std::uint8_t>(c)] = 1; }
 
   sigma = 0;
   for(auto c : char_to_comp) { sigma += c; }
@@ -1673,52 +1675,55 @@ determine_alphabet(const std::vector<char>& sequences, std::vector<std::uint8_t>
 void
 StringArray::simple_sds_serialize(std::ostream& out) const
 {
+  // Compress the index without the past-the-end sentinel.
+  {
+    sdsl::sd_vector<> v(this->index.begin(), this->index.end() - 1);
+    v.simple_sds_serialize(out);
+  }
+
   // Determine and serialize the alphabet.
   std::vector<std::uint8_t> char_to_comp;
   sdsl::int_vector<8> comp_to_char;
   size_type sigma = 0;
-  determine_alphabet(this->sequences, char_to_comp, comp_to_char, sigma);
+  determine_alphabet(this->strings, char_to_comp, comp_to_char, sigma);
   comp_to_char.simple_sds_serialize(out);
 
-  // Compress the sequences.
+  // Compress the strings.
   {
-    sdsl::int_vector<> compressed(this->sequences.size(), 0, sdsl::bits::length(sigma - 1));
-    for(size_type i = 0; i < this->sequences.size(); i++)
+    sdsl::int_vector<> compressed(this->strings.size(), 0, sdsl::bits::length(sigma - 1));
+    for(size_type i = 0; i < this->strings.size(); i++)
     {
-      compressed[i] = char_to_comp[static_cast<uint8_t>(this->sequences[i])];
+      compressed[i] = char_to_comp[static_cast<uint8_t>(this->strings[i])];
     }
     compressed.simple_sds_serialize(out);
-  }
-
-  // Compress the offsets without the past-the-end sentinel.
-  {
-    sdsl::sd_vector<> v(this->offsets.begin(), this->offsets.end() - 1);
-    v.simple_sds_serialize(out);
   }
 }
 
 void
 StringArray::simple_sds_load(std::istream& in)
 {
+  // Decompress the index.
+  {
+    sdsl::sd_vector<> v; v.simple_sds_load(in);
+    this->index = sdsl::int_vector<>(v.ones() + 1, 0);
+    size_type i = 0;
+    for(auto iter = v.one_begin(); iter != v.one_end(); ++iter, i++) { this->index[i] = iter->second; }
+  }
+
   // Load the alphabet.
   sdsl::int_vector<8> comp_to_char;
   comp_to_char.simple_sds_load(in);
 
-  // Decompress the sequences.
+  // Decompress the strings.
   {
     sdsl::int_vector<> compressed; compressed.simple_sds_load(in);
-    this->sequences = std::vector<char>(); this->sequences.reserve(compressed.size());
-    for(auto c : compressed) { this->sequences.push_back(comp_to_char[c]); }
+    this->strings = std::vector<char>(); this->strings.reserve(compressed.size());
+    for(auto c : compressed) { this->strings.push_back(comp_to_char[c]); }
   }
 
-  // Decompress the offsets and add the past-the-end sentinel
-  {
-    sdsl::sd_vector<> v; v.simple_sds_load(in);
-    this->offsets = sdsl::int_vector<>(v.ones() + 1, 0, sdsl::bits::length(this->sequences.size()));
-    size_type i = 0;
-    for(auto iter = v.one_begin(); iter != v.one_end(); ++iter, i++) { this->offsets[i] = iter->second; }
-    this->offsets[v.ones()] = this->sequences.size();
-  }
+  // Add past-the-end sentinel and bit-compress the index.
+  this->index[this->index.size() - 1] = this->strings.size();
+  sdsl::util::bit_compress(this->index);
 
   this->sanityChecks();
 }
@@ -1728,27 +1733,27 @@ StringArray::simple_sds_size() const
 {
   size_t result = 0;
 
+  // Compress the index without the past-the-end sentinel.
+  {
+    sdsl::sd_vector<> v(this->index.begin(), this->index.end() - 1);
+    result += v.simple_sds_size();
+  }
+
   // Determine the alphabet.
   std::vector<std::uint8_t> char_to_comp;
   sdsl::int_vector<8> comp_to_char;
   size_type sigma = 0;
-  determine_alphabet(this->sequences, char_to_comp, comp_to_char, sigma);
+  determine_alphabet(this->strings, char_to_comp, comp_to_char, sigma);
   result += comp_to_char.simple_sds_size();
 
-  // Compress the sequences.
+  // Compress the strings.
   {
-    sdsl::int_vector<> compressed(this->sequences.size(), 0, sdsl::bits::length(sigma - 1));
-    for(size_type i = 0; i < this->sequences.size(); i++)
+    sdsl::int_vector<> compressed(this->strings.size(), 0, sdsl::bits::length(sigma - 1));
+    for(size_type i = 0; i < this->strings.size(); i++)
     {
-      compressed[i] = char_to_comp[static_cast<uint8_t>(this->sequences[i])];
+      compressed[i] = char_to_comp[static_cast<uint8_t>(this->strings[i])];
     }
     result += compressed.simple_sds_size();
-  }
-
-  // Compress the offsets without the past-the-end sentinel.
-  {
-    sdsl::sd_vector<> v(this->offsets.begin(), this->offsets.end() - 1);
-    result += v.simple_sds_size();
   }
 
   return result;
@@ -1759,29 +1764,29 @@ StringArray::remove(size_type i)
 {
   if(i >= this->size()) { return; }
 
-  // Update sequences.
-  size_type tail = this->offsets[i];
-  size_type diff = this->offsets[i + 1] - tail;
-  while(tail + diff < this->sequences.size())
+  // Update strings.
+  size_type tail = this->index[i];
+  size_type diff = this->index[i + 1] - tail;
+  while(tail + diff < this->strings.size())
   {
-    this->sequences[tail] = this->sequences[tail + diff];
+    this->strings[tail] = this->strings[tail + diff];
     tail++;
   }
-  this->sequences.resize(tail);
+  this->strings.resize(tail);
 
-  // Update offsets.
-  for(size_type j = i; j + 1 < this->offsets.size(); j++)
+  // Update index.
+  for(size_type j = i; j + 1 < this->index.size(); j++)
   {
-    this->offsets[j] = this->offsets[j + 1] - diff;
+    this->index[j] = this->index[j + 1] - diff;
   }
-  this->offsets.resize(this->offsets.size() - 1);
-  sdsl::util::bit_compress(this->offsets);
+  this->index.resize(this->index.size() - 1);
+  sdsl::util::bit_compress(this->index);
 }
 
 bool
 StringArray::operator==(const StringArray& another) const
 {
-  return (this->sequences == another.sequences && this->offsets == another.offsets);
+  return (this->index == another.index && this->strings == another.strings);
 }
 
 bool
@@ -1793,9 +1798,9 @@ StringArray::operator!=(const StringArray& another) const
 void
 StringArray::sanityChecks() const
 {
-  if(this->offsets.size() == 0 || this->offsets[0] != 0 || this->offsets[this->offsets.size() - 1] != this->sequences.size())
+  if(this->index.size() == 0 || this->index[0] != 0 || this->index[this->index.size() - 1] != this->strings.size())
   {
-    throw sdsl::simple_sds::InvalidData("StringArray: Offsets and sequences do not match");
+    throw sdsl::simple_sds::InvalidData("StringArray: Offsets and strings do not match");
   }
 }
 

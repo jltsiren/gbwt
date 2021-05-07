@@ -478,7 +478,7 @@ class StringArray
 public:
   typedef gbwt::size_type size_type;
 
-  StringArray() : offsets(1, 0) {}
+  StringArray() : index(1, 0) {}
   StringArray(const std::vector<std::string>& source);
   StringArray(const std::map<std::string, std::string>& source);
   StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<view_type(size_type)>& sequence);
@@ -497,26 +497,26 @@ public:
   bool operator==(const StringArray& another) const;
   bool operator!=(const StringArray& another) const;
 
-  size_type size() const { return this->offsets.size() - 1; }
+  size_type size() const { return this->index.size() - 1; }
   bool empty() const { return (this->size() == 0); }
-  size_type length() const { return this->sequences.size(); }
-  size_type length(size_type i) const { return (this->offsets[i + 1] - this->offsets[i]); }
-  size_type length(size_type start, size_t limit) const { return (this->offsets[limit] - this->offsets[start]); }
+  size_type length() const { return this->strings.size(); }
+  size_type length(size_type i) const { return (this->index[i + 1] - this->index[i]); }
+  size_type length(size_type start, size_t limit) const { return (this->index[limit] - this->index[start]); }
 
   std::string str(size_type i) const
   {
-    return std::string(this->sequences.data() + this->offsets[i], this->sequences.data() + this->offsets[i + 1]);
+    return std::string(this->strings.data() + this->index[i], this->strings.data() + this->index[i + 1]);
   }
 
   view_type view(size_type i) const
   {
-    return view_type(this->sequences.data() + this->offsets[i], this->length(i));
+    return view_type(this->strings.data() + this->index[i], this->length(i));
   }
 
   void remove(size_type i);
 
-  std::vector<char>   sequences;
-  sdsl::int_vector<0> offsets;
+  sdsl::int_vector<0> index;
+  std::vector<char>   strings;
 
 private:
   // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
