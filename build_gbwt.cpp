@@ -120,7 +120,7 @@ main(int argc, char** argv)
   if(input_files.empty() || output_base.empty()) { printUsage(EXIT_FAILURE); }
   if(resample && input_files.size() != 1)
   {
-    std::cerr << "build_gbwt: Resampling only works with a single index" << std::endl;
+    std::cerr << "build_gbwt: Resampling requires a single input" << std::endl;
     std::exit(EXIT_FAILURE);
   }
   if(verify_index && !(input_files.size() == 1 && index_base.empty() && !build_from_parse))
@@ -335,7 +335,7 @@ main(int argc, char** argv)
     std::cout << std::endl;
 
     GBWT compressed_index;
-    sdsl::simple_sds::load_from(compressed_index, gbwt_name);
+    sdsl::simple_sds::load_from(compressed_index, input_base + GBWT::EXTENSION);
     compressed_index.resample(sample_interval);
     printStatistics(compressed_index, output_base);
 
