@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2020 Jouni Siren
+  Copyright (c) 2019, 2020, 2021 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -25,6 +25,7 @@
 #ifndef GBWT_METADATA_H
 #define GBWT_METADATA_H
 
+#include <gbwt/files.h>
 #include <gbwt/support.h>
 
 namespace gbwt
@@ -67,61 +68,28 @@ struct PathName
 
 //------------------------------------------------------------------------------
 
-/*
-  Version 1:
-  - Sample names, contig names, path names.
-  - Compatible with version 0.
-
-  Version 0:
-  - Preliminary version with sample/haplotype/contig counts.
-
-  Future versions:
-  - Haplotype coverage over ranges of node ids (run-length encode with sd_vector).
-  - Assign contig ids to ranges of node ids (as above).
-*/
-
 class Metadata
 {
 public:
   typedef gbwt::size_type size_type; // Needed for SDSL serialization.
 
   // Header.
-  std::uint32_t tag;
-  std::uint32_t version;
-  std::uint64_t sample_count;
-  std::uint64_t haplotype_count;
-  std::uint64_t contig_count;
-  std::uint64_t flags;
+  MetadataHeader        header;
 
   // Path / sample / contig names.
   std::vector<PathName> path_names;
   Dictionary            sample_names;
   Dictionary            contig_names;
 
-  constexpr static std::uint32_t TAG = 0x6B375E7A;
-  constexpr static std::uint32_t VERSION = Version::METADATA_VERSION;
-
-  constexpr static std::uint64_t FLAG_MASK         = 0x0007;
-  constexpr static std::uint64_t FLAG_PATH_NAMES   = 0x0001;
-  constexpr static std::uint64_t FLAG_SAMPLE_NAMES = 0x0002;
-  constexpr static std::uint64_t FLAG_CONTIG_NAMES = 0x0004;
-
-  // Flag masks for old compatible versions.
-  constexpr static std::uint32_t INITIAL_VERSION   = 0;
-  constexpr static std::uint64_t INITIAL_FLAG_MASK = 0x0000;
-
   Metadata();
   Metadata(std::vector<const Metadata*> sources, bool same_samples, bool same_contigs);
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
-  bool check() const;
 
-  void setVersion() { this->version = VERSION; }
-
-  void set(std::uint64_t flag) { this->flags |= flag; }
-  void unset(std::uint64_t flag) { this->flags &= ~flag; }
-  bool get(std::uint64_t flag) const { return (this->flags & flag); }
+  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_load(std::istream& in);
+  size_t simple_sds_size() const;
 
   void swap(Metadata& another);
 
@@ -129,15 +97,15 @@ public:
   bool operator!=(const Metadata& another) const { return !(this->operator==(another)); }
 
   // Header operations.
-  size_type samples() const { return this->sample_count; }
-  size_type haplotypes() const { return this->haplotype_count; }
-  size_type contigs() const { return this->contig_count; }
+  size_type samples() const { return this->header.sample_count; }
+  size_type haplotypes() const { return this->header.haplotype_count; }
+  size_type contigs() const { return this->header.contig_count; }
   void setSamples(size_type n);
   void setHaplotypes(size_type n);
   void setContigs(size_type n);
 
   // Path operations.
-  bool hasPathNames() const { return this->get(FLAG_PATH_NAMES); }
+  bool hasPathNames() const { return this->header.get(MetadataHeader::FLAG_PATH_NAMES); }
   size_type paths() const { return this->path_names.size(); }
   const PathName& path(size_type i) const { return this->path_names[i]; }
   std::vector<size_type> findPaths(size_type sample_id, size_type contig_id) const;
@@ -148,7 +116,7 @@ public:
   void clearPathNames();
 
   // Sample operations.
-  bool hasSampleNames() const { return this->get(FLAG_SAMPLE_NAMES); }
+  bool hasSampleNames() const { return this->header.get(MetadataHeader::FLAG_SAMPLE_NAMES); }
   std::string sample(size_type i) const { return this->sample_names[i]; }
   size_type sample(const std::string& name) const { return this->sample_names.find(name); }
   void setSamples(const std::vector<std::string>& names);
@@ -156,7 +124,7 @@ public:
   void clearSampleNames();
 
   // Contig operations.
-  bool hasContigNames() const { return this->get(FLAG_CONTIG_NAMES); }
+  bool hasContigNames() const { return this->header.get(MetadataHeader::FLAG_CONTIG_NAMES); }
   std::string contig(size_type i) const { return this->contig_names[i]; }
   size_type contig(const std::string& name) const { return this->contig_names.find(name); }
   void setContigs(const std::vector<std::string>& names);
@@ -177,6 +145,10 @@ public:
   void merge(const Metadata& source, bool same_samples, bool same_contigs);
 
   void clear();
+
+private:
+  // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
+  void sanityChecks() const;
 };
 
 std::ostream& operator<<(std::ostream& stream, const Metadata& metadata);

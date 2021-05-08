@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2019, 2020 Jouni Siren
+  Copyright (c) 2018, 2019, 2020, 2021 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -40,24 +40,31 @@ main(int argc, char** argv)
   if(argc < 2) { printUsage(); }
 
   int c = 0;
-  bool print_metadata = true;
-  bool list_samples = false, list_contigs = false, list_paths = false;
+  bool print_metadata = true, need_metadata = false;
+  bool list_samples = false, list_contigs = false, list_paths = false, list_tags = false;
   bool remove_metadata = false;
-  while((c = getopt(argc, argv, "scpr")) != -1)
+  bool sdsl_format = false;
+  while((c = getopt(argc, argv, "scptrO")) != -1)
   {
     switch(c)
     {
     case 's':
-      list_samples = true; print_metadata = false;
+      list_samples = true; print_metadata = false; need_metadata = true;
       break;
     case 'c':
-      list_contigs = true; print_metadata = false;
+      list_contigs = true; print_metadata = false; need_metadata = true;
       break;
     case 'p':
-      list_paths = true; print_metadata = false;
+      list_paths = true; print_metadata = false; need_metadata = true;
+      break;
+    case 't':
+      list_tags = true; print_metadata = false;
       break;
     case 'r':
       remove_metadata = true;
+      break;
+    case 'O':
+      sdsl_format = true;
       break;
     case '?':
       std::exit(EXIT_FAILURE);
@@ -70,12 +77,8 @@ main(int argc, char** argv)
   std::string index_base = argv[optind];
 
   GBWT index;
-  if(!sdsl::load_from_file(index, index_base + GBWT::EXTENSION))
-  {
-    std::cerr << "metadata_tool: Cannot load the index from " << (index_base + GBWT::EXTENSION) << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if(!(index.hasMetadata()))
+  sdsl::simple_sds::load_from(index, index_base + GBWT::EXTENSION);
+  if(!(index.hasMetadata()) && need_metadata)
   {
     std::cerr << "metadata_tool: No metadata in the GBWT index" << std::endl;
     std::exit(EXIT_FAILURE);
@@ -129,6 +132,13 @@ main(int argc, char** argv)
       std::cout << ", " << path.phase << ", " << path.count << ")" << std::endl;
     }
   }
+  if(list_tags)
+  {
+    for(auto iter = index.tags.begin(); iter != index.tags.end(); ++iter)
+    {
+      std::cout << iter->first << " = " << iter->second << std::endl;
+    }
+  }
   if(remove_metadata)
   {
     index.clearMetadata();
@@ -137,11 +147,15 @@ main(int argc, char** argv)
 
   if(modified)
   {
-    if(!sdsl::store_to_file(index, index_base + GBWT::EXTENSION))
+    if(sdsl_format)
     {
-      std::cerr << "metadata: Cannot write the index to " << (index_base + GBWT::EXTENSION) << std::endl;
-      std::exit(EXIT_FAILURE);
+      if(!sdsl::store_to_file(index, index_base + GBWT::EXTENSION))
+      {
+        std::cerr << "metadata: Cannot write the index to " << (index_base + GBWT::EXTENSION) << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
     }
+    else { sdsl::simple_sds::serialize_to(index, index_base + GBWT::EXTENSION); }
   }
 
   return 0;
@@ -158,7 +172,9 @@ printUsage(int exit_code)
   std::cerr << "  -s    List sample names" << std::endl;
   std::cerr << "  -c    List contig names" << std::endl;
   std::cerr << "  -p    List path names" << std::endl;
+  std::cerr << "  -t    List tags" << std::endl;
   std::cerr << "  -r    Remove all metadata" << std::endl;
+  std::cerr << "  -O    Output SDSL format instead of simple-sds format" << std::endl;
   std::cerr << std::endl;
 
   std::exit(exit_code);

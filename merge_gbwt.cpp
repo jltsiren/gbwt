@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2021 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -50,8 +50,9 @@ main(int argc, char** argv)
   MergingAlgorithm algorithm = ma_insert;
   MergeParameters parameters;
   std::string output;
+  bool sdsl_format = false;
   int c = 0;
-  while((c = getopt(argc, argv, "b:C:fiJ:M:o:pP:s:S:t:T:")) != -1)
+  while((c = getopt(argc, argv, "b:C:fiJ:M:o:OpP:s:S:t:T:")) != -1)
   {
     switch(c)
     {
@@ -69,6 +70,8 @@ main(int argc, char** argv)
       parameters.setMergeBuffers(std::stoul(optarg)); break;
     case 'o':
       output = optarg; break;
+    case 'O':
+      sdsl_format = true; break;
     case 'p':
       algorithm = ma_parallel; break;
     case 'P':
@@ -96,7 +99,7 @@ main(int argc, char** argv)
 
   printHeader("Algorithm"); std::cout << algorithmName(algorithm) << std::endl;
   printHeader("Input files"); std::cout << input_files << std::endl;
-  printHeader("Output name"); std::cout << output << std::endl;
+  printHeader("Output name"); std::cout << output << (sdsl_format ? " (SDSL format)" : " (simple-sds format)") << std::endl;
   if(algorithm == ma_insert)
   {
     printHeader("Batch size"); std::cout << batch_size << std::endl;
@@ -122,20 +125,20 @@ main(int argc, char** argv)
     for(int i = optind; i < argc; i++)
     {
       std::string input_name = argv[i];
-      if(!sdsl::load_from_file(indexes[i - optind], input_name + GBWT::EXTENSION))
-      {
-        std::cerr << "merge_gbwt: Cannot load the index from " << (input_name + GBWT::EXTENSION) << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
+      sdsl::simple_sds::load_from(indexes[i - optind], input_name + GBWT::EXTENSION);
       printStatistics(indexes[i - optind], input_name);
       total_inserted += indexes[i - optind].size();
     }
     GBWT merged(indexes);
-    if(!sdsl::store_to_file(merged, output + GBWT::EXTENSION))
+    if(sdsl_format)
     {
-      std::cerr << "merge_gbwt: Cannot write the index to " << (output + GBWT::EXTENSION) << std::endl;
-      std::exit(EXIT_FAILURE);
+      if(!sdsl::store_to_file(merged, output + GBWT::EXTENSION))
+      {
+        std::cerr << "merge_gbwt: Cannot write the index to " << (output + GBWT::EXTENSION) << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
     }
+    else { sdsl::simple_sds::serialize_to(merged, output + GBWT::EXTENSION); }
     printStatistics(merged, output);
   }
   else
@@ -143,11 +146,7 @@ main(int argc, char** argv)
     DynamicGBWT index;
     {
       std::string input_name = argv[optind];
-      if(!sdsl::load_from_file(index, input_name + DynamicGBWT::EXTENSION))
-      {
-        std::cerr << "merge_gbwt: Cannot load the index from " << (input_name + DynamicGBWT::EXTENSION) << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
+      sdsl::simple_sds::load_from(index, input_name + DynamicGBWT::EXTENSION);
       printStatistics(index, input_name);
       optind++;
     }
@@ -157,11 +156,7 @@ main(int argc, char** argv)
       if(algorithm == ma_insert)
       {
         GBWT next;
-        if(!sdsl::load_from_file(next, input_name + GBWT::EXTENSION))
-        {
-          std::cerr << "merge_gbwt: Cannot load the index from " << (input_name + GBWT::EXTENSION) << std::endl;
-          std::exit(EXIT_FAILURE);
-        }
+        sdsl::simple_sds::load_from(next, input_name + GBWT::EXTENSION);
         printStatistics(next, input_name);
         index.merge(next, batch_size, sample_interval);
         total_inserted += next.size();
@@ -169,22 +164,22 @@ main(int argc, char** argv)
       else if(algorithm == ma_parallel)
       {
         DynamicGBWT next;
-        if(!sdsl::load_from_file(next, input_name + DynamicGBWT::EXTENSION))
-        {
-          std::cerr << "merge_gbwt: Cannot load the index from " << (input_name + DynamicGBWT::EXTENSION) << std::endl;
-          std::exit(EXIT_FAILURE);
-        }
+        sdsl::simple_sds::load_from(next, input_name + DynamicGBWT::EXTENSION);
         printStatistics(next, input_name);
         index.merge(next, parameters);
         total_inserted += next.size();
       }
       optind++;
     }
-    if(!sdsl::store_to_file(index, output + DynamicGBWT::EXTENSION))
+    if(sdsl_format)
     {
-      std::cerr << "merge_gbwt: Cannot write the index to " << (output + DynamicGBWT::EXTENSION) << std::endl;
-      std::exit(EXIT_FAILURE);
+      if(!sdsl::store_to_file(index, output + DynamicGBWT::EXTENSION))
+      {
+        std::cerr << "merge_gbwt: Cannot write the index to " << (output + DynamicGBWT::EXTENSION) << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
     }
+    else { sdsl::simple_sds::serialize_to(index, output + DynamicGBWT::EXTENSION); }
     printStatistics(index, output);
   }
 
@@ -209,6 +204,7 @@ printUsage(int exit_code)
   std::cerr << std::endl;
   std::cerr << "General options:" << std::endl;
   std::cerr << "  -o X  Use X as the base name for output (required)" << std::endl;
+  std::cerr << "  -O    Output SDSL format instead of simple-sds format" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Algorithm choice:" << std::endl;
   std::cerr << "  -f    Fast algorithm (node ids must not overlap)" << std::endl;

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019, 2020 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020, 2021 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -29,6 +29,7 @@
 #include <gbwt/utils.h>
 
 #include <functional>
+#include <map>
 
 namespace gbwt
 {
@@ -213,6 +214,9 @@ struct CompressedRecord
   CompressedRecord();
   CompressedRecord(const std::vector<byte_type>& source, size_type start, size_type limit);
 
+  // Returns the size of the record corresponding to the given semiopen interval.
+  static size_type recordSize(const std::vector<byte_type>& source, size_type start, size_type limit);
+
   // Checks whether the record starting at the given position is empty.
   static bool emptyRecord(const std::vector<byte_type>& source, size_type start);
 
@@ -321,7 +325,7 @@ struct RecordArray
 {
   typedef gbwt::size_type size_type;
 
-  size_type                        records;
+  size_type                        records; // This is redundant, as we could use `index.ones()`.
   sdsl::sd_vector<>                index;
   sdsl::sd_vector<>::select_1_type select;
   std::vector<byte_type>           data;
@@ -345,8 +349,14 @@ struct RecordArray
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
 
+  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_load(std::istream& in);
+  size_t simple_sds_size() const;
+
   size_type size() const { return this->records; }
   bool empty() const { return (this->size() == 0); }
+
+  size_type size(size_type record) const;
   bool empty(size_type record) const { return CompressedRecord::emptyRecord(this->data, this->select(record + 1)); }
 
   // Records use 0-based indexing and semiopen ranges [start, limit).
@@ -355,6 +365,9 @@ struct RecordArray
 
 private:
   void copy(const RecordArray& source);
+
+  // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
+  void sanityChecks() const;
 };
 
 //------------------------------------------------------------------------------
@@ -382,6 +395,10 @@ struct DASamples
   ~DASamples();
 
   explicit DASamples(const std::vector<DynamicRecord>& bwt);
+
+  // Assumes that the samples are in sorted order.
+  explicit DASamples(const RecordArray& bwt, const std::vector<std::pair<node_type, sample_type>>& samples);
+
   DASamples(const std::vector<DASamples const*> sources, const sdsl::int_vector<0>& origins, const std::vector<size_type>& record_offsets, const std::vector<size_type>& sequence_counts);
 
   void swap(DASamples& another);
@@ -390,6 +407,10 @@ struct DASamples
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
+
+  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_load(std::istream& in);
+  size_t simple_sds_size() const;
 
   size_type records() const { return this->sampled_records.size(); }
   size_type size() const { return this->array.size(); }
@@ -408,6 +429,9 @@ struct DASamples
 private:
   void copy(const DASamples& source);
   void setVectors();
+
+  // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
+  void sanityChecks() const;
 };
 
 //------------------------------------------------------------------------------
@@ -444,14 +468,70 @@ struct MergeParameters
 
 //------------------------------------------------------------------------------
 
+/*
+  An array of strings stored in a single character vector, with starting offsets
+  stored in an integer vector. This can be serialized and loaded much faster than
+  an array of actual strings.
+*/
+class StringArray
+{
+public:
+  typedef gbwt::size_type size_type;
+
+  StringArray() : index(1, 0) {}
+  StringArray(const std::vector<std::string>& source);
+  StringArray(const std::map<std::string, std::string>& source);
+  StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<view_type(size_type)>& sequence);
+  StringArray(size_type n, const std::function<bool(size_type)>& choose, const std::function<size_type(size_type)>& length, const std::function<view_type(size_type)>& sequence);
+  StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence);
+
+  void swap(StringArray& another);
+
+  size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
+  void load(std::istream& in);
+
+  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_load(std::istream& in);
+  size_t simple_sds_size() const;
+
+  bool operator==(const StringArray& another) const;
+  bool operator!=(const StringArray& another) const;
+
+  size_type size() const { return this->index.size() - 1; }
+  bool empty() const { return (this->size() == 0); }
+  size_type length() const { return this->strings.size(); }
+  size_type length(size_type i) const { return (this->index[i + 1] - this->index[i]); }
+  size_type length(size_type start, size_t limit) const { return (this->index[limit] - this->index[start]); }
+
+  std::string str(size_type i) const
+  {
+    return std::string(this->strings.data() + this->index[i], this->strings.data() + this->index[i + 1]);
+  }
+
+  view_type view(size_type i) const
+  {
+    return view_type(this->strings.data() + this->index[i], this->length(i));
+  }
+
+  void remove(size_type i);
+
+  sdsl::int_vector<0> index;
+  std::vector<char>   strings;
+
+private:
+  // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
+  void sanityChecks() const;
+};
+
+//------------------------------------------------------------------------------
+
 class Dictionary
 {
 public:
   typedef gbwt::size_type size_type;
 
-  sdsl::int_vector<0> offsets;    // Starting offsets for each string, including a sentinel at the end.
+  StringArray         strings;
   sdsl::int_vector<0> sorted_ids; // String ids in sorted order.
-  std::vector<char>   data;       // Concatenated strings.
 
   Dictionary();
   Dictionary(const Dictionary& source);
@@ -459,6 +539,9 @@ public:
   ~Dictionary();
 
   explicit Dictionary(const std::vector<std::string>& source);
+
+  // Create a dictionary that contains all strings from the first and all missing strings
+  // from the second dictionary.
   Dictionary(const Dictionary& first, const Dictionary& second);
 
   void swap(Dictionary& another);
@@ -468,28 +551,36 @@ public:
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
 
+  // Load the version of Dictionary used in Metadata version 1.
+  void load_v1(std::istream& in);
+
+  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_load(std::istream& in);
+  size_t simple_sds_size() const;
+
   bool operator==(const Dictionary& another) const;
   bool operator!=(const Dictionary& another) const { return !(this->operator==(another)); }
 
   void clear();
 
-  size_type size() const { return this->sorted_ids.size(); }
+  size_type size() const { return this->strings.size(); }
   bool empty() const { return (this->size() == 0); }
-  size_type length() const { return this->data.size(); }
+  size_type length() const { return this->strings.length(); }
 
   // Return key i or an empty string if there is no such key.
-  std::string operator[](size_type i) const
+  std::string operator[](size_type i) const 
   {
-    if(i >= this->size()) { return ""; }
-    return std::string(this->data.begin() + this->offsets[i], this->data.begin() + this->offsets[i + 1]);
+    return (i >= this->size() ? std::string() : this->strings.str(i));
   }
 
   // Returns size() if not found.
-  size_type find(const std::string& s) const;
+  size_type find(const std::string& s) const { return this->find(str_to_view(s)); }
+  size_type find(view_type view) const;
 
   // Removes key i.
   void remove(size_type i);
 
+  // The same as `*this = Dictionary(*this, source)`.
   void append(const Dictionary& source);
 
   bool hasDuplicates() const;
@@ -497,17 +588,20 @@ public:
 private:
   void copy(const Dictionary& source);
 
+  // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
+  void sanityChecks() const;
+
   void sortKeys();
 
   // Indexes in sorted_ids.
   bool smaller_by_order(size_type left, size_type right) const;
-  bool smaller_by_order(size_type left, const std::string& right) const;
-  bool smaller_by_order(const std::string& left, size_type right) const;
+  bool smaller_by_order(size_type left, view_type right) const;
+  bool smaller_by_order(view_type left, size_type right) const;
 
   // Indexes in offsets.
   bool smaller_by_id(size_type left, size_type right) const;
-  bool smaller_by_id(size_type left, const std::string& right) const;
-  bool smaller_by_id(const std::string& left, size_type right) const;
+  bool smaller_by_id(size_type left, view_type right) const;
+  bool smaller_by_id(view_type left, size_type right) const;
 };
 
 //------------------------------------------------------------------------------

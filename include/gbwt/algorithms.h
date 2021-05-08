@@ -26,8 +26,6 @@
 #ifndef GBWT_ALGORITHMS_H
 #define GBWT_ALGORITHMS_H
 
-#include <map>
-
 #include <gbwt/support.h>
 
 namespace gbwt
@@ -262,6 +260,49 @@ extract(const GBWTType& index, size_type sequence)
 {
   if(sequence >= index.sequences()) { return vector_type(); }
   return extract(index, index.start(sequence));
+}
+
+//------------------------------------------------------------------------------
+
+/*
+  Returns DA samples for the given sample interval in sorted order.
+
+  Template parameters:
+    GBWTType  GBWT or DynamicGBWT
+*/
+
+template<class GBWTType>
+std::vector<std::pair<comp_type, sample_type>>
+resample(const GBWTType& index, size_type sample_interval)
+{
+  if(sample_interval == 0) { sample_interval = std::numeric_limits<size_type>::max(); }
+  std::vector<std::pair<comp_type, sample_type>> result;
+
+  #pragma omp parallel for schedule(dynamic, 1)
+  for(size_type sequence = 0; sequence < index.sequences(); sequence++)
+  {
+    std::vector<edge_type> buffer;
+    edge_type curr(ENDMARKER, sequence);
+    size_type distance = 0; // From the initial endmarker to the next position.
+    do
+    {
+      edge_type next = index.LF(curr); distance++;
+      if(distance % sample_interval == 0 || next.first == ENDMARKER) { buffer.push_back(curr); }
+      curr = next;
+    }
+    while(curr.first != ENDMARKER);
+    #pragma omp critical
+    {
+      result.reserve(result.size() + buffer.size());
+      for(edge_type pos : buffer)
+      {
+        result.emplace_back(index.toComp(pos.first), sample_type(pos.second, sequence));
+      }
+    }
+  }
+
+  parallelQuickSort(result.begin(), result.end());
+  return result;
 }
 
 //------------------------------------------------------------------------------

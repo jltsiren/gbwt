@@ -52,6 +52,7 @@ const std::string DynamicGBWT::EXTENSION = ".gbwt";
 
 DynamicGBWT::DynamicGBWT()
 {
+  this->addSource();
 }
 
 DynamicGBWT::DynamicGBWT(const DynamicGBWT& source)
@@ -79,6 +80,7 @@ DynamicGBWT::swap(DynamicGBWT& another)
   if(this != &another)
   {
     this->header.swap(another.header);
+    this->tags.swap(another.tags);
     this->bwt.swap(another.bwt);
     this->metadata.swap(another.metadata);
   }
@@ -104,10 +106,20 @@ DynamicGBWT::operator=(DynamicGBWT&& source)
   if(this != &source)
   {
     this->header = std::move(source.header);
+    this->tags = std::move(source.tags);
     this->bwt = std::move(source.bwt);
     this->metadata = std::move(source.metadata);
   }
   return *this;
+}
+
+void
+DynamicGBWT::resample(size_type sample_interval)
+{
+  // Delete old samples to save memory.
+  for(DynamicRecord& record : this->bwt) { record.ids = std::vector<sample_type>(); }
+  std::vector<std::pair<node_type, sample_type>> samples = gbwt::resample(*this, sample_interval);
+  for(auto sample : samples) { this->bwt[sample.first].ids.push_back(sample.second); }
 }
 
 size_type
@@ -117,6 +129,11 @@ DynamicGBWT::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::str
   size_type written_bytes = 0;
 
   written_bytes += this->header.serialize(out, child, "header");
+
+  {
+    StringArray linearized(this->tags);
+    written_bytes += linearized.serialize(out, child, "tags");
+  }
 
   {
     RecordArray array(this->bwt);
@@ -141,18 +158,55 @@ void
 DynamicGBWT::load(std::istream& in)
 {
   // Read the header.
-  this->header.load(in);
-  if(!(this->header.check()))
+  GBWTHeader h = sdsl::simple_sds::load_value<GBWTHeader>(in);
+  if(!(h.check()))
   {
-    std::cerr << "DynamicGBWT::load(): Invalid header: " << this->header << std::endl;
+    throw sdsl::simple_sds::InvalidData("DynamicGBWT: Invalid header");
   }
-  this->header.setVersion();  // Update to the current version.
-  this->bwt.resize(this->effective());
+  bool simple_sds = h.get(GBWTHeader::FLAG_SIMPLE_SDS);
+  bool has_tags = h.version >= 5; // FIXME Replace with symbolic constant.
+  h.unset(GBWTHeader::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
+  h.setVersion(); // Update to the current version.
+  this->header = h;
+
+  // Read the tags and set the source to Version::SOURCE_VALUE.
+  bool source_is_self = false; // We know how to read DASamples.
+  if(has_tags)
+  {
+    StringArray linearized;
+    if(simple_sds) { linearized.simple_sds_load(in); }
+    else { linearized.load(in); }
+    if(linearized.size() % 2 != 0)
+    {
+      throw sdsl::simple_sds::InvalidData("DynamicGBWT: Tag without a value");
+    }
+    this->tags.clear();
+    for(size_type i = 0; i < linearized.size(); i += 2)
+    {
+      std::string key = linearized.str(i);
+      for(auto iter = key.begin(); iter != key.end(); ++iter) { *iter = std::tolower(*iter); }
+      this->tags[key] = linearized.str(i + 1);
+    }
+    if(this->tags.size() != linearized.size() / 2)
+    {
+      throw sdsl::simple_sds::InvalidData("DynamicGBWT: Duplicate tags");
+    }
+    auto iter = this->tags.find(Version::SOURCE_KEY);
+    if(iter != this->tags.end() && iter->second == Version::SOURCE_VALUE) { source_is_self = true; }
+    this->addSource();
+  }
+  else { this->resetTags(); }
 
   // Read and decompress the BWT.
+  this->bwt.resize(this->effective());
   {
     RecordArray array;
-    array.load(in);
+    if(simple_sds) { array.simple_sds_load(in); }
+    else { array.load(in); }
+    if(array.size() != this->effective())
+    {
+      throw sdsl::simple_sds::InvalidData("DynamicGBWT: BWT record count / alphabet size mismatch");
+    }
     array.forEach([&](size_type comp, const CompressedRecord& record)
     {
       DynamicRecord& current = this->bwt[comp];
@@ -172,30 +226,113 @@ DynamicGBWT::load(std::istream& in)
   // Read and decompress the samples.
   {
     DASamples samples;
-    samples.load(in);
-    SampleIterator sample_iter(samples);
-    for(SampleRangeIterator range_iter(samples); !(range_iter.end()); ++range_iter)
+    bool found_samples = false;
+    if(simple_sds)
     {
-      DynamicRecord& current = this->bwt[range_iter.record()];
-      while(!(sample_iter.end()) && sample_iter.offset() < range_iter.limit())
+      // The samples may be absent or from an unknown source.
+      if(source_is_self) { found_samples = sdsl::simple_sds::load_option(samples, in); }
+      else { sdsl::simple_sds::skip_option(in); }
+    }
+    else { samples.load(in); found_samples = true; }
+    if(found_samples)
+    {
+      if(samples.records() != this->effective())
       {
-        current.ids.push_back(sample_type(sample_iter.offset() - range_iter.start(), *sample_iter));
-        ++sample_iter;
+        throw sdsl::simple_sds::InvalidData("DynamicGBWT: Sample record count / alphabet size mismatch");
+      }
+      SampleIterator sample_iter(samples);
+      for(SampleRangeIterator range_iter(samples); !(range_iter.end()); ++range_iter)
+      {
+        DynamicRecord& current = this->bwt[range_iter.record()];
+        while(!(sample_iter.end()) && sample_iter.offset() < range_iter.limit())
+        {
+          current.ids.push_back(sample_type(sample_iter.offset() - range_iter.start(), *sample_iter));
+          ++sample_iter;
+        }
       }
     }
+    else { this->resample(SAMPLE_INTERVAL); }
   }
 
   // Read the metadata.
-  if(this->hasMetadata()) { this->metadata.load(in); }
+  if(simple_sds)
+  {
+    bool loaded_metadata = sdsl::simple_sds::load_option(this->metadata, in);
+    if(loaded_metadata != this->hasMetadata())
+    {
+      throw sdsl::simple_sds::InvalidData("DynamicGBWT: Invalid metadata flag in the header");
+    }
+  }
+  else if(this->hasMetadata()) { this->metadata.load(in); }
+  if(this->hasMetadata() && this->metadata.hasPathNames())
+  {
+    size_type expected_paths = (this->bidirectional() ? this->sequences() / 2 : this->sequences());
+    if(this->metadata.paths() != expected_paths)
+    {
+      throw sdsl::simple_sds::InvalidData("DynamicGBWT: Path name / sequence count mismatch");
+    }
+  }
 
   // Rebuild the incoming edges.
   this->rebuildIncoming();
 }
 
 void
+DynamicGBWT::simple_sds_serialize(std::ostream& out) const
+{
+  GBWTHeader h = this->header;
+  h.set(GBWTHeader::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
+  sdsl::simple_sds::serialize_value(h, out);
+
+  {
+    StringArray linearized(this->tags);
+    linearized.simple_sds_serialize(out);
+  }
+  {
+    RecordArray array(this->bwt);
+    array.simple_sds_serialize(out);
+  }
+  {
+    DASamples compressed_samples(this->bwt);
+    sdsl::simple_sds::serialize_option(compressed_samples, out);
+  }
+  if(this->hasMetadata()) { sdsl::simple_sds::serialize_option(this->metadata, out); }
+  else { sdsl::simple_sds::empty_option(out); }
+}
+
+void
+DynamicGBWT::simple_sds_load(std::istream& in)
+{
+  // The same load() function can handle the SDSL and simple-sds formats.
+  this->load(in);
+}
+
+size_t
+DynamicGBWT::simple_sds_size() const
+{
+  size_t result = sdsl::simple_sds::value_size(this->header);
+  {
+    StringArray linearized(this->tags);
+    result += linearized.simple_sds_size();
+  }
+  {
+    RecordArray array(this->bwt);
+    result += array.simple_sds_size();
+  }
+  {
+    DASamples compressed_samples(this->bwt);
+    result += compressed_samples.simple_sds_size();
+  }
+  if(this->hasMetadata()) { result += sdsl::simple_sds::option_size(this->metadata); }
+  else { result += sdsl::simple_sds::empty_option_size(); }
+  return result;
+}
+
+void
 DynamicGBWT::copy(const DynamicGBWT& source)
 {
   this->header = source.header;
+  this->tags = source.tags;
   this->bwt = source.bwt;
   this->metadata = source.metadata;
 }
@@ -204,6 +341,7 @@ void
 DynamicGBWT::copy(const GBWT& source)
 {
   this->header = source.header;
+  this->tags = source.tags;
 
   // Decompress the BWT.
   this->bwt.resize(this->effective());
@@ -238,6 +376,19 @@ DynamicGBWT::copy(const GBWT& source)
   this->rebuildIncoming();
 
   this->metadata = source.metadata;
+}
+
+void
+DynamicGBWT::resetTags()
+{
+  this->tags.clear();
+  this->addSource();
+}
+
+void
+DynamicGBWT::addSource()
+{
+  this->tags[Version::SOURCE_KEY] = Version::SOURCE_VALUE;
 }
 
 //------------------------------------------------------------------------------
@@ -440,6 +591,7 @@ swapBody(DynamicRecord& record, RunMerger& merger)
   - Set 'offset' to rank(next) within the record.
   - Update the predecessor count of 'curr' in the incoming edges of 'next'.
 
+  Note: Iteration is the distance from the initial endmarker to the next position.
   We do not maintain incoming edges to the endmarker, because it can be expensive
   and because searching with the endmarker does not work in a multi-string BWT.
 */
@@ -705,7 +857,7 @@ size_type
 insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source, size_type sample_interval)
 {
   // Sanity check sample interval only here.
-  if(sample_interval == 0) { sample_interval = ~(size_type)0; }
+  if(sample_interval == 0) { sample_interval = std::numeric_limits<size_type>::max(); }
 
   // The outgoing edges are not expected to be sorted during construction. As the endmarker
   // may have millions of outgoing edges, we need a faster way of mapping destination nodes
@@ -767,7 +919,7 @@ insertBatch(DynamicGBWT& index, const IntegerVector& text, size_type text_length
     Increase alphabet size and decrease offset if necessary.
   */
   bool seq_start = true;
-  node_type min_node = (index.empty() ? ~(node_type)0 : index.header.offset + 1);
+  node_type min_node = (index.empty() ? std::numeric_limits<node_type>::max() : index.header.offset + 1);
   node_type max_node = (index.empty() ? 0 : index.sigma() - 1);
   std::vector<Sequence> seqs;
   for(size_type i = 0; i < text_length; i++)

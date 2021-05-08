@@ -23,7 +23,6 @@
 */
 
 #include <fstream>
-#include <map>
 #include <random>
 #include <string>
 #include <unistd.h>
@@ -141,11 +140,7 @@ main(int argc, char** argv)
   std::cout << std::endl;
 
   GBWT compressed_index;
-  if(!sdsl::load_from_file(compressed_index, index_base + GBWT::EXTENSION))
-  {
-    std::cerr << "benchmark: Cannot load the index from " << (index_base + GBWT::EXTENSION) << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
+  sdsl::simple_sds::load_from(compressed_index, index_base + GBWT::EXTENSION);
   printStatistics(compressed_index, index_base);
 
   if(breakdown)
@@ -166,11 +161,7 @@ main(int argc, char** argv)
   if(compare)
   {
     GBWT second_index;
-    if(!sdsl::load_from_file(second_index, compare_base + GBWT::EXTENSION))
-    {
-      std::cerr << "benchmark: Cannot load the index from " << (compare_base + GBWT::EXTENSION) << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
+    sdsl::simple_sds::load_from(second_index, compare_base + GBWT::EXTENSION);
     printStatistics(second_index, compare_base);
     compareIndexes(compressed_index, second_index, index_base, compare_base);
   }

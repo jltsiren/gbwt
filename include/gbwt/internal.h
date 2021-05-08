@@ -102,10 +102,6 @@ serializeVector(const std::vector<Element>& data, std::ostream& out, sdsl::struc
   return written_bytes;
 }
 
-// Specialization for a vector of strings.
-template<>
-size_type serializeVector<std::string>(const std::vector<std::string>& data, std::ostream& out, sdsl::structure_tree_node* v, std::string name);
-
 // Load an std::vector of integers.
 template<class Element>
 void
@@ -120,10 +116,6 @@ loadVector(std::vector<Element>& data, std::istream& in)
     DiskIO::read(in, data.data(), data_size);
   }
 }
-
-// Specialization for a vector of strings.
-template<>
-void loadVector<std::string>(std::vector<std::string>& data, std::istream& in);
 
 //------------------------------------------------------------------------------
 

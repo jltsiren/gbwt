@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2020 Jouni Siren
+  Copyright (c) 2019, 2020, 2021 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -32,30 +32,11 @@ namespace gbwt
 
 //------------------------------------------------------------------------------
 
-// Numerical class constants.
-
-constexpr std::uint32_t Metadata::TAG;
-constexpr std::uint32_t Metadata::VERSION;
-constexpr std::uint64_t Metadata::FLAG_MASK;
-constexpr std::uint64_t Metadata::FLAG_PATH_NAMES;
-constexpr std::uint64_t Metadata::FLAG_SAMPLE_NAMES;
-constexpr std::uint64_t Metadata::FLAG_CONTIG_NAMES;
-constexpr std::uint32_t Metadata::INITIAL_VERSION;
-constexpr std::uint64_t Metadata::INITIAL_FLAG_MASK;
-
-//------------------------------------------------------------------------------
-
-Metadata::Metadata() :
-  tag(TAG), version(VERSION),
-  sample_count(0), haplotype_count(0), contig_count(0),
-  flags(0)
+Metadata::Metadata()
 {
 }
 
-Metadata::Metadata(std::vector<const Metadata*> sources, bool same_samples, bool same_contigs)  :
-  tag(TAG), version(VERSION),
-  sample_count(0), haplotype_count(0), contig_count(0),
-  flags(0)
+Metadata::Metadata(std::vector<const Metadata*> sources, bool same_samples, bool same_contigs)
 {
   if(sources.empty()) { return; }
 
@@ -72,12 +53,7 @@ Metadata::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string
   sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
   size_type written_bytes = 0;
 
-  written_bytes += sdsl::write_member(this->tag, out, child, "tag");
-  written_bytes += sdsl::write_member(this->version, out, child, "version");
-  written_bytes += sdsl::write_member(this->sample_count, out, child, "sample_count");
-  written_bytes += sdsl::write_member(this->haplotype_count, out, child, "haplotype_count");
-  written_bytes += sdsl::write_member(this->contig_count, out, child, "contig_count");
-  written_bytes += sdsl::write_member(this->flags, out, child, "flags");
+  written_bytes += this->header.serialize(out, child, "header");
 
   if(this->hasPathNames())
   {
@@ -99,19 +75,14 @@ Metadata::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string
 void
 Metadata::load(std::istream& in)
 {
-  sdsl::read_member(this->tag, in);
-  sdsl::read_member(this->version, in);
-  sdsl::read_member(this->sample_count, in);
-  sdsl::read_member(this->haplotype_count, in);
-  sdsl::read_member(this->contig_count, in);
-  sdsl::read_member(this->flags, in);
-
-  // Check the header.
-  if(!(this->check()))
+  // Load and check the header.
+  this->header.load(in);
+  if(!(this->header.check()))
   {
-    std::cerr << "Metadata::load(): Invalid metadata: " << *this << std::endl;
+    throw sdsl::simple_sds::InvalidData("Metadata: Invalid header");
   }
-  this->setVersion(); // Update to the current version.
+  bool old_version = (this->header.version < MetadataHeader::VERSION);
+  this->header.setVersion(); // Update to the current version.
 
   if(this->hasPathNames())
   {
@@ -119,27 +90,53 @@ Metadata::load(std::istream& in)
   }
   if(this->hasSampleNames())
   {
-    this->sample_names.load(in);
+    if(old_version) { this->sample_names.load_v1(in); }
+    else { this->sample_names.load(in); }
   }
   if(this->hasContigNames())
   {
-    this->contig_names.load(in);
+    if(old_version) { this->contig_names.load_v1(in); }
+    else { this->contig_names.load(in); }
   }
+
+  this->sanityChecks();
 }
 
-bool
-Metadata::check() const
+void
+Metadata::simple_sds_serialize(std::ostream& out) const
 {
-  if(this->tag != TAG) { return false; }
-  switch(this->version)
+  sdsl::simple_sds::serialize_value(this->header, out);
+  sdsl::simple_sds::serialize_vector(this->path_names, out);
+  this->sample_names.simple_sds_serialize(out);
+  this->contig_names.simple_sds_serialize(out);
+}
+
+void
+Metadata::simple_sds_load(std::istream& in)
+{
+  // Header.
+  this->header = sdsl::simple_sds::load_value<MetadataHeader>(in);
+  if(!(this->header.check_simple_sds()))
   {
-  case VERSION:
-    return ((this->flags & FLAG_MASK) == this->flags);
-  case INITIAL_VERSION:
-    return ((this->flags & INITIAL_FLAG_MASK) == this->flags);
-  default:
-    return false;
+    throw sdsl::simple_sds::InvalidData("Metadata: Invalid header");
   }
+  this->header.setVersion(); // Update to the current version.
+
+  // Path / sample / contig names.
+  this->path_names = sdsl::simple_sds::load_vector<PathName>(in);
+  this->sample_names.simple_sds_load(in);
+  this->contig_names.simple_sds_load(in);
+
+  this->sanityChecks();
+}
+
+size_t
+Metadata::simple_sds_size() const
+{
+  return sdsl::simple_sds::value_size(this->header) +
+    sdsl::simple_sds::vector_size(this->path_names) +
+    this->sample_names.simple_sds_size() +
+    this->contig_names.simple_sds_size();
 }
 
 void
@@ -147,13 +144,7 @@ Metadata::swap(Metadata& another)
 {
   if(this != &another)
   {
-    std::swap(this->tag, another.tag);
-    std::swap(this->version, another.version);
-    std::swap(this->sample_count, another.sample_count);
-    std::swap(this->haplotype_count, another.haplotype_count);
-    std::swap(this->contig_count, another.contig_count);
-    std::swap(this->flags, another.flags);
-
+    this->header.swap(another.header);
     this->path_names.swap(another.path_names);
     this->sample_names.swap(another.sample_names);
     this->contig_names.swap(another.contig_names);
@@ -163,15 +154,43 @@ Metadata::swap(Metadata& another)
 bool
 Metadata::operator==(const Metadata& another) const
 {
-  return (this->tag == another.tag &&
-          this->version == another.version &&
-          this->sample_count == another.sample_count &&
-          this->haplotype_count == another.haplotype_count &&
-          this->contig_count == another.contig_count &&
-          this->flags == another.flags &&
+  return (this->header == another.header &&
           this->path_names == another.path_names &&
           this->sample_names == another.sample_names &&
           this->contig_names == another.contig_names);
+}
+
+void
+Metadata::sanityChecks() const
+{
+  if(!(this->hasPathNames()) && this->path_names.size() > 0)
+  {
+    throw sdsl::simple_sds::InvalidData("Metadata: Invalid path name flag in the header");
+  }
+
+  if(this->hasSampleNames())
+  {
+    if(this->header.sample_count != this->sample_names.size())
+    {
+      throw sdsl::simple_sds::InvalidData("Metadata: Sample / sample name count mismatch");
+    }
+  }
+  else if(this->sample_names.size() > 0)
+  {
+    throw sdsl::simple_sds::InvalidData("Metadata: Invalid sample name flag in the header");
+  }
+
+  if(this->hasContigNames())
+  {
+    if(this->header.contig_count != this->contig_names.size())
+    {
+      throw sdsl::simple_sds::InvalidData("Metadata: Contig / contig name count mismatch");
+    }
+  }
+  else if(this->contig_names.size() > 0)
+  {
+    throw sdsl::simple_sds::InvalidData("Metadata: Invalid contig name flag in the header");
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -183,13 +202,13 @@ Metadata::setSamples(size_type n)
   {
     std::cerr << "Metadata::setSamples(): Warning: Changing sample count without changing sample names" << std::endl;
   }
-  this->sample_count = n;
+  this->header.sample_count = n;
 }
 
 void
 Metadata::setHaplotypes(size_type n)
 {
-  this->haplotype_count = n;
+  this->header.haplotype_count = n;
 }
 
 void
@@ -199,7 +218,7 @@ Metadata::setContigs(size_type n)
   {
     std::cerr << "Metadata::setContigs(): Warning: Changing contig count without changing contig names" << std::endl;
   }
-  this->contig_count = n;
+  this->header.contig_count = n;
 }
 
 //------------------------------------------------------------------------------
@@ -250,14 +269,14 @@ Metadata::pathsForContig(size_type contig_id) const
 void
 Metadata::addPath(const PathName& path)
 {
-  this->set(FLAG_PATH_NAMES);
+  this->header.set(MetadataHeader::FLAG_PATH_NAMES);
   this->path_names.emplace_back(path);
 }
 
 void
 Metadata::addPath(size_type sample, size_type contig, size_type phase, size_type count)
 {
-  this->set(FLAG_PATH_NAMES);
+  this->header.set(MetadataHeader::FLAG_PATH_NAMES);
   PathName path =
   {
     static_cast<PathName::path_name_type>(sample),
@@ -271,7 +290,7 @@ Metadata::addPath(size_type sample, size_type contig, size_type phase, size_type
 void
 Metadata::clearPathNames()
 {
-  this->unset(FLAG_PATH_NAMES);
+  this->header.unset(MetadataHeader::FLAG_PATH_NAMES);
   this->path_names = std::vector<PathName>();
 }
 
@@ -287,7 +306,7 @@ Metadata::setSamples(const std::vector<std::string>& names)
   }
 
   this->setSamples(names.size());
-  this->set(FLAG_SAMPLE_NAMES);
+  this->header.set(MetadataHeader::FLAG_SAMPLE_NAMES);
   this->sample_names = Dictionary(names);
 }
 
@@ -299,13 +318,13 @@ Metadata::addSamples(const std::vector<std::string>& names)
   Dictionary additional_names(names);
   this->sample_names.append(additional_names);
   this->setSamples(this->sample_names.size());
-  this->set(FLAG_SAMPLE_NAMES);
+  this->header.set(MetadataHeader::FLAG_SAMPLE_NAMES);
 }
 
 void
 Metadata::clearSampleNames()
 {
-  this->unset(FLAG_SAMPLE_NAMES);
+  this->header.unset(MetadataHeader::FLAG_SAMPLE_NAMES);
   this->sample_names.clear();
 }
 
@@ -321,7 +340,7 @@ Metadata::setContigs(const std::vector<std::string>& names)
   }
 
   this->setContigs(names.size());
-  this->set(FLAG_CONTIG_NAMES);
+  this->header.set(MetadataHeader::FLAG_CONTIG_NAMES);
   this->contig_names = Dictionary(names);
 }
 
@@ -333,13 +352,13 @@ Metadata::addContigs(const std::vector<std::string>& names)
   Dictionary additional_names(names);
   this->contig_names.append(additional_names);
   this->setContigs(this->contig_names.size());
-  this->set(FLAG_CONTIG_NAMES);
+  this->header.set(MetadataHeader::FLAG_CONTIG_NAMES);
 }
 
 void
 Metadata::clearContigNames()
 {
-  this->unset(FLAG_CONTIG_NAMES);
+  this->header.unset(MetadataHeader::FLAG_CONTIG_NAMES);
   this->contig_names.clear();
 }
 
@@ -407,8 +426,8 @@ Metadata::removeSample(size_type sample_id)
 
   // Update samples and haplotypes.
   if(this->hasSampleNames()) { this->sample_names.remove(sample_id); }
-  this->sample_count--;
-  this->haplotype_count -= haplotypes_to_remove;
+  this->header.sample_count--;
+  this->header.haplotype_count -= haplotypes_to_remove;
 
   return result;
 }
@@ -434,7 +453,7 @@ Metadata::removeContig(size_type contig_id)
 
   // Update contigs.
   if(this->hasContigNames()) { this->contig_names.remove(contig_id); }
-  this->contig_count--;
+  this->header.contig_count--;
 
   return result;
 }
@@ -459,10 +478,10 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
       {
         std::cerr << "Metadata::merge(): Warning: Estimating new haplotype count" << std::endl;
       }
-      double added_samples = this->sample_names.size() - this->sample_count;
-      this->haplotype_count += (added_samples * source.haplotypes()) / source.samples();
+      double added_samples = this->sample_names.size() - this->header.sample_count;
+      this->header.haplotype_count += (added_samples * source.haplotypes()) / source.samples();
     }
-    this->sample_count = this->sample_names.size();
+    this->header.sample_count = this->sample_names.size();
   }
   else if(same_samples)
   {
@@ -480,14 +499,14 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
         std::cerr << "Metadata::merge(): Warning: Taking sample names from the source" << std::endl;
       }
       this->sample_names = source.sample_names;
-      this->set(FLAG_SAMPLE_NAMES);
+      this->header.set(MetadataHeader::FLAG_SAMPLE_NAMES);
     }
   }
   else
   {
     source_sample_offset = this->samples();
-    this->sample_count += source.samples();
-    this->haplotype_count += source.haplotypes();
+    this->header.sample_count += source.samples();
+    this->header.haplotype_count += source.haplotypes();
     if(this->hasSampleNames())
     {
       if(Verbosity::level >= Verbosity::FULL)
@@ -502,7 +521,7 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
   if(merge_contig_names)
   {
     this->contig_names = Dictionary(this->contig_names, source.contig_names);
-    this->contig_count = this->contig_names.size();
+    this->header.contig_count = this->contig_names.size();
   }
   else if(same_contigs)
   {
@@ -517,13 +536,13 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
         std::cerr << "Metadata::merge(): Warning: Taking contig names from the source" << std::endl;
       }
       this->contig_names = source.contig_names;
-      this->set(FLAG_CONTIG_NAMES);
+      this->header.set(MetadataHeader::FLAG_CONTIG_NAMES);
     }
   }
   else
   {
     source_contig_offset = this->contigs();
-    this->contig_count += source.contigs();
+    this->header.contig_count += source.contigs();
     if(this->hasContigNames())
     {
       if(Verbosity::level >= Verbosity::FULL)
@@ -560,7 +579,7 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
       {
         found_haplotypes.emplace(path.sample, path.phase);
       }
-      this->haplotype_count = found_haplotypes.size();
+      this->header.haplotype_count = found_haplotypes.size();
     }
   }
   else if(this->hasPathNames())
@@ -583,19 +602,19 @@ Metadata::clear()
 
 std::ostream& operator<<(std::ostream& stream, const Metadata& metadata)
 {
-  if(metadata.get(Metadata::FLAG_PATH_NAMES))
+  if(metadata.hasPathNames())
   {
     stream << metadata.paths() << " paths with names, ";
   }
 
   stream << metadata.samples() << " samples";
-  if(metadata.get(Metadata::FLAG_SAMPLE_NAMES)) { stream << " with names"; }
+  if(metadata.hasSampleNames()) { stream << " with names"; }
   stream << ", ";
 
   stream << metadata.haplotypes() << " haplotypes, ";
 
   stream << metadata.contigs() << " contigs";
-  if(metadata.get(Metadata::FLAG_CONTIG_NAMES)) { stream << " with names"; }
+  if(metadata.hasContigNames()) { stream << " with names"; }
 
   return stream;
 }
