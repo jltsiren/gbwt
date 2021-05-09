@@ -1,6 +1,11 @@
 SDSL_DIR=../sdsl-lite
 include $(SDSL_DIR)/Make.helper
 
+BUILD_BIN=bin
+BUILD_LIB=lib
+BUILD_OBJ=obj
+SOURCE_DIR=src
+
 # Multithreading with OpenMP.
 PARALLEL_FLAGS=-fopenmp -pthread
 LIBS=-L$(LIB_DIR) -lsdsl -ldivsufsort -ldivsufsort64
@@ -28,43 +33,41 @@ ifeq ($(shell uname -s), Darwin)
 endif
 
 CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -Iinclude -I$(INC_DIR)
-LIBOBJS=algorithms.o bwtmerge.o cached_gbwt.o dynamic_gbwt.o fast_locate.o files.o gbwt.o internal.o metadata.o support.o test.o utils.o variants.o
-SOURCES=$(wildcard *.cpp)
+
 HEADERS=$(wildcard include/gbwt/*.h)
-OBJS=$(SOURCES:.cpp=.o)
+LIBOBJS=$(addprefix $(BUILD_OBJ)/,algorithms.o bwtmerge.o cached_gbwt.o dynamic_gbwt.o fast_locate.o files.o gbwt.o internal.o metadata.o support.o test.o utils.o variants.o)
+LIBRARY=$(BUILD_LIB)/libgbwt.a
 
-LIBRARY=libgbwt.a
-PROGRAMS=build_gbwt build_ri merge_gbwt benchmark metadata_tool remove_seq
-OBSOLETE=prepare_text prepare_text.o metadata
+PROGRAMS=$(addprefix $(BUILD_BIN)/,build_gbwt build_ri merge_gbwt benchmark metadata_tool remove_seq)
+OBSOLETE=build_gbwt build_ri merge_gbwt benchmark metadata_tool remove_seq
 
-all:$(LIBRARY) $(PROGRAMS)
+.PHONY: all clean directories test
+all: directories $(LIBRARY) $(PROGRAMS)
 
-%.o:%.cpp $(HEADERS)
-	$(MY_CXX) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -c $<
+directories: $(BUILD_BIN) $(BUILD_LIB) $(BUILD_OBJ)
+
+$(BUILD_BIN):
+	mkdir -p $@
+
+$(BUILD_LIB):
+	mkdir -p $@
+
+$(BUILD_OBJ):
+	mkdir -p $@
+
+$(BUILD_OBJ)/%.o:$(SOURCE_DIR)/%.cpp $(HEADERS)
+	$(MY_CXX) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -c -o $@ $<
 
 $(LIBRARY):$(LIBOBJS)
 	ar rcs $@ $(LIBOBJS)
 
-build_gbwt:build_gbwt.o $(LIBRARY)
-	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-build_ri:build_ri.o $(LIBRARY)
-	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-merge_gbwt:merge_gbwt.o $(LIBRARY)
-	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-benchmark:benchmark.o $(LIBRARY)
-	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-metadata_tool:metadata_tool.o $(LIBRARY)
-	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-remove_seq:remove_seq.o $(LIBRARY)
+$(BUILD_BIN)/%:$(BUILD_OBJ)/%.o $(LIBRARY)
 	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 test:$(LIBRARY)
 	cd tests && $(MAKE) test
 
 clean:
-	rm -f $(PROGRAMS) $(OBJS) $(LIBRARY) $(OBSOLETE)
+	rm -rf $(BUILD_BIN) $(BUILD_LIB) $(BUILD_OBJ)
+	rm -f *.o *.a $(OBSOLETE)
+	cd tests && $(MAKE) clean

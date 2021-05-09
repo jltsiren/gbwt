@@ -2,7 +2,7 @@ SDSL_DIR=../../sdsl-lite
 include $(SDSL_DIR)/Make.helper
 
 GBWT_DIR=..
-LIBRARY=$(GBWT_DIR)/libgbwt.a
+LIBRARY=$(GBWT_DIR)/lib/libgbwt.a
 
 # Multithreading with OpenMP.
 PARALLEL_FLAGS=-fopenmp -pthread
@@ -31,33 +31,21 @@ ifeq ($(shell uname -s), Darwin)
 endif
 
 CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(GBWT_DIR)/include -I$(INC_DIR)
-SOURCES=$(wildcard *.cpp)
-HEADERS=$(wildcard ../include/gbwt/*.h)
-OBJS=$(SOURCES:.cpp=.o)
+
+HEADERS=$(wildcard $(GBWT_DIR)/include/gbwt/*.h)
 PROGRAMS=test_bwtmerge test_metadata test_queries test_support test_variants
 
+.PHONY: all clean test
 all:$(PROGRAMS)
 
 %.o:%.cpp $(HEADERS)
 	$(MY_CXX) $(CXX_FLAGS) -c $<
 
-test_bwtmerge:test_bwtmerge.o $(HEADERS)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-test_metadata:test_metadata.o $(HEADERS)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-test_queries:test_queries.o $(HEADERS)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-test_support:test_support.o $(HEADERS)
-	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
-
-test_variants:test_variants.o $(HEADERS)
+$(PROGRAMS):%:%.o $(LIBRARY)
 	$(MY_CXX) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
 test:$(PROGRAMS)
 	$(foreach PROG,$(PROGRAMS),./$(PROG) || exit 1;)
 
 clean:
-	rm -f $(PROGRAMS) $(OBJS)
+	rm -f $(PROGRAMS) *.o
