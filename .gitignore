@@ -3,6 +3,12 @@
 *.o
 *.a
 
+# Build directories
+bin
+lib
+obj
+build
+
 # Tools
 build_gbwt
 build_ri
@@ -18,10 +24,6 @@ test_queries
 test_support
 test_variants
 
-# Legacy tools
-prepare_text
-metadata
-
 # Mac
 .DS_Store
 
@@ -30,9 +32,6 @@ metadata
 
 # vim
 \#*
-
-# cmake
-build
 
 # vscode
 .vscode
