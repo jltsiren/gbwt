@@ -478,7 +478,7 @@ class StringArray
 public:
   typedef gbwt::size_type size_type;
 
-  StringArray() : index(1, 0) {}
+  StringArray() : index(1, 0, 1) {}
   StringArray(const std::vector<std::string>& source);
   StringArray(const std::map<std::string, std::string>& source);
   StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<view_type(size_type)>& sequence);
