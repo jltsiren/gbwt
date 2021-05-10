@@ -1,6 +1,6 @@
 # Simple-SDS serialization format
 
-Version 5. Updated 2021-05-08.
+Version 5. Updated 2021-05-10.
 
 ## Basics
 
@@ -188,6 +188,9 @@ Serialization format for metadata:
 
 The number of path names must be either `0` or equal to the number of original paths in the GBWT index.
 The number of sample/contig names must be either `0` or equal to the sample / contig count in the header.
+
+**Note:** The absence of names is indicated by an empty structure instead of an absent optional structure.
+An optional structure implies that the data is optional, while the names are the core of the metadata.
 
 ### Metadata header
 
