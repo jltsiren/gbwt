@@ -1609,15 +1609,23 @@ StringArray::StringArray(size_type n, const std::function<bool(size_type)>& choo
   this->index[chosen] = total;
 }
 
+// This has a separate implementation, because we cannot take a view of a temporary string.
 StringArray::StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence)
 {
-  *this = StringArray(n, [](size_type) -> bool
+  size_type total_length = 0;
+  for(size_type i = 0; i < n; i++) { total_length += length(i); }
+  this->index = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
+  this->strings.reserve(total_length);
+
+  size_type total = 0;
+  for(size_type i = 0; i < n; i++)
   {
-    return true;
-  }, length, [&](size_type i) -> view_type
-  {
-    return str_to_view(sequence(i));
-  });
+    std::string str = sequence(i);
+    this->index[i] = total;
+    this->strings.insert(this->strings.end(), str.begin(), str.end());
+    total += str.length();
+  }
+  this->index[n] = total;
 }
 
 void
