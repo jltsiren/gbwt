@@ -67,7 +67,7 @@ if [ $? != 0 ]; then
 fi
 cp "${LIBRARY_DIR}/${LIBRARY}" "${PREFIX}/${LIBRARY_DIR}" 2> /dev/null
 if [ $? != 0 ]; then
-	echo "Error: Could not install the headers."
+	echo "Error: Could not install the library."
 	exit 1
 fi
 
