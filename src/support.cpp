@@ -1685,7 +1685,9 @@ StringArray::simple_sds_serialize(std::ostream& out) const
 {
   // Compress the index without the past-the-end sentinel.
   {
-    sdsl::sd_vector<> v(this->index.begin(), this->index.end() - 1);
+    sdsl::sd_vector_builder builder(this->index[this->size()], this->size());
+    for(size_type i = 0; i + 1 < this->index.size(); i++) { builder.set_unsafe(this->index[i]); }
+    sdsl::sd_vector<> v(builder);
     v.simple_sds_serialize(out);
   }
 
@@ -1713,9 +1715,10 @@ StringArray::simple_sds_load(std::istream& in)
   // Decompress the index.
   {
     sdsl::sd_vector<> v; v.simple_sds_load(in);
-    this->index = sdsl::int_vector<>(v.ones() + 1, 0);
+    this->index = sdsl::int_vector<>(v.ones() + 1, 0, sdsl::bits::length(v.size()));
     size_type i = 0;
     for(auto iter = v.one_begin(); iter != v.one_end(); ++iter, i++) { this->index[i] = iter->second; }
+    this->index[this->size()] = v.size();
   }
 
   // Load the alphabet.
@@ -1729,10 +1732,6 @@ StringArray::simple_sds_load(std::istream& in)
     for(auto c : compressed) { this->strings.push_back(comp_to_char[c]); }
   }
 
-  // Add past-the-end sentinel and bit-compress the index.
-  this->index[this->index.size() - 1] = this->strings.size();
-  sdsl::util::bit_compress(this->index);
-
   this->sanityChecks();
 }
 
@@ -1742,10 +1741,7 @@ StringArray::simple_sds_size() const
   size_t result = 0;
 
   // Compress the index without the past-the-end sentinel.
-  {
-    sdsl::sd_vector<> v(this->index.begin(), this->index.end() - 1);
-    result += v.simple_sds_size();
-  }
+  result += sdsl::sd_vector<>::simple_sds_size(this->index[this->size()], this->size());
 
   // Determine the alphabet.
   std::vector<std::uint8_t> char_to_comp;
@@ -1755,14 +1751,7 @@ StringArray::simple_sds_size() const
   result += comp_to_char.simple_sds_size();
 
   // Compress the strings.
-  {
-    sdsl::int_vector<> compressed(this->strings.size(), 0, sdsl::bits::length(sigma - 1));
-    for(size_type i = 0; i < this->strings.size(); i++)
-    {
-      compressed[i] = char_to_comp[static_cast<uint8_t>(this->strings[i])];
-    }
-    result += compressed.simple_sds_size();
-  }
+  result += sdsl::int_vector<>::simple_sds_size(this->strings.size(), sdsl::bits::length(sigma - 1));
 
   return result;
 }

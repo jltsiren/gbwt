@@ -22,6 +22,7 @@ Serialization format for string arrays:
 The serialization format uses alphabet compaction.
 `alphabet` and `strings` can be decompressed into a vector of bytes as `bytes[i] = alphabet[strings[i]]`.
 The sequence of bytes from `bytes[index.select(i)]` (inclusive) to `bytes[index.select(i + 1)]` (exclusive) encodes the `i`th string using UTF-8.
+The length of `index` must be equal to the length of `strings`.
 
 ### Dictionary
 
