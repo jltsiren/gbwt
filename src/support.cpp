@@ -25,6 +25,7 @@
 
 #include <gbwt/internal.h>
 
+#include <cctype>
 #include <unordered_set>
 
 namespace gbwt
@@ -2097,6 +2098,163 @@ Dictionary::smaller_by_id(view_type a, size_type b) const
 {
   view_type second = this->strings.view(b);
   return stringCompare(a.first, a.first + a.second, second.first, second.first + second.second);
+}
+
+//------------------------------------------------------------------------------
+
+Tags::Tags()
+{
+}
+
+Tags::Tags(const Tags& source)
+{
+  this->copy(source);
+}
+
+Tags::Tags(Tags&& source)
+{
+  *this = std::move(source);
+}
+
+Tags::~Tags()
+{
+}
+
+void
+Tags::swap(Tags& another)
+{
+  if(this != &another)
+  {
+    this->tags.swap(another.tags);
+  }
+}
+
+Tags&
+Tags::operator=(const Tags& source)
+{
+  if(this != &source) { this->copy(source); }
+  return *this;
+}
+
+Tags&
+Tags::operator=(Tags&& source)
+{
+  if(this != &source)
+  {
+    this->tags = std::move(source.tags);
+  }
+  return *this;
+}
+
+size_type
+Tags::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
+{
+  sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
+  size_type written_bytes = 0;
+
+  {
+    StringArray linearized(this->tags);
+    written_bytes += linearized.serialize(out, child, "tags");
+  }
+
+  sdsl::structure_tree::add_size(child, written_bytes);
+  return written_bytes;
+}
+
+void
+Tags::load(std::istream& in)
+{
+  StringArray linearized; linearized.load(in);
+  this->build(linearized);
+}
+
+void
+Tags::simple_sds_serialize(std::ostream& out) const
+{
+  StringArray linearized(this->tags);
+  linearized.simple_sds_serialize(out);
+}
+
+void
+Tags::simple_sds_load(std::istream& in)
+{
+  StringArray linearized; linearized.simple_sds_load(in);
+  this->build(linearized);
+}
+
+size_t
+Tags::simple_sds_size() const
+{
+  StringArray linearized(this->tags);
+  return linearized.simple_sds_size();
+}
+
+void
+Tags::copy(const Tags& source)
+{
+  this->tags = source.tags;
+}
+
+void
+Tags::build(const StringArray& source)
+{
+  if(source.size() % 2 != 0)
+  {
+    throw sdsl::simple_sds::InvalidData("Tags: Key without a value");
+  }
+
+  this->tags.clear();
+  for(size_type i = 0; i < source.size(); i += 2)
+  {
+    std::string key = source.str(i);
+    for(auto iter = key.begin(); iter != key.end(); ++iter) { *iter = std::tolower(*iter); }
+    this->tags[key] = source.str(i + 1);
+  }
+
+  if(this->tags.size() != source.size() / 2)
+  {
+    throw sdsl::simple_sds::InvalidData("Tags: Duplicate keys");
+  }
+}
+
+bool
+Tags::operator==(const Tags& another) const
+{
+  return (this->tags == another.tags);
+}
+
+void
+Tags::set(const std::string& key, const std::string& value)
+{
+  this->tags[normalize(key)] = value;
+}
+
+std::string
+Tags::get(const std::string& key) const
+{
+  auto iter = this->tags.find(normalize(key));
+  if(iter == this->tags.end()) { return std::string(); }
+  return iter->second;
+}
+
+bool
+Tags::contains(const std::string& key) const
+{
+  return (this->tags.find(normalize(key)) != this->tags.end());
+}
+
+void
+Tags::clear()
+{
+  *this = Tags();
+}
+
+std::string
+Tags::normalize(const std::string& key)
+{
+  std::string normalized = key;
+  for(auto iter = normalized.begin(); iter != normalized.end(); ++iter) { *iter = std::tolower(*iter); }
+  return normalized;
 }
 
 //------------------------------------------------------------------------------

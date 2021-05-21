@@ -134,7 +134,8 @@ main(int argc, char** argv)
   }
   if(list_tags)
   {
-    for(auto iter = index.tags.begin(); iter != index.tags.end(); ++iter)
+    // TODO: The `Tags` structure could support iteration directly.
+    for(auto iter = index.tags.tags.begin(); iter != index.tags.tags.end(); ++iter)
     {
       std::cout << iter->first << " = " << iter->second << std::endl;
     }

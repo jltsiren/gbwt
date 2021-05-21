@@ -1,6 +1,6 @@
 # Simple-SDS serialization format
 
-Version 5. Updated 2021-05-10.
+GBWT version 5, Metadata version 2. Updated 2021-05-21.
 
 ## Basics
 
@@ -35,6 +35,18 @@ Serialization format for dictionaries:
 
 Permutation `sorted_ids` stores the identifiers of the strings in lexicographic order.
 Strings can be mapped to their identifiers using binary search in the permutation.
+
+### Tags
+
+**Tags** are key-value pairs that can be used for arbitrary annotations.
+Both keys and values are strings.
+
+Serialization format for tags:
+
+1. Keys and values as a string array.
+
+Keys are case-insensitive, and they must be distinct.
+The key of tag `i` is string `2 * i` and the value is string `2 * i + 1`.
 
 ### Byte code
 
@@ -78,6 +90,10 @@ A bidirectional index also stores each **original path** as two **GBWT paths**.
 The forward sequence for original path `i` is stored as GBWT path `2 * i`.
 The reverse sequence, which visits the opposite strands of each node in reverse order, is stored as GBWT path `2 * i + 1`.
 
+If key `source` is present in the tags, the corresponding value indicates the GBWT implementation used for serializing the structure.
+The reader may use that information for determining if it can understand the serialization formats for unspecified optional structures.
+The original GBWT implementation is `jltsiren/gbwt`.
+
 ### GBWT header
 
 **GBWT header** is a 48-byte (6-element) structure with the following fields:
@@ -110,22 +126,6 @@ The following flags are supported:
 Other flag bits must not be set.
 The metadata flag must be set if and only if the metadata structure is present.
 If the simple-sds bit is not set, the serialized data is in the SDSL format.
-
-### Tags
-
-**Tags** are key-value pairs that can be used for arbitrary annotations.
-Both keys and values are strings.
-
-Serialization format for tags:
-
-1. Keys and values as a string array.
-
-Keys are case-insensitive, and they must be distinct.
-The key of tag `i` is string `2 * i` and the value is string `2 * i + 1`.
-
-If key `source` is present, the corresponding value indicates the GBWT implementation used for serializing the structure.
-The reader may use that information for determining if it can understand the serialization formats for unspecified optional structures.
-The original GBWT implementation is `jltsiren/gbwt`.
 
 ### BWT
 
