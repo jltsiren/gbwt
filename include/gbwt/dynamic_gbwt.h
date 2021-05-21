@@ -319,10 +319,10 @@ public:
 
 //------------------------------------------------------------------------------
 
-  GBWTHeader                         header;
-  std::map<std::string, std::string> tags;
-  std::vector<DynamicRecord>         bwt;
-  Metadata                           metadata;
+  GBWTHeader                 header;
+  Tags                       tags;
+  std::vector<DynamicRecord> bwt;
+  Metadata                   metadata;
 
 //------------------------------------------------------------------------------
 
