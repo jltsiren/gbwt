@@ -606,6 +606,51 @@ private:
 
 //------------------------------------------------------------------------------
 
+class Tags
+{
+public:
+  typedef gbwt::size_type size_type;
+
+  std::map<std::string, std::string> tags;
+
+  Tags();
+  Tags(const Tags& source);
+  Tags(Tags&& source);
+  ~Tags();
+
+  void swap(Tags& another);
+  Tags& operator=(const Tags& source);
+  Tags& operator=(Tags&& source);
+
+  size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
+  void load(std::istream& in);
+
+  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_load(std::istream& in);
+  size_t simple_sds_size() const;
+
+  bool operator==(const Tags& another) const;
+  bool operator!=(const Tags& another) const { return !(this->operator==(another)); }
+
+  void set(const std::string& key, const std::string& value);
+
+  // Returns an empty string if the key does not exist.
+  std::string get(const std::string& key) const;
+
+  bool contains(const std::string& key) const;
+
+  void clear();
+
+  size_type size() const { return this->tags.size(); }
+  bool empty() const { return (this->size() == 0); }
+
+private:
+  void copy(const Tags& source);
+  void build(const StringArray& source);
+};
+
+//------------------------------------------------------------------------------
+
 } // namespace gbwt
 
 #endif // GBWT_SUPPORT_H

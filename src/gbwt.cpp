@@ -28,8 +28,6 @@
 #include <gbwt/dynamic_gbwt.h>
 #include <gbwt/internal.h>
 
-#include <cctype>
-
 namespace gbwt
 {
 
