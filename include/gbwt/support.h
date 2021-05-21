@@ -647,6 +647,7 @@ public:
 private:
   void copy(const Tags& source);
   void build(const StringArray& source);
+  static std::string normalize(const std::string& key);
 };
 
 //------------------------------------------------------------------------------

@@ -2226,13 +2226,13 @@ Tags::operator==(const Tags& another) const
 void
 Tags::set(const std::string& key, const std::string& value)
 {
-  this->tags[key] = value;
+  this->tags[normalize(key)] = value;
 }
 
 std::string
 Tags::get(const std::string& key) const
 {
-  auto iter = this->tags.find(key);
+  auto iter = this->tags.find(normalize(key));
   if(iter == this->tags.end()) { return std::string(); }
   return iter->second;
 }
@@ -2240,13 +2240,21 @@ Tags::get(const std::string& key) const
 bool
 Tags::contains(const std::string& key) const
 {
-  return (this->tags.find(key) != this->tags.end());
+  return (this->tags.find(normalize(key)) != this->tags.end());
 }
 
 void
 Tags::clear()
 {
   *this = Tags();
+}
+
+std::string
+Tags::normalize(const std::string& key)
+{
+  std::string normalized = key;
+  for(auto iter = normalized.begin(); iter != normalized.end(); ++iter) { *iter = std::tolower(*iter); }
+  return normalized;
 }
 
 //------------------------------------------------------------------------------

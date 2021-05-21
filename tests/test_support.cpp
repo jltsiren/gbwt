@@ -167,14 +167,9 @@ TEST_F(StringArrayTest, SerializeEmpty)
   StringArray original(truth);
 
   std::string filename = TempFile::getName("string-array");
-  std::ofstream out(filename, std::ios_base::binary);
-  original.serialize(out);
-  out.close();
+  sdsl::store_to_file(original, filename);
 
-  StringArray copy;
-  std::ifstream in(filename, std::ios_base::binary);
-  copy.load(in);
-  in.close();
+  StringArray copy; sdsl::load_from_file(copy, filename);
   ASSERT_EQ(copy, original) << "Serialization changed the empty array";
 
   TempFile::remove(filename);
@@ -186,9 +181,7 @@ TEST_F(StringArrayTest, CompressEmpty)
   StringArray original(truth);
 
   std::string filename = TempFile::getName("string-array");
-  std::ofstream out(filename, std::ios_base::binary);
-  original.simple_sds_serialize(out);
-  out.close();
+  sdsl::simple_sds::serialize_to(original, filename);
 
   StringArray copy;
   std::ifstream in(filename, std::ios_base::binary);
@@ -212,14 +205,9 @@ TEST_F(StringArrayTest, SerializeNonEmpty)
   StringArray original(truth);
 
   std::string filename = TempFile::getName("string-array");
-  std::ofstream out(filename, std::ios_base::binary);
-  original.serialize(out);
-  out.close();
+  sdsl::store_to_file(original, filename);
 
-  StringArray copy;
-  std::ifstream in(filename, std::ios_base::binary);
-  copy.load(in);
-  in.close();
+  StringArray copy; sdsl::load_from_file(copy, filename);
   ASSERT_EQ(copy, original) << "Serialization changed the non-empty array";
 
   TempFile::remove(filename);
@@ -237,9 +225,7 @@ TEST_F(StringArrayTest, CompressNonEmpty)
   StringArray original(truth);
 
   std::string filename = TempFile::getName("string-array");
-  std::ofstream out(filename, std::ios_base::binary);
-  original.simple_sds_serialize(out);
-  out.close();
+  sdsl::simple_sds::serialize_to(original, filename);
 
   StringArray copy;
   std::ifstream in(filename, std::ios_base::binary);
@@ -266,9 +252,7 @@ TEST_F(StringArrayTest, CompressWithEmptyString)
   StringArray original(truth);
 
   std::string filename = TempFile::getName("string-array");
-  std::ofstream out(filename, std::ios_base::binary);
-  original.simple_sds_serialize(out);
-  out.close();
+  sdsl::simple_sds::serialize_to(original, filename);
 
   StringArray copy;
   std::ifstream in(filename, std::ios_base::binary);
@@ -422,6 +406,161 @@ TEST(DictionaryTest, Serialization)
   in.close();
   TempFile::remove(simple_sds_filename);
   EXPECT_EQ(original, simple_sds_copy) << "Simple-SDS serialization failed";
+}
+
+//------------------------------------------------------------------------------
+
+class TagsTest : public ::testing::Test
+{
+public:
+  void check_tags(const Tags& tags, const std::map<std::string, std::string>& truth) const
+  {
+    ASSERT_EQ(tags.size(), truth.size()) << "Incorrect tags size";
+    ASSERT_EQ(tags.empty(), truth.empty()) << "Incorrect emptiness";
+
+    for(auto iter = truth.begin(); iter != truth.end(); ++iter)
+    {
+      EXPECT_TRUE(tags.contains(iter->first)) << "Key " << iter->first << " is missing";
+      EXPECT_EQ(tags.get(iter->first), iter->second) << "Invalid value for key " << iter->first;
+    }
+  }
+
+  void check_file_size(const Tags& original, std::ifstream& in) const
+  {
+    size_type expected_size = original.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
+    size_type file_size = fileSize(in);
+    ASSERT_EQ(expected_size, file_size) << "Incorrect file size";
+  }
+};
+
+TEST_F(TagsTest, Empty)
+{
+  std::map<std::string, std::string> truth;
+  Tags tags;
+  this->check_tags(tags, truth);
+}
+
+TEST_F(TagsTest, NonEmpty)
+{
+  std::map<std::string, std::string> truth
+  {
+    { "first-key", "first-value" },
+    { "second-key", "second-value" },
+    { "third-key", "third-value" },
+  };
+  Tags tags;
+  for(auto iter = truth.begin(); iter != truth.end(); ++iter) { tags.set(iter->first, iter->second); }
+  this->check_tags(tags, truth);
+}
+
+TEST_F(TagsTest, MissingKeys)
+{
+  std::map<std::string, std::string> truth
+  {
+    { "first-key", "first-value" },
+    { "second-key", "second-value" },
+    { "third-key", "third-value" },
+  };
+  Tags tags;
+  for(auto iter = truth.begin(); iter != truth.end(); ++iter) { tags.set(iter->first, iter->second); }
+
+  ASSERT_FALSE(tags.contains("key")) << "Tags contains an invalid key";
+  ASSERT_TRUE(tags.get("key").empty()) << "Non-empty value for an invalid key";
+}
+
+TEST_F(TagsTest, NormalizedKeys)
+{
+  std::map<std::string, std::string> source
+  {
+    { "First-Key", "first-value" },
+    { "Second-Key", "second-value" },
+    { "Third-Key", "third-value" },
+  };
+  Tags tags;
+  for(auto iter = source.begin(); iter != source.end(); ++iter) { tags.set(iter->first, iter->second); }
+  this->check_tags(tags, source); // Check with the original keys.
+
+  std::map<std::string, std::string> truth
+  {
+    { "first-key", "first-value" },
+    { "second-key", "second-value" },
+    { "third-key", "third-value" },
+  };
+  this->check_tags(tags, truth); // Check with normalized keys.
+}
+
+TEST_F(TagsTest, SerializeEmpty)
+{
+  Tags original;
+
+  std::string filename = TempFile::getName("tags");
+  sdsl::store_to_file(original, filename);
+
+  Tags copy; sdsl::load_from_file(copy, filename);
+  ASSERT_EQ(copy, original) << "Serialization changed empty tags";
+
+  TempFile::remove(filename);
+}
+
+TEST_F(TagsTest, CompressEmpty)
+{
+  Tags original;
+
+  std::string filename = TempFile::getName("tags");
+  sdsl::simple_sds::serialize_to(original, filename);
+
+  Tags copy;
+  std::ifstream in(filename, std::ios_base::binary);
+  this->check_file_size(original, in);
+  copy.simple_sds_load(in);
+  in.close();
+  ASSERT_EQ(copy, original) << "Compression changed empty tags";
+
+  TempFile::remove(filename);
+}
+
+TEST_F(TagsTest, SerializeNonEmpty)
+{
+  std::map<std::string, std::string> truth
+  {
+    { "first-key", "first-value" },
+    { "second-key", "second-value" },
+    { "third-key", "third-value" },
+  };
+  Tags original;
+  for(auto iter = truth.begin(); iter != truth.end(); ++iter) { original.set(iter->first, iter->second); }
+
+  std::string filename = TempFile::getName("tags");
+  sdsl::store_to_file(original, filename);
+
+  Tags copy; sdsl::load_from_file(copy, filename);
+  ASSERT_EQ(copy, original) << "Serialization changed non-empty tags";
+
+  TempFile::remove(filename);
+}
+
+TEST_F(TagsTest, CompressNonEmpty)
+{
+  std::map<std::string, std::string> truth
+  {
+    { "first-key", "first-value" },
+    { "second-key", "second-value" },
+    { "third-key", "third-value" },
+  };
+  Tags original;
+  for(auto iter = truth.begin(); iter != truth.end(); ++iter) { original.set(iter->first, iter->second); }
+
+  std::string filename = TempFile::getName("tags");
+  sdsl::simple_sds::serialize_to(original, filename);
+
+  Tags copy;
+  std::ifstream in(filename, std::ios_base::binary);
+  this->check_file_size(original, in);
+  copy.simple_sds_load(in);
+  in.close();
+  ASSERT_EQ(copy, original) << "Compression changed non-empty tags";
+
+  TempFile::remove(filename);
 }
 
 //------------------------------------------------------------------------------
