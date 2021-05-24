@@ -294,7 +294,7 @@ DynamicGBWT::simple_sds_size() const
   }
   {
     DASamples compressed_samples(this->bwt);
-    result += compressed_samples.simple_sds_size();
+    result += sdsl::simple_sds::option_size(compressed_samples);
   }
   if(this->hasMetadata()) { result += sdsl::simple_sds::option_size(this->metadata); }
   else { result += sdsl::simple_sds::empty_option_size(); }

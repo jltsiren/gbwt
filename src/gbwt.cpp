@@ -246,7 +246,7 @@ GBWT::simple_sds_size() const
   size_t result = sdsl::simple_sds::value_size(this->header);
   result += this->tags.simple_sds_size();
   result += this->bwt.simple_sds_size();
-  result += this->da_samples.simple_sds_size();
+  result += sdsl::simple_sds::option_size(this->da_samples);
   if(this->hasMetadata()) { result += sdsl::simple_sds::option_size(this->metadata); }
   else { result += sdsl::simple_sds::empty_option_size(); }
   return result;
