@@ -1686,7 +1686,7 @@ StringArray::simple_sds_serialize(std::ostream& out) const
 {
   // Compress the index without the past-the-end sentinel.
   {
-    sdsl::sd_vector_builder builder(this->index[this->size()], this->size());
+    sdsl::sd_vector_builder builder(this->index[this->size()], this->size(), true);
     for(size_type i = 0; i + 1 < this->index.size(); i++) { builder.set_unsafe(this->index[i]); }
     sdsl::sd_vector<> v(builder);
     v.simple_sds_serialize(out);
