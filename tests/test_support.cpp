@@ -237,17 +237,19 @@ TEST_F(StringArrayTest, CompressNonEmpty)
   TempFile::remove(filename);
 }
 
-TEST_F(StringArrayTest, CompressWithEmptyString)
+TEST_F(StringArrayTest, CompressWithEmptyStrings)
 {
   // Here we test that the compression still works when there is an empty
   // string in the middle and the sd_vector used for the offsets contains
-  // duplicate values.
+  // duplicate values. There is also an empty string at the end, as this
+  // used to fail in the past.
   std::vector<std::string> truth
   {
     "first",
     "second",
     "",
-    "fourth"
+    "fourth",
+    ""
   };
   StringArray original(truth);
 
@@ -259,7 +261,7 @@ TEST_F(StringArrayTest, CompressWithEmptyString)
   this->check_file_size(original, in);
   copy.simple_sds_load(in);
   in.close();
-  ASSERT_EQ(copy, original) << "Compression changed the array with an empty string in the middle";
+  ASSERT_EQ(copy, original) << "Compression changed the array with empty strings";
 
   TempFile::remove(filename);
 }

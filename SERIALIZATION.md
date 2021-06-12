@@ -1,6 +1,6 @@
 # Simple-SDS serialization format
 
-GBWT version 5, Metadata version 2. Updated 2021-05-21.
+GBWT version 5, Metadata version 2. Updated 2021-06-12.
 
 ## Basics
 
@@ -22,7 +22,10 @@ Serialization format for string arrays:
 The serialization format uses alphabet compaction.
 `alphabet` and `strings` can be decompressed into a vector of bytes as `bytes[i] = alphabet[strings[i]]`.
 The sequence of bytes from `bytes[index.select(i)]` (inclusive) to `bytes[index.select(i + 1)]` (exclusive) encodes the `i`th string using UTF-8.
-The length of `index` must be equal to the length of `strings`.
+For the last string, the upper bound is the length of `strings`.
+
+**Note:** The length of `index` is not necessarily the same as the length of `strings`.
+In particular, if the last string is empty, the last value in `index` is the same as the length of `strings`.
 
 ### Dictionary
 

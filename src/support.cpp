@@ -1686,9 +1686,7 @@ StringArray::simple_sds_serialize(std::ostream& out) const
 {
   // Compress the index without the past-the-end sentinel.
   {
-    sdsl::sd_vector_builder builder(this->index[this->size()], this->size(), true);
-    for(size_type i = 0; i + 1 < this->index.size(); i++) { builder.set_unsafe(this->index[i]); }
-    sdsl::sd_vector<> v(builder);
+    sdsl::sd_vector<> v(this->index.begin(), this->index.end() - 1);
     v.simple_sds_serialize(out);
   }
 
@@ -1713,14 +1711,9 @@ StringArray::simple_sds_serialize(std::ostream& out) const
 void
 StringArray::simple_sds_load(std::istream& in)
 {
-  // Decompress the index.
-  {
-    sdsl::sd_vector<> v; v.simple_sds_load(in);
-    this->index = sdsl::int_vector<>(v.ones() + 1, 0, sdsl::bits::length(v.size()));
-    size_type i = 0;
-    for(auto iter = v.one_begin(); iter != v.one_end(); ++iter, i++) { this->index[i] = iter->second; }
-    this->index[this->size()] = v.size();
-  }
+  // Load the index. We cannot compress it yet because we do not know the width of the sentinel
+  // value `strings.size()`.
+  sdsl::sd_vector<> v; v.simple_sds_load(in);
 
   // Load the alphabet.
   sdsl::int_vector<8> comp_to_char;
@@ -1733,6 +1726,12 @@ StringArray::simple_sds_load(std::istream& in)
     for(auto c : compressed) { this->strings.push_back(comp_to_char[c]); }
   }
 
+  // Decompress the index.
+  this->index = sdsl::int_vector<>(v.ones() + 1, 0, sdsl::bits::length(this->strings.size()));
+  size_t i = 0;
+  for(auto iter = v.one_begin(); iter != v.one_end(); ++iter, i++) { this->index[i] = iter->second; }
+  this->index[this->size()] = this->strings.size();
+
   this->sanityChecks();
 }
 
@@ -1742,7 +1741,8 @@ StringArray::simple_sds_size() const
   size_t result = 0;
 
   // Compress the index without the past-the-end sentinel.
-  result += sdsl::sd_vector<>::simple_sds_size(this->index[this->size()], this->size());
+  size_t universe = (this->empty() ? 0 : this->index[this->size() - 1] + 1);
+  result += sdsl::sd_vector<>::simple_sds_size(universe, this->size());
 
   // Determine the alphabet.
   std::vector<std::uint8_t> char_to_comp;
