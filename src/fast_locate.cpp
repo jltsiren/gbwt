@@ -74,10 +74,30 @@ FastLocate::Header::load(std::istream& in)
   sdsl::read_member(this->flags, in);
 }
 
-bool
+void
 FastLocate::Header::check() const
 {
-  return (this->tag == TAG && this->version == VERSION && this->flags == 0);
+  if(this->tag != TAG)
+  {
+    throw sdsl::simple_sds::InvalidData("FastLocate: Invalid tag");
+  }
+
+  if(this->version != VERSION)
+  {
+    std::string msg = "FastLocate: Expected v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
+    throw sdsl::simple_sds::InvalidData(msg);
+  }
+
+  std::uint64_t mask = 0;
+  switch(this->version)
+  {
+  case VERSION:
+    mask = 0; break;
+  }
+  if((this->flags & mask) != this->flags)
+  {
+    throw sdsl::simple_sds::InvalidData("FastLocate: Invalid flags");
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -157,10 +177,7 @@ void
 FastLocate::load(std::istream& in)
 {
   this->header.load(in);
-  if(!(this->header.check()))
-  {
-    throw sdsl::simple_sds::InvalidData("FastLocate: Invalid header");
-  }
+  this->header.check();
   this->header.setVersion(); // Update to the current version.
 
   this->samples.load(in);

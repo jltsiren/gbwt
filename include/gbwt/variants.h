@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2019 Jouni Siren
+  Copyright (c) 2018, 2019, 2021 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -117,7 +117,9 @@ public:
   std::uint32_t version;
   std::uint64_t flags;
 
-  bool check() const;
+  // Throws `sdsl::simple_sds::InvalidData` if the header is invalid.
+  void check() const;
+
   void setVersion() { this->version = VERSION; }
   void set(std::uint64_t flag) { this->flags |= flag; }
   void unset(std::uint64_t flag) { this->flags &= ~flag; }

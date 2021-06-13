@@ -98,7 +98,9 @@ public:
 
     size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
     void load(std::istream& in);
-    bool check() const;
+
+    // Throws `sdsl::simple_sds::InvalidData` if the header is invalid.
+    void check() const;
 
     void setVersion() { this->version = VERSION; }
     void set(std::uint64_t flag) { this->flags |= flag; }

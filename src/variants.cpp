@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2019 Jouni Siren
+  Copyright (c) 2018, 2019, 2021 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -180,12 +180,9 @@ VariantPaths::load(std::istream& in)
   sdsl::read_member(this->version, in);
   sdsl::read_member(this->flags, in);
 
-  // Check header.
-  if(!(this->check()))
-  {
-    throw sdsl::simple_sds::InvalidData("VariantPaths: Invalid header");
-  }
-  this->setVersion(); // Update to the current version.
+  // Check the header and update to the current version.
+  this->check();
+  this->setVersion();
 
   loadVector(this->reference, in);
   loadVector(this->ref_starts, in);
@@ -202,16 +199,29 @@ VariantPaths::load(std::istream& in)
   if(this->hasContigName()) { sdsl::read_member(this->contig_name, in); }
 }
 
-bool
+void
 VariantPaths::check() const
 {
-  if(this->tag != TAG) { return false; }
+  if(this->tag != TAG)
+  {
+    throw sdsl::simple_sds::InvalidData("VariantPaths: Invalid tag");
+  }
+
+  if(this->version != VERSION)
+  {
+    std::string msg = "VariantPaths: Expected v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
+    throw sdsl::simple_sds::InvalidData(msg);
+  }
+
+  std::uint64_t mask = 0;
   switch(this->version)
   {
   case VERSION:
-    return ((this->flags & FLAG_MASK) == this->flags);
-  default:
-    return false;
+    mask = FLAG_MASK; break;
+  }
+  if((this->flags & mask) != this->flags)
+  {
+    throw sdsl::simple_sds::InvalidData("VariantPaths: Invalid flags");
   }
 }
 

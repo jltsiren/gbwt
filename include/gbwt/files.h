@@ -104,7 +104,9 @@ struct GBWTHeader
   // simple-sds serialization sees the header as a serializable value.
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
-  bool check() const;
+
+  // Throws `sdsl::simple_sds::InvalidData` if the header is invalid.
+  void check() const;
 
   void setVersion() { this->version = VERSION; }
 
@@ -167,8 +169,10 @@ struct MetadataHeader
   // simple-sds serialization sees the header as a serializable value.
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
-  bool check() const;
-  bool check_simple_sds() const;
+
+  // Throws `sdsl::simple_sds::InvalidData` if the header is invalid.
+  void check() const;
+  void check_simple_sds() const;
 
   void setVersion() { this->version = VERSION; }
 

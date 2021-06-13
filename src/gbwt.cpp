@@ -153,10 +153,7 @@ GBWT::load(std::istream& in)
 {
   // Read the header.
   GBWTHeader h = sdsl::simple_sds::load_value<GBWTHeader>(in);
-  if(!(h.check()))
-  {
-    throw sdsl::simple_sds::InvalidData("GBWT: Invalid header");
-  }
+  h.check();
   bool simple_sds = h.get(GBWTHeader::FLAG_SIMPLE_SDS);
   bool has_tags = h.version >= 5; // FIXME Replace with symbolic constant.
   h.unset(GBWTHeader::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.

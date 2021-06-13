@@ -77,10 +77,7 @@ Metadata::load(std::istream& in)
 {
   // Load and check the header.
   this->header.load(in);
-  if(!(this->header.check()))
-  {
-    throw sdsl::simple_sds::InvalidData("Metadata: Invalid header");
-  }
+  this->header.check();
   bool old_version = (this->header.version < MetadataHeader::VERSION);
   this->header.setVersion(); // Update to the current version.
 
@@ -116,10 +113,7 @@ Metadata::simple_sds_load(std::istream& in)
 {
   // Header.
   this->header = sdsl::simple_sds::load_value<MetadataHeader>(in);
-  if(!(this->header.check_simple_sds()))
-  {
-    throw sdsl::simple_sds::InvalidData("Metadata: Invalid header");
-  }
+  this->header.check_simple_sds();
   this->header.setVersion(); // Update to the current version.
 
   // Path / sample / contig names.

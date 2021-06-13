@@ -99,24 +99,37 @@ GBWTHeader::load(std::istream& in)
   sdsl::read_member(this->flags, in);
 }
 
-bool
+void
 GBWTHeader::check() const
 {
-  if(this->tag != TAG) { return false; }
+  if(this->tag != TAG)
+  {
+    throw sdsl::simple_sds::InvalidData("GBWTHeader: Invalid tag");
+  }
+
+  if(this->version > VERSION || this->version < OLD_VERSION)
+  {
+    std::string msg = "GBWTHeader: Expected v" + std::to_string(OLD_VERSION) + " to v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
+    throw sdsl::simple_sds::InvalidData(msg);
+  }
+
+  std::uint64_t mask = 0;
   switch(this->version)
   {
   case VERSION:
-    return ((this->flags & FLAG_MASK) == this->flags);
+    mask = FLAG_MASK; break;
   case META2_VERSION:
-    return ((this->flags & META2_FLAG_MASK) == this->flags);
+    mask = META2_FLAG_MASK; break;
   case META_VERSION:
-    return ((this->flags & META_FLAG_MASK) == this->flags);
+    mask = META_FLAG_MASK; break;
   case BD_VERSION:
-    return ((this->flags & BD_FLAG_MASK) == this->flags);
+    mask = BD_FLAG_MASK; break;
   case OLD_VERSION:
-    return ((this->flags & OLD_FLAG_MASK) == this->flags);
-  default:
-    return false;
+    mask = OLD_FLAG_MASK; break;
+  }
+  if((this->flags & mask) != this->flags)
+  {
+    throw sdsl::simple_sds::InvalidData("GBWTHeader: Invalid flags");
   }
 }
 
@@ -191,33 +204,59 @@ MetadataHeader::load(std::istream& in)
   sdsl::read_member(this->flags, in);
 }
 
-bool
+void
 MetadataHeader::check() const
 {
-  if(this->tag != TAG) { return false; }
+  if(this->tag != TAG)
+  {
+    throw sdsl::simple_sds::InvalidData("MetadataHeader: Invalid tag");
+  }
+
+  if(this->version > VERSION || this->version < INITIAL_VERSION)
+  {
+    std::string msg = "MetadataHeader: Expected v" + std::to_string(INITIAL_VERSION) + " to v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
+    throw sdsl::simple_sds::InvalidData(msg);
+  }
+
+  std::uint64_t mask = 0;
   switch(this->version)
   {
   case VERSION:
-    return ((this->flags & FLAG_MASK) == this->flags);
+    mask = FLAG_MASK; break;
   case NAMES_VERSION:
-    return ((this->flags & NAMES_FLAG_MASK) == this->flags);
+    mask = NAMES_FLAG_MASK; break;
   case INITIAL_VERSION:
-    return ((this->flags & INITIAL_FLAG_MASK) == this->flags);
-  default:
-    return false;
+    mask = INITIAL_FLAG_MASK; break;
+  }
+  if((this->flags & mask) != this->flags)
+  {
+    throw sdsl::simple_sds::InvalidData("MetadataHeader: Invalid flags");
   }
 }
 
-bool
+void
 MetadataHeader::check_simple_sds() const
 {
-  if(this->tag != TAG) { return false; }
+  if(this->tag != TAG)
+  {
+    throw sdsl::simple_sds::InvalidData("MetadataHeader: Invalid tag");
+  }
+
+  if(this->version != VERSION)
+  {
+    std::string msg = "MetadataHeader: Expected v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
+    throw sdsl::simple_sds::InvalidData(msg);
+  }
+
+  std::uint64_t mask = 0;
   switch(this->version)
   {
   case VERSION:
-    return ((this->flags & FLAG_MASK) == this->flags);
-  default:
-    return false;
+    mask = FLAG_MASK; break;
+  }
+  if((this->flags & mask) != this->flags)
+  {
+    throw sdsl::simple_sds::InvalidData("MetadataHeader: Invalid flags");
   }
 }
 
