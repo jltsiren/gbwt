@@ -1660,14 +1660,14 @@ StringArray::load(std::istream& in)
 }
 
 void
-determine_alphabet(const std::vector<char>& strings, std::vector<std::uint8_t>& char_to_comp, sdsl::int_vector<8>& comp_to_char, size_type& sigma)
+determine_alphabet(const std::vector<char>& strings, std::vector<std::uint8_t>& char_to_comp, sdsl::int_vector<8>& comp_to_char, size_type& width)
 {
   char_to_comp = std::vector<std::uint8_t>(256, 0);
   for(char c : strings) { char_to_comp[static_cast<std::uint8_t>(c)] = 1; }
 
-  sigma = 0;
+  size_type sigma = 0;
   for(auto c : char_to_comp) { sigma += c; }
-  sigma = std::max(sigma, size_type(1));
+  width = sdsl::bits::length(std::max(sigma, size_type(1)) - 1);
 
   comp_to_char = sdsl::int_vector<8>(sigma, 0);
   for(size_type i = 0, found = 0; i < char_to_comp.size(); i++)
@@ -1693,13 +1693,13 @@ StringArray::simple_sds_serialize(std::ostream& out) const
   // Determine and serialize the alphabet.
   std::vector<std::uint8_t> char_to_comp;
   sdsl::int_vector<8> comp_to_char;
-  size_type sigma = 0;
-  determine_alphabet(this->strings, char_to_comp, comp_to_char, sigma);
+  size_type width = 0;
+  determine_alphabet(this->strings, char_to_comp, comp_to_char, width);
   comp_to_char.simple_sds_serialize(out);
 
   // Compress the strings.
   {
-    sdsl::int_vector<> compressed(this->strings.size(), 0, sdsl::bits::length(sigma - 1));
+    sdsl::int_vector<> compressed(this->strings.size(), 0, width);
     for(size_type i = 0; i < this->strings.size(); i++)
     {
       compressed[i] = char_to_comp[static_cast<uint8_t>(this->strings[i])];
@@ -1747,12 +1747,12 @@ StringArray::simple_sds_size() const
   // Determine the alphabet.
   std::vector<std::uint8_t> char_to_comp;
   sdsl::int_vector<8> comp_to_char;
-  size_type sigma = 0;
-  determine_alphabet(this->strings, char_to_comp, comp_to_char, sigma);
+  size_type width = 0;
+  determine_alphabet(this->strings, char_to_comp, comp_to_char, width);
   result += comp_to_char.simple_sds_size();
 
   // Compress the strings.
-  result += sdsl::int_vector<>::simple_sds_size(this->strings.size(), sdsl::bits::length(sigma - 1));
+  result += sdsl::int_vector<>::simple_sds_size(this->strings.size(), width);
 
   return result;
 }
