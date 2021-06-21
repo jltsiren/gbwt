@@ -66,13 +66,16 @@ The first byte stores bits 0 to 6 of the integer, the second byte stores bits 7 
 **Run-length encoding**, as used in the GBWT, encodes a run of `length > 0` equal integers `value` as a sequence of bytes.
 The encoding depends on the size of the **local alphabet** `sigma`.
 This assumes that the local alphabet consists of integers in the semiopen interval `0..sigma`.
-Let `run_continues = floor(256 / sigma)` be a boundary value.
 
-If `run_continues > 0`, we encode short runs as a single byte.
-If `length < run_continues`, the run is encoded as byte `value + sigma * (length - 1)`.
-Otherwise the first byte stores `value + sigma * (run_continues - 1)`.
-Subsequent bytes encode the remaining run length `length - run_continues` using byte code.
-If `run_continues == 0`, we first encode `value` and then `length - 1` using byte code.
+If `sigma < 255`, we encode short runs as a single byte.
+Let `threshold = floor(256 / sigma)` be a boundary value.
+If `length < threshold`, the run is encoded as byte `value + sigma * (length - 1)`.
+Otherwise the first byte stores `value + sigma * (threshold - 1)`.
+Subsequent bytes encode the remaining run length `length - threshold` using byte code.
+If `sigma >= 255`, we first encode `value` and then `length - 1` using byte code.
+
+**Note:** The former case would also work with `sigma == 255` and `sigma == 256`.
+The `sigma < 255` condition was chosen for compatibility with older GBWT indexes.
 
 ## GBWT
 
