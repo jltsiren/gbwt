@@ -1,6 +1,6 @@
 # Simple-SDS serialization format
 
-GBWT version 5, Metadata version 2. Updated 2021-06-21.
+GBWT version 5, Metadata version 2. Updated 2021-06-29.
 
 ## Basics
 
@@ -151,7 +151,12 @@ The corresponding record is encoded as the sequence of bytes from `data[index.se
 Local alphabet size `sigma` is the number of outgoing edges from node `v`.
 If the GBWT is bidirectional and original graph is a bidirected sequence graph, `sigma` is the number of edges adjacent to the exit side of the node traversal corresponding to `v`.
 Edges not used on the indexed paths may be omitted from the local alphabet.
-If such edges are omitted from all records, the BWT encodes the topology of the subgraph induced by the paths.
+
+**Note:** For the last record, the upper bound is the length of `data`.
+
+**Note:** The length of `index` must be equal to the length of `data`.
+
+**Note:** If the BWT encodes the topology of the subgraph induced by the paths, all unused nodes and edges must be omitted.
 
 ### BWT records
 
@@ -169,6 +174,8 @@ The visits are sorted by the previous node `u` on the path, with ties broken by 
 `BWT(v)[j]` stores the next node `w` visited by the path, or the endmarker `0` if the path ends.
 We encode the body by replacing each node `w` with the index of the corresponding edge in the header and by run-length encoding the result.
 A path that visits offset `j` of node `v` continues to offset `rank(v, w) + BWT(v).rank(j, w)` of node `w = BWT(v)[j]`.
+
+**Note:** If a node does not exist, the corresponding record is encoded with `sigma` set to `0`.
 
 **Note:** The GBWT path with identifier `j` starts at offset `j` of the endmarker `0`.
 
