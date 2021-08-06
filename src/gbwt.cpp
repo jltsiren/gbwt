@@ -179,6 +179,9 @@ GBWT::load(std::istream& in)
     throw sdsl::simple_sds::InvalidData("GBWT: BWT record count / alphabet size mismatch");
   }
 
+  // Cache the endmarker before the potential resampling.
+  this->cacheEndmarker();
+
   // Read the DA samples.
   if(simple_sds)
   {
@@ -212,8 +215,6 @@ GBWT::load(std::istream& in)
       throw sdsl::simple_sds::InvalidData("GBWT: Path name / sequence count mismatch");
     }
   }
-
-  this->cacheEndmarker();
 }
 
 void
