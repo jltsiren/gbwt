@@ -1,12 +1,19 @@
 # Simple-SDS serialization format
 
-GBWT version 5, Metadata version 2. Updated 2021-06-29.
+GBWT version 5, Metadata version 2. Updated 2021-10-11.
 
 ## Basics
 
 This document specifies the portable simple-sds serialization format for the GBWT.
 It is an alternative to the old file format based on SDSL data structures.
 The format builds upon the basic data structures described in: [https://github.com/jltsiren/simple-sds/blob/main/SERIALIZATION.md](https://github.com/jltsiren/simple-sds/blob/main/SERIALIZATION.md).
+
+The notation uses simple-sds conventions.
+Array indexes start at 0.
+Rank queries count the number of occurrences strictly before the query position, as in SDSL.
+A rank query past the end of the sequence counts the total number of occurrences in the sequence.
+Select queries use 0-based indexing (SDSL uses 1-based indexing).
+A past-the-end select query should be understood as the length of the sequence, though this is usually clarified later.
 
 ### String array
 
