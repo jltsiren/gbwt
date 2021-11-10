@@ -383,6 +383,30 @@ DynamicGBWT::samples() const
   return total;
 }
 
+edge_type
+DynamicGBWT::inverseLF(node_type from, size_type i) const
+{
+  if(!(this->bidirectional()) || from == ENDMARKER) { return invalid_edge(); }
+
+  // Find the predecessor node id.
+  DynamicRecord curr = this->record(from);
+  node_type predecessor = invalid_node();
+  size_type curr_offset = 0;
+  for(edge_type inedge : curr.incoming)
+  {
+    curr_offset += inedge.second;
+    if(curr_offset > i) { predecessor = inedge.first; break; }
+  }
+  if(predecessor == invalid_node()) { return invalid_edge(); }
+
+  // Determine the offset.
+  DynamicRecord pred_record = this->record(predecessor);
+  size_type offset = pred_record.offsetTo(from, i);
+  if(offset == invalid_offset()) { return invalid_edge(); }
+
+  return edge_type(predecessor, offset);
+}
+
 size_type
 DynamicGBWT::fullLF(node_type from, size_type i, node_type to) const
 {

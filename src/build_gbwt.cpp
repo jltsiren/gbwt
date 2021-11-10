@@ -47,6 +47,7 @@ std::vector<SearchState> verifyFind(const GBWT& compressed_index, const DynamicG
 void verifyBidirectional(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<vector_type>& queries, const std::vector<SearchState>& find_results);
 void verifyLocate(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<SearchState>& queries);
 void verifyExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& base_name, bool both_orientations);
+void verifyInverseLF(const GBWT& compressed_index, const DynamicGBWT& dynamic_index);
 void verifySamples(const GBWT& compressed_index, const DynamicGBWT& dynamic_index);
 
 //------------------------------------------------------------------------------
@@ -373,6 +374,10 @@ main(int argc, char** argv)
     }
     verifyLocate(compressed_index, dynamic_index, result);
     verifyExtract(compressed_index, dynamic_index, input_base, both_orientations);
+    if(both_orientations)
+    {
+      verifyInverseLF(compressed_index, dynamic_index);
+    }
     verifySamples(compressed_index, dynamic_index);
 
     double verify_seconds = readTimer() - verify_start;
@@ -426,7 +431,7 @@ totalLength(const std::vector<SearchState>& states)
 
 /*
   find() queries: Ensure that both index types give the same results.
-  FIXME We could validate the actual results in DynamicGBWT by extracting backwards
+  TODO We could validate the actual results in DynamicGBWT by extracting backwards
   using Psi(). Psi() can be implemented using the incoming edges.
 */
 
@@ -695,6 +700,49 @@ verifyExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, co
   double seconds = readTimer() - start;
   if(errors > initial_errors) { std::cout << "extract() verification failed" << std::endl; }
   else { std::cout << "extract() verified in " << seconds << " seconds" << std::endl; }
+  std::cout << std::endl;
+}
+
+//------------------------------------------------------------------------------
+
+/*
+  Inverse LF(): Try inverting LF() at every position.
+*/
+
+void
+verifyInverseLF(const GBWT& compressed_index, const DynamicGBWT& dynamic_index)
+{
+  std::cout << "Verifying inverse LF()..." << std::endl;
+
+  double start = readTimer();
+  size_type initial_errors = errors;
+
+  #pragma omp parallel for schedule(dynamic, 1)
+  for(size_type sequence = 0; sequence < compressed_index.sequences(); sequence++)
+  {
+    edge_type prev(ENDMARKER, sequence);
+    edge_type curr = compressed_index.start(sequence);
+    while(curr.first != ENDMARKER)
+    {
+      edge_type compressed_pred = compressed_index.inverseLF(curr);
+      edge_type dynamic_pred = dynamic_index.inverseLF(curr);
+      if(compressed_pred != prev || dynamic_pred != prev)
+      {
+        errors++;
+        if(errors <= MAX_ERRORS)
+        {
+          std::cerr << "verifyInverseLF(): Mismatching results for sequence " << sequence << ", position " << curr << std::endl;
+          std::cerr << "verifyInverseLF(): " << indexType(compressed_index) << ": " << compressed_pred << ", " << indexType(dynamic_index) << ": " << dynamic_pred << ", truth: " << prev << std::endl;
+        }
+      }
+      prev = curr;
+      curr = compressed_index.LF(curr);
+    }
+  }
+
+  double seconds = readTimer() - start;
+  if(errors > initial_errors) { std::cout << "Inverse LF() verification failed" << std::endl; }
+  else { std::cout << "Inverse LF() verified in " << seconds << " seconds" << std::endl; }
   std::cout << std::endl;
 }
 

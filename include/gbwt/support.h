@@ -130,6 +130,11 @@ struct DynamicRecord
   // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
   edge_type LF(size_type i) const;
 
+  // Returns `offset` such that `LF(offset) == (to, i)`, or `invalid_offset()`
+  // if there is no such offset.
+  // This can be used for computing inverse LF in a bidirectional GBWT.
+  size_type offsetTo(node_type to, size_type i) const;
+
   // As above, but also reports the closed offset range ('run') and the identifier
   // ('run_id') of the logical run used for computing LF().
   edge_type LF(size_type i, range_type& run, size_type& run_id) const;
@@ -227,6 +232,16 @@ struct CompressedRecord
 
   // Returns (node, LF(i, node)) or invalid_edge() if the offset is invalid.
   edge_type LF(size_type i) const;
+
+  // Returns the predecessor node for the sequene at offset `i` in the other orientation
+  // of this node, or `invalid_node()` if there is no such node.
+  // This can be used for computing inverse LF in a bidirectional GBWT.
+  node_type predecessorAt(size_type i) const;
+
+  // Returns `offset` such that `LF(offset) == (to, i)`, or `invalid_offset()`
+  // if there is no such offset.
+  // This can be used for computing inverse LF in a bidirectional GBWT.
+  size_type offsetTo(node_type to, size_type i) const;
 
   // As above, but also reports the closed offset range ('run') and the identifier
   // ('run_id') of the logical run used for computing LF().

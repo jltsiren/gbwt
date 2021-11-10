@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019 Jouni Siren
+  Copyright (c) 2019, 2021 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -161,7 +161,7 @@ CachedGBWT::cachedExtendBackward(BidirectionalState state, size_type cache_offse
 
 //------------------------------------------------------------------------------
 
-// FIXME This should really have a common implementation with GBWT::locate(state).
+// TODO This should have a common implementation with GBWT::locate().
 std::vector<size_type>
 CachedGBWT::locate(SearchState state) const
 {
@@ -219,6 +219,27 @@ CachedGBWT::locate(SearchState state) const
 
   removeDuplicates(result, false);
   return result;
+}
+
+//------------------------------------------------------------------------------
+
+// TODO This should have a common implementation with GBWT::inverseLF().
+edge_type
+CachedGBWT::inverseLF(node_type from, size_type i) const
+{
+  if(!(this->bidirectional()) || from == ENDMARKER) { return invalid_edge(); }
+
+  // Find the predecessor node id.
+  const CompressedRecord& reverse_record = this->record(Node::reverse(from));
+  node_type predecessor = reverse_record.predecessorAt(i);
+  if(predecessor == invalid_node()) { return invalid_edge(); }
+
+  // Determine the offset.
+  const CompressedRecord& pred_record = this->record(predecessor);
+  size_type offset = pred_record.offsetTo(from, i);
+  if(offset == invalid_offset()) { return invalid_edge(); }
+
+  return edge_type(predecessor, offset);
 }
 
 //------------------------------------------------------------------------------

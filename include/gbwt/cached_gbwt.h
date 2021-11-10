@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2021 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -226,6 +226,17 @@ public:
     return this->record(position.first).LF(position.second);
   }
 
+  // Only works in bidirectional indexes. May be slow when the predecessor is the endmarker.
+  // On error: invalid_edge().
+  edge_type inverseLF(node_type from, size_type i) const;
+
+  // Only works in bidirectional indexes. May be slow when the predecessor is the endmarker.
+  // On error: invalid_edge().
+  edge_type inverseLF(edge_type position) const
+  {
+    return this->inverseLF(position.first, position.second);
+  }
+
   // On error: invalid_offset().
   size_type LF(node_type from, size_type i, node_type to) const
   {
@@ -279,7 +290,7 @@ public:
   const GBWT* index;
 
   // Node node_in_cache[i].first is at cached_records[node_in_cache[i].second].
-  // Note: We want to update the cache in const member functions.
+  // NOTE: We want to update the cache in const member functions.
   mutable std::vector<edge_type>        cache_index;
   mutable std::vector<CompressedRecord> cached_records;
 

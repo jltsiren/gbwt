@@ -465,6 +465,26 @@ GBWT::locate(SearchState state) const
 
 //------------------------------------------------------------------------------
 
+edge_type
+GBWT::inverseLF(node_type from, size_type i) const
+{
+  if(!(this->bidirectional()) || from == ENDMARKER) { return invalid_edge(); }
+
+  // Find the predecessor node id.
+  CompressedRecord reverse_record = this->record(Node::reverse(from));
+  node_type predecessor = reverse_record.predecessorAt(i);
+  if(predecessor == invalid_node()) { return invalid_edge(); }
+
+  // Determine the offset.
+  CompressedRecord pred_record = this->record(predecessor);
+  size_type offset = pred_record.offsetTo(from, i);
+  if(offset == invalid_offset()) { return invalid_edge(); }
+
+  return edge_type(predecessor, offset);
+}
+
+//------------------------------------------------------------------------------
+
 CompressedRecord
 GBWT::record(node_type node) const
 {

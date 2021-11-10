@@ -230,6 +230,24 @@ DynamicRecord::LF(size_type i) const
   return this->LF(i, run, run_id);
 }
 
+size_type
+DynamicRecord::offsetTo(node_type to, size_type i) const
+{
+  size_type outrank = this->edgeTo(to);
+  if(outrank >= this->outdegree() || this->offset(outrank) > i) { return invalid_offset(); }
+
+  // Find the occurrence of `to` of rank `i`.
+  size_type rank = this->offset(outrank), offset = 0;
+  for(run_type run : this->body)
+  {
+    offset += run.second;
+    if(run.first != outrank) { continue; }
+    rank += run.second;
+    if(rank > i) { return offset - (rank - i); }
+  }
+  return invalid_offset();
+}
+
 edge_type
 DynamicRecord::LF(size_type i, range_type& run, size_type& run_id) const
 {
@@ -540,6 +558,51 @@ CompressedRecord::LF(size_type i) const
   range_type run(0, 0);
   size_type run_id = 0;
   return this->LF(i, run, run_id);
+}
+
+node_type
+CompressedRecord::predecessorAt(size_type i) const
+{
+  // 1. Determine the number of sequences going to each successor node.
+  std::vector<edge_type> edges = this->outgoing;
+  for(edge_type& edge : edges) { edge.second = 0; }
+  for(CompressedRecordIterator iter(*this); !(iter.end()); ++iter) { edges[iter->first].second += iter->second; }
+
+  // 2. Flip the successors to make them predecessors of the other orientation of this node.
+  for(edge_type& edge : edges)
+  {
+    if(edge.first != ENDMARKER) { edge.first = Node::reverse(edge.first); }
+  }
+
+  // 3. If the list of predecessors has both orientations of the same node, swap them
+  // to make the list sorted again.
+  for(size_type rank = 1; rank < edges.size(); rank++)
+  {
+    if(Node::id(edges[rank - 1].first) == Node::id(edges[rank].first)) { std::swap(edges[rank - 1], edges[rank]); }
+  }
+
+  // 4. Find the predecessor, if it exists.
+  size_type offset = 0;
+  for(edge_type edge : edges)
+  {
+    offset += edge.second;
+    if(offset > i) { return edge.first; }
+  }
+  return invalid_node();
+}
+
+size_type
+CompressedRecord::offsetTo(node_type to, size_type i) const
+{
+  size_type outrank = this->edgeTo(to);
+  if(outrank >= this->outdegree() || this->offset(outrank) > i) { return invalid_offset(); }
+
+  // Find the occurrence of `to` of rank `i`.
+  for(CompressedRecordRankIterator iter(*this, outrank); !(iter.end()); ++iter)
+  {
+    if(iter->first == outrank && iter.rank() > i) { return iter.offset() - (iter.rank() - i); }
+  }
+  return invalid_offset();
 }
 
 template<class Iterator>

@@ -35,13 +35,6 @@ namespace
 //------------------------------------------------------------------------------
 
 /*
-  TODO Also test DynamicGBWT vs GBWT and GBWT vs correct answers.
-  TODO Test using multiple indexes.
-*/
-
-//------------------------------------------------------------------------------
-
-/*
   The test paths were copied from the VG gbwt_helper.cpp unit tests.
 */
 
@@ -107,6 +100,48 @@ getPatterns()
   result.emplace_back(alt_path.begin() + 2, alt_path.begin() + 6);
   result.emplace_back(short_path.begin() + 2, short_path.begin() + 5);
   return result;
+}
+
+//------------------------------------------------------------------------------
+
+TEST(GBWTTest, InverseLF)
+{
+  GBWT index = getGBWT();
+
+  for(size_type sequence = 0; sequence < index.sequences(); sequence++)
+  {
+    edge_type prev(ENDMARKER, sequence);
+    edge_type curr = index.start(sequence);
+    while(curr.first != ENDMARKER)
+    {
+      ASSERT_NE(curr, invalid_edge()) << "Invalid position for sequence " << sequence;
+      edge_type pred = index.inverseLF(curr);
+      ASSERT_EQ(pred, prev) << "Invalid predecessor for position (" << curr.first << ", " << curr.second << ") in sequence " << sequence;
+      prev = curr;
+      curr = index.LF(curr);
+    }
+  }
+}
+
+//------------------------------------------------------------------------------
+
+TEST(DynamicGBWTTest, InverseLF)
+{
+  DynamicGBWT index = getGBWT();
+
+  for(size_type sequence = 0; sequence < index.sequences(); sequence++)
+  {
+    edge_type prev(ENDMARKER, sequence);
+    edge_type curr = index.start(sequence);
+    while(curr.first != ENDMARKER)
+    {
+      ASSERT_NE(curr, invalid_edge()) << "Invalid position for sequence " << sequence;
+      edge_type pred = index.inverseLF(curr);
+      ASSERT_EQ(pred, prev) << "Invalid predecessor for position (" << curr.first << ", " << curr.second << ") in sequence " << sequence;
+      prev = curr;
+      curr = index.LF(curr);
+    }
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -297,6 +332,26 @@ TEST(CachedGBWTTest, Sequences)
     for(size_type i = 0; i < node_size; i++)
     {
       EXPECT_EQ(cached.tryLocate(node, i), index.tryLocate(node, i)) << "Wrong tryLocate() result for node " << node << ", offset " << i;
+    }
+  }
+}
+
+TEST(CachedGBWTTest, InverseLF)
+{
+  GBWT index = getGBWT();
+  CachedGBWT cached(index);
+
+  for(size_type sequence = 0; sequence < cached.sequences(); sequence++)
+  {
+    edge_type prev(ENDMARKER, sequence);
+    edge_type curr = cached.start(sequence);
+    while(curr.first != ENDMARKER)
+    {
+      ASSERT_NE(curr, invalid_edge()) << "Invalid position for sequence " << sequence;
+      edge_type pred = cached.inverseLF(curr);
+      ASSERT_EQ(pred, prev) << "Invalid predecessor for position (" << curr.first << ", " << curr.second << ") in sequence " << sequence;
+      prev = curr;
+      curr = cached.LF(curr);
     }
   }
 }
