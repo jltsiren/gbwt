@@ -1,6 +1,6 @@
 # Simple-SDS serialization format
 
-GBWT version 5, Metadata version 2. Updated 2021-10-11.
+GBWT version 5, Metadata version 2. Updated 2021-11-23.
 
 ## Basics
 
@@ -89,7 +89,7 @@ The `sigma < 255` condition was chosen for compatibility with older GBWT indexes
 The **GBWT** is a run-length encoded FM-index storing integer sequences.
 The integers are interpreted as node identifiers and the sequences as paths in a graph.
 Each path starts from a special **endmarker** node 0, which does not exist in the graph.
-There must be at least one real node in addition to the endmarker on each path.
+**Empty paths** containing only the endmarker are supported but discouraged.
 
 Serialization format for the GBWT:
 

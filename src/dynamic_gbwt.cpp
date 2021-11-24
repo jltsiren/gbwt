@@ -1345,7 +1345,8 @@ buildRA(const DynamicGBWT& left, const DynamicGBWT& right, MergeBuffers& buffers
     buffers.insert(edge_type(ENDMARKER, left.sequences()), thread);
 
     // Computing LF() at the endmarker can be expensive, so we do it using the incoming
-    // edges at the destination node instead.
+    // edges at the destination node instead. If the sequence is empty, countUntil().
+    // will return 0, because the endmarker does not have incoming edges.
     edge_type right_pos = right_endmarker.LF(sequence);
     edge_type left_pos(right_pos.first, left.record(right_pos.first).countUntil(ENDMARKER));
 

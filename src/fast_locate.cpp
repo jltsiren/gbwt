@@ -253,7 +253,7 @@ FastLocate::FastLocate(const GBWT& source) :
     for(size_type i = 1; i < this->index->sequences(); i++)
     {
       edge_type curr = this->index->start(i);
-      if(curr.first != prev.first) { run_id++; prev = curr; }
+      if(curr.first == ENDMARKER || curr.first != prev.first) { run_id++; prev = curr; }
       endmarker_runs[i] = run_id;
     }
   }
