@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019 Jouni Siren
+  Copyright (c) 2019, 2021 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -26,6 +26,7 @@
 
 #include <gbwt/cached_gbwt.h>
 #include <gbwt/dynamic_gbwt.h>
+#include <gbwt/fast_locate.h>
 
 using namespace gbwt;
 
@@ -59,7 +60,10 @@ vector_type short_path
   static_cast<vector_type::value_type>(Node::encode(9, false))
 };
 
+vector_type empty_path;
+
 // Build a bidirectional GBWT of the paths.
+template<class GBWTType>
 GBWT
 buildGBWT(const std::vector<vector_type>& paths)
 {
@@ -75,7 +79,7 @@ buildGBWT(const std::vector<vector_type>& paths)
   for(auto& path : paths) { builder.insert(path, true); }
   builder.finish();
 
-  return GBWT(builder.index);
+  return GBWTType(builder.index);
 }
 
 // Build a bidirectional GBWT with three paths including a duplicate.
@@ -87,7 +91,7 @@ getGBWT()
     short_path, alt_path, short_path
   };
 
-  return buildGBWT(paths);
+  return buildGBWT<GBWT>(paths);
 }
 
 std::vector<vector_type>
@@ -100,6 +104,44 @@ getPatterns()
   result.emplace_back(alt_path.begin() + 2, alt_path.begin() + 6);
   result.emplace_back(short_path.begin() + 2, short_path.begin() + 5);
   return result;
+}
+
+//------------------------------------------------------------------------------
+
+template<class GBWTType>
+void
+testWithEmptyPaths(const GBWTType& index, const std::vector<vector_type>& paths, node_type node, const std::vector<size_type>& locate_result)
+{
+  ASSERT_EQ(index.sequences(), 2 * paths.size()) << "Invalid number of sequences";
+
+  // locate() at the endmarker.
+  std::vector<size_type> endmarker_result;
+  for(size_type i = 0; i < index.sequences(); i++)
+  {
+    ASSERT_EQ(index.locate(ENDMARKER, i), i) << "Invalid locate(" << i << ") result at the endmarker";
+    endmarker_result.push_back(i);
+  }
+  ASSERT_EQ(index.locate(ENDMARKER, range_type(0, index.sequences() - 1)), endmarker_result) << "Invalid locate results at the endmarker";
+
+  // locate() at the specific node.
+  if(index.contains(node))
+  {
+    size_type node_size = index.nodeSize(node);
+    for(size_type i = 0; i < node_size; i++)
+    {
+      ASSERT_EQ(index.locate(node, i), locate_result[i]) << "Invalid locate(" << node << ", " << i << ") result";
+    }
+    ASSERT_EQ(index.locate(node, range_type(0, node_size - 1)), locate_result) << "Invalid locate results at node " << node;
+  }
+
+  // extract() for all paths.
+  for(size_type i = 0; i < index.sequences(); i += 2)
+  {
+    ASSERT_EQ(index.extract(i), paths[i / 2]) << "Invalid extract(" << i << ") result (forward path)";
+    vector_type reverse;
+    reversePath(paths[i / 2], reverse);
+    ASSERT_EQ(index.extract(i + 1), reverse) << "Invalid extract(" << (i + 1) << ") result (reverse path)";
+  }
 }
 
 //------------------------------------------------------------------------------
@@ -123,6 +165,66 @@ TEST(GBWTTest, InverseLF)
   }
 }
 
+TEST(GBWTTest, WithEmptyPaths)
+{
+  std::vector<vector_type> paths
+  {
+    short_path, alt_path, empty_path, short_path
+  };
+  GBWT index = buildGBWT<GBWT>(paths);
+  node_type node = 19;
+  std::vector<size_type> result { 1, 3, 7 };
+  testWithEmptyPaths(index, paths, node, result);
+}
+
+TEST(GBWTTest, OnlyEmptyPaths)
+{
+  std::vector<vector_type> paths
+  {
+    empty_path, empty_path, empty_path
+  };
+  GBWT index = buildGBWT<GBWT>(paths);
+  node_type node = 19;
+  std::vector<size_type> result { };
+  testWithEmptyPaths(index, paths, node, result);
+}
+
+//------------------------------------------------------------------------------
+
+TEST(RIndexTest, WithEmptyPaths)
+{
+  std::vector<vector_type> paths
+  {
+    short_path, alt_path, empty_path, short_path
+  };
+  GBWT index = buildGBWT<GBWT>(paths);
+  FastLocate r_index(index);
+  std::vector<size_type> endmarker_result;
+  for(size_type i = 0; i < index.sequences(); i++) { endmarker_result.push_back(i); }
+  node_type node = 19;
+  std::vector<size_type> locate_result { 1, 3, 7 };
+
+  ASSERT_EQ(r_index.locate(ENDMARKER, range_type(0, index.sequences() - 1)), endmarker_result) << "Invalid locate results at the endmarker";
+  ASSERT_EQ(r_index.locate(node, range_type(0, index.nodeSize(node) - 1)), locate_result) << "Invalid locate results at node " << node;
+}
+
+TEST(RIndexTest, OnlyEmptyPaths)
+{
+  std::vector<vector_type> paths
+  {
+    empty_path, empty_path, empty_path
+  };
+  GBWT index = buildGBWT<GBWT>(paths);
+  FastLocate r_index(index);
+  std::vector<size_type> endmarker_result;
+  for(size_type i = 0; i < index.sequences(); i++) { endmarker_result.push_back(i); }
+  node_type node = 19;
+  std::vector<size_type> locate_result { };
+
+  ASSERT_EQ(r_index.locate(ENDMARKER, range_type(0, index.sequences() - 1)), endmarker_result) << "Invalid locate results at the endmarker";
+  ASSERT_EQ(r_index.locate(node, range_type(0, index.nodeSize(node) - 1)), locate_result) << "Invalid locate results at node " << node;
+}
+
 //------------------------------------------------------------------------------
 
 TEST(DynamicGBWTTest, InverseLF)
@@ -142,6 +244,30 @@ TEST(DynamicGBWTTest, InverseLF)
       curr = index.LF(curr);
     }
   }
+}
+
+TEST(DynamicGBWTTest, WithEmptyPaths)
+{
+  std::vector<vector_type> paths
+  {
+    short_path, alt_path, empty_path, short_path
+  };
+  DynamicGBWT index = buildGBWT<DynamicGBWT>(paths);
+  node_type node = 19;
+  std::vector<size_type> result { 1, 3, 7 };
+  testWithEmptyPaths(index, paths, node, result);
+}
+
+TEST(DynamicGBWTTest, OnlyEmptyPaths)
+{
+  std::vector<vector_type> paths
+  {
+    empty_path, empty_path, empty_path
+  };
+  DynamicGBWT index = buildGBWT<DynamicGBWT>(paths);
+  node_type node = 19;
+  std::vector<size_type> result { };
+  testWithEmptyPaths(index, paths, node, result);
 }
 
 //------------------------------------------------------------------------------
@@ -354,6 +480,32 @@ TEST(CachedGBWTTest, InverseLF)
       curr = cached.LF(curr);
     }
   }
+}
+
+TEST(CachedGBWTTest, WithEmptyPaths)
+{
+  std::vector<vector_type> paths
+  {
+    short_path, alt_path, empty_path, short_path
+  };
+  GBWT index = buildGBWT<GBWT>(paths);
+  CachedGBWT cached(index);
+  node_type node = 19;
+  std::vector<size_type> result { 1, 3, 7 };
+  testWithEmptyPaths(cached, paths, node, result);
+}
+
+TEST(CachedGBWTTest, OnlyEmptyPaths)
+{
+  std::vector<vector_type> paths
+  {
+    empty_path, empty_path, empty_path
+  };
+  GBWT index = buildGBWT<GBWT>(paths);
+  CachedGBWT cached(index);
+  node_type node = 19;
+  std::vector<size_type> result { };
+  testWithEmptyPaths(cached, paths, node, result);
 }
 
 TEST(CachedGBWTTest, Cache)
