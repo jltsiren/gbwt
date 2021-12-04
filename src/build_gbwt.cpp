@@ -41,8 +41,6 @@ const std::string tool_name = "GBWT construction";
 constexpr size_type MAX_ERRORS   = 100; // Do not print more error messages.
 size_type errors                 = 0;
 
-void printUsage(int exit_code = EXIT_SUCCESS);
-
 std::vector<SearchState> verifyFind(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::string& query_base, std::vector<vector_type>& queries);
 void verifyBidirectional(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<vector_type>& queries, const std::vector<SearchState>& find_results);
 void verifyLocate(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, const std::vector<SearchState>& queries);
@@ -52,128 +50,100 @@ void verifySamples(const GBWT& compressed_index, const DynamicGBWT& dynamic_inde
 
 //------------------------------------------------------------------------------
 
+struct Config
+{
+  Config(int argc, char** argv);
+
+  // Returns `true` if ok.
+  bool validate() const;
+
+  static void usage();
+
+  // GBWT construction parameters.
+  size_type batch_size = DynamicGBWT::INSERT_BATCH_SIZE / MILLION;
+  size_type sample_interval = DynamicGBWT::SAMPLE_INTERVAL;
+
+  // Special options.
+  bool verify_index = false;
+  bool both_orientations = false;
+  bool build_index = true;
+  bool build_empty = false;
+  bool resample = false;
+
+  // Input.
+  enum input_type { input_sdsl, input_parse, input_text };
+  input_type input = input_sdsl;
+  std::vector<std::string> input_files;
+  std::string index_base;
+
+  // Build from parse.
+  bool skip_overlaps = false;
+  bool check_overlaps = false;
+  std::set<std::string> phasing_files;
+
+  // Output.
+  std::string output_base;
+  bool sdsl_format = false;
+};
+
+//------------------------------------------------------------------------------
+
+struct MetadataConfig
+{
+  // Take config from the GBWT index.
+  void from(const DynamicGBWT& index);
+
+  // Use this metadata in the index.
+  void applyTo(DynamicGBWT& index) const;
+
+  // Add new contigs to the index.
+  void addContigs(DynamicGBWT& index) const;
+
+  bool need_sample_names = true;
+  bool have_sample_names = false;
+  bool use_contig_names = true;
+  bool use_path_names = true;
+  size_type contig_id = 0;
+
+  std::set<size_type> samples;
+  std::set<range_type> haplotypes;
+  std::vector<std::string> sample_names, contig_names;
+};
+
+//------------------------------------------------------------------------------
+
+size_type insertParse(DynamicGBWT& index, const std::string& filename, const Config& config, MetadataConfig& metadata);
+size_type insertTextFile(DynamicGBWT& index, const std::string& filename, const Config& config);
+
+//------------------------------------------------------------------------------
+
 int
 main(int argc, char** argv)
 {
-  if(argc < 2) { printUsage(); }
-
-  size_type batch_size = DynamicGBWT::INSERT_BATCH_SIZE / MILLION, sample_interval = DynamicGBWT::SAMPLE_INTERVAL;
-  bool verify_index = false, both_orientations = false, build_index = true, build_empty = false, resample = false;
-  bool build_from_parse = false, skip_overlaps = false, check_overlaps = false;
-  std::string index_base, output_base;
-  std::set<std::string> phasing_files;
-  std::vector<std::string> input_files;
-  bool sdsl_format = false;
-  int c = 0;
-  while((c = getopt(argc, argv, "b:cefF:i:lL:o:OpP:rRs:Sv")) != -1)
-  {
-    switch(c)
-    {
-    case 'b':
-      batch_size = std::stoul(optarg); break;
-    case 'c':
-      check_overlaps = true; break;
-    case 'e':
-      build_empty = true; break;
-    case 'f':
-      both_orientations = false; break;
-    case 'F':
-      readRows(optarg, input_files, true); break;
-    case 'i':
-      index_base = optarg; break;
-    case 'l':
-      build_index = false; break;
-    case 'L':
-      {
-        std::vector<std::string> rows;
-        readRows(optarg, rows, true);
-        phasing_files.insert(rows.begin(), rows.end());
-      }
-      break;
-    case 'o':
-      output_base = optarg; break;
-    case 'O':
-      sdsl_format = true; break;
-    case 'p':
-      build_from_parse = true; break;
-    case 'P':
-      phasing_files.insert(optarg); break;
-    case 'r':
-      both_orientations = true; break;
-    case 'R':
-      resample = true; build_index = false; break;
-    case 's':
-      sample_interval = std::stoul(optarg); break;
-    case 'S':
-      skip_overlaps = true; break;
-    case 'v':
-      verify_index = true; break;
-    case '?':
-      std::exit(EXIT_FAILURE);
-    default:
-      std::exit(EXIT_FAILURE);
-    }
-  }
-
-  // Append the remaining arguments to the list of input files and check the parameters.
-  while(optind < argc) { input_files.push_back(argv[optind]); optind++; }
-  if(index_base.empty() && output_base.empty() && input_files.size() == 1) { output_base = input_files.front(); }
-  if(input_files.empty() || output_base.empty()) { printUsage(EXIT_FAILURE); }
-  if(resample && input_files.size() != 1)
-  {
-    std::cerr << "build_gbwt: Resampling requires a single input" << std::endl;
-    std::exit(EXIT_FAILURE);
-  }
-  if(verify_index && !(input_files.size() == 1 && index_base.empty() && !build_from_parse))
-  {
-    std::cerr << "build_gbwt: Verification only works with indexes for a single non-parse file" << std::endl;
-    verify_index = false;
-  }
-  if(build_empty)
-  {
-    if(!(index_base.empty()))
-    {
-      std::cerr << "build_gbwt: Cannot load an index when building an empty GBWT" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    if(output_base.empty())
-    {
-      std::cerr << "build_gbwt: No output file specified for empty GBWT" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    if(build_from_parse)
-    {
-      std::cerr << "build_gbwt: Cannot build empty GBWT from a parsed VCF file" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-    if(verify_index)
-    {
-      std::cerr << "build_gbwt: Cannot verify an empty GBWT" << std::endl;
-      std::exit(EXIT_FAILURE);
-    }
-  }
-  std::string gbwt_name = output_base + DynamicGBWT::EXTENSION;
+  Config config(argc, argv);
+  if(!(config.validate())) { std::exit(EXIT_FAILURE); }
+  std::string gbwt_name = config.output_base + DynamicGBWT::EXTENSION;
 
   Version::print(std::cout, tool_name);
 
-  if(!(index_base.empty())) { printHeader("Index name"); std::cout << index_base << std::endl; }
-  printHeader("Input files"); std::cout << input_files.size();
-  if(build_from_parse)
+  if(!(config.index_base.empty())) { printHeader("Index name"); std::cout << config.index_base << std::endl; }
+  printHeader("Input files"); std::cout << config.input_files.size();
+  if(config.input == Config::input_parse)
   {
     std::cout << " (VCF parses";
-    if(check_overlaps) { std::cout << "; checking overlaps"; }
-    if(skip_overlaps) { std::cout << "; skipping overlaps"; }
-    if(!(phasing_files.empty())) { std::cout << "; using " << phasing_files.size() << " phasing files"; }
+    if(config.check_overlaps) { std::cout << "; checking overlaps"; }
+    if(config.skip_overlaps) { std::cout << "; skipping overlaps"; }
+    if(!(config.phasing_files.empty())) { std::cout << "; using " << config.phasing_files.size() << " phasing files"; }
     std::cout << ")";
   }
   std::cout << std::endl;
-  printHeader("Output name"); std::cout << output_base << (sdsl_format ? " (SDSL format)" : " (simple-sds format)") << std::endl;
-  if(batch_size != 0) { printHeader("Batch size"); std::cout << batch_size << " million" << std::endl; }
-  printHeader("Orientation"); std::cout << (both_orientations ? "both" : "forward only") << std::endl;
-  printHeader("Sample interval"); std::cout << sample_interval << std::endl;
+  printHeader("Output name"); std::cout << config.output_base << (config.sdsl_format ? " (SDSL format)" : " (simple-sds format)") << std::endl;
+  if(config.batch_size != 0) { printHeader("Batch size"); std::cout << config.batch_size << " million" << std::endl; }
+  printHeader("Orientation"); std::cout << (config.both_orientations ? "both" : "forward only") << std::endl;
+  printHeader("Sample interval"); std::cout << config.sample_interval << std::endl;
   std::cout << std::endl;
 
-  if(build_index)
+  if(config.build_index)
   {
     double start = readTimer();
 
@@ -181,136 +151,59 @@ main(int argc, char** argv)
     // We assume that each VCF parse adds new contigs for the same samples.
     // We take the sample names either from the index we load or from the first parse.
     DynamicGBWT dynamic_index;
-    bool need_sample_names = true, have_sample_names = false;
-    bool use_contig_names = true, use_path_names = true;
-    size_type contig_id = 0;
-    if(index_base.empty())
+    MetadataConfig metadata;
+    if(config.index_base.empty())
     {
-      if(build_from_parse) { dynamic_index.addMetadata(); }
+      if(config.input == Config::input_parse) { dynamic_index.addMetadata(); }
     }
     else
     {
-      sdsl::simple_sds::load_from(dynamic_index, index_base + DynamicGBWT::EXTENSION);
-      printStatistics(dynamic_index, index_base);
-      need_sample_names = false;
-      use_contig_names = (dynamic_index.hasMetadata() && dynamic_index.metadata.hasContigNames());
-      if(dynamic_index.hasMetadata()) { contig_id = dynamic_index.metadata.contigs(); }
-      use_path_names = (dynamic_index.hasMetadata() && dynamic_index.metadata.hasPathNames());
+      sdsl::simple_sds::load_from(dynamic_index, config.index_base + DynamicGBWT::EXTENSION);
+      printStatistics(dynamic_index, config.index_base);
+      metadata.from(dynamic_index);
     }
 
     size_type input_size = 0;
-    std::set<size_type> samples;
-    std::set<range_type> haplotypes;
-    std::vector<std::string> sample_names, contig_names;
-    if(build_empty)
+    if(config.build_empty)
     {
       std::cout << "Building an empty GBWT" << std::endl;
     }
-    for(const std::string& input_base : input_files)
+    for(const std::string& input_base : config.input_files)
     {
-      if(build_empty) { continue; }
+      if(config.build_empty) { continue; }
       printHeader("Input name"); std::cout << input_base << std::endl;
-      if(build_from_parse)
+      if(config.input == Config::input_parse)
       {
-        // Load the parse and determine if we still want to use sample/contig names.
-        VariantPaths variants;
-        if(!sdsl::load_from_file(variants, input_base))
-        {
-          std::cerr << "build_gbwt: Cannot load variants from " << input_base << std::endl;
-          std::exit(EXIT_FAILURE);
-        }
-        need_sample_names &= variants.hasSampleNames();
-        if(need_sample_names && !have_sample_names)
-        {
-          sample_names = variants.getSampleNames();
-          have_sample_names = true;
-        }
-        use_contig_names &= variants.hasContigName();
-        if(use_contig_names)
-        {
-          contig_names.emplace_back(variants.getContigName());
-        }
-
-        // Build GBWT from the parse.
-        if(check_overlaps) { checkOverlaps(variants, std::cerr, true); }
-        std::set<range_type> overlaps;
-        size_type node_width = variants.nodeWidth(both_orientations);
-        size_type old_size = dynamic_index.size();
-        GBWTBuilder builder(node_width, batch_size * MILLION, sample_interval);
-        builder.swapIndex(dynamic_index);
-        generateHaplotypes(variants, phasing_files,
-          [](size_type) -> bool { return true; },
-          [&](const Haplotype& haplotype)
-          {
-            builder.insert(haplotype.path, both_orientations);
-            samples.insert(haplotype.sample);
-            haplotypes.insert(range_type(haplotype.sample, haplotype.phase));
-            if(use_path_names)
-            {
-              builder.index.metadata.addPath({
-                static_cast<PathName::path_name_type>(haplotype.sample),
-                static_cast<PathName::path_name_type>(contig_id),
-                static_cast<PathName::path_name_type>(haplotype.phase),
-                static_cast<PathName::path_name_type>(haplotype.count)
-              });
-            }
-          },
-          [&](size_type site, size_type allele) -> bool
-          {
-            if(check_overlaps) { overlaps.insert(range_type(site, allele)); }
-            return skip_overlaps;
-          });
-        builder.finish();
-        builder.swapIndex(dynamic_index);
-        input_size += dynamic_index.size() - old_size;
-        if(check_overlaps && !overlaps.empty())
-        {
-          std::cerr << overlaps.size() << " unresolved overlaps:" << std::endl;
-          for(range_type overlap : overlaps)
-          {
-            std::cerr << "- site " << overlap.first << ", allele " << overlap.second << std::endl;
-          }
-        }
+        input_size += insertParse(dynamic_index, input_base, config, metadata);
       }
-      else
+      else if(config.input == Config::input_sdsl)
       {
         text_buffer_type input(input_base);
-        input_size += input.size() * (both_orientations ? 2 : 1);
-        dynamic_index.insert(input, batch_size * MILLION, both_orientations, sample_interval);
+        input_size += input.size() * (config.both_orientations ? 2 : 1);
+        dynamic_index.insert(input, config.batch_size * MILLION, config.both_orientations, config.sample_interval);
       }
-      contig_id++;
-      optind++;
+      else if(config.input == Config::input_text)
+      {
+        input_size += insertTextFile(dynamic_index, input_base, config);
+      }
     }
     std::cout << std::endl;
 
     // Set metadata if we built from parse.
-    if(build_from_parse)
+    if(config.input == Config::input_parse)
     {
-      if(index_base.empty())
+      if(config.index_base.empty())
       {
-        // New index with new samples and contigs.
-        if(have_sample_names) { dynamic_index.metadata.setSamples(sample_names); }
-        else { dynamic_index.metadata.setSamples(samples.size()); }
-        dynamic_index.metadata.setHaplotypes(haplotypes.size());
-        if(use_contig_names) { dynamic_index.metadata.setContigs(contig_names); }
-        else { dynamic_index.metadata.setContigs(contig_id); }
+        metadata.applyTo(dynamic_index);
       }
       else if(dynamic_index.hasMetadata())
       {
-        // Same samples, possibly new contigs.
-        if(use_contig_names)
-        {
-          dynamic_index.metadata.addContigs(contig_names);
-        }
-        else
-        {
-          dynamic_index.metadata.clearContigNames();
-          dynamic_index.metadata.setContigs(contig_id);
-        }
+        metadata.addContigs(dynamic_index);
       }
     }
 
-    if(sdsl_format)
+    // Serialize and print statistics.
+    if(config.sdsl_format)
     {
       if(!sdsl::store_to_file(dynamic_index, gbwt_name))
       {
@@ -319,7 +212,7 @@ main(int argc, char** argv)
       }
     }
     else { sdsl::simple_sds::serialize_to(dynamic_index, gbwt_name); }
-    printStatistics(dynamic_index, output_base);
+    printStatistics(dynamic_index, config.output_base);
 
     double seconds = readTimer() - start;
 
@@ -328,19 +221,19 @@ main(int argc, char** argv)
     std::cout << std::endl;
   }
 
-  if(resample)
+  if(config.resample)
   {
-    std::string input_base = input_files.front();
+    std::string input_base = config.input_files.front();
     std::cout << "Resampling the index..." << std::endl;
     double resample_start = readTimer();
     std::cout << std::endl;
 
     GBWT compressed_index;
     sdsl::simple_sds::load_from(compressed_index, input_base + GBWT::EXTENSION);
-    compressed_index.resample(sample_interval);
-    printStatistics(compressed_index, output_base);
+    compressed_index.resample(config.sample_interval);
+    printStatistics(compressed_index, config.output_base);
 
-    if(sdsl_format)
+    if(config.sdsl_format)
     {
       if(!sdsl::store_to_file(compressed_index, gbwt_name))
       {
@@ -355,9 +248,9 @@ main(int argc, char** argv)
     std::cout << std::endl;
   }
 
-  if(verify_index)
+  if(config.verify_index)
   {
-    std::string input_base = input_files.front();
+    std::string input_base = config.input_files.front();
     std::cout << "Verifying the index..." << std::endl;
     double verify_start = readTimer();
     std::cout << std::endl;
@@ -368,13 +261,13 @@ main(int argc, char** argv)
 
     std::vector<vector_type> queries;
     std::vector<SearchState> result = verifyFind(compressed_index, dynamic_index, input_base, queries);
-    if(both_orientations)
+    if(config.both_orientations)
     {
       verifyBidirectional(compressed_index, dynamic_index, queries, result);
     }
     verifyLocate(compressed_index, dynamic_index, result);
-    verifyExtract(compressed_index, dynamic_index, input_base, both_orientations);
-    if(both_orientations)
+    verifyExtract(compressed_index, dynamic_index, input_base, config.both_orientations);
+    if(config.both_orientations)
     {
       verifyInverseLF(compressed_index, dynamic_index);
     }
@@ -391,8 +284,117 @@ main(int argc, char** argv)
 
 //------------------------------------------------------------------------------
 
+Config::Config(int argc, char** argv)
+{
+  if(argc < 2) { usage(); std::exit(EXIT_FAILURE); }
+
+  int c = 0;
+  while((c = getopt(argc, argv, "b:cefF:i:lL:o:OpP:rRs:Stv")) != -1)
+  {
+    switch(c)
+    {
+    case 'b':
+      this->batch_size = std::stoul(optarg); break;
+    case 'c':
+      this->check_overlaps = true; break;
+    case 'e':
+      this->build_empty = true; break;
+    case 'f':
+      this->both_orientations = false; break;
+    case 'F':
+      readRows(optarg, this->input_files, true); break;
+    case 'i':
+      this->index_base = optarg; break;
+    case 'l':
+      this->build_index = false; break;
+    case 'L':
+      {
+        std::vector<std::string> rows;
+        readRows(optarg, rows, true);
+        this->phasing_files.insert(rows.begin(), rows.end());
+      }
+      break;
+    case 'o':
+      this->output_base = optarg; break;
+    case 'O':
+      this->sdsl_format = true; break;
+    case 'p':
+      this->input = input_parse; break;
+    case 'P':
+      this->phasing_files.insert(optarg); break;
+    case 'r':
+      this->both_orientations = true; break;
+    case 'R':
+      this->resample = true; this->build_index = false; break;
+    case 's':
+      this->sample_interval = std::stoul(optarg); break;
+    case 'S':
+      this->skip_overlaps = true; break;
+    case 't':
+      this->input = input_text; break;
+    case 'v':
+      this->verify_index = true; break;
+    case '?':
+      std::exit(EXIT_FAILURE);
+    default:
+      std::exit(EXIT_FAILURE);
+    }
+  }
+
+  // Append the remaining arguments to the list of input files and check the parameters.
+  while(optind < argc) { this->input_files.push_back(argv[optind]); optind++; }
+
+  // If we have a single input and no specified index / output, use that as the
+  // base name for output.
+  if(this->index_base.empty() && this->output_base.empty() && this->input_files.size() == 1)
+  {
+    this->output_base = this->input_files.front();
+  }
+}
+
+bool
+Config::validate() const
+{
+  if(this->input_files.empty() || this->output_base.empty()) { return false; }
+  if(this->resample && this->input_files.size() != 1)
+  {
+    std::cerr << "build_gbwt: Resampling requires a single input" << std::endl;
+    return false;
+  }
+  if(this->verify_index && !(this->input_files.size() == 1 && this->index_base.empty() && this->input == input_sdsl))
+  {
+    std::cerr << "build_gbwt: Verification only works with indexes for a single SDSL input" << std::endl;
+    return false;
+  }
+  if(this->build_empty)
+  {
+    if(!(this->index_base.empty()))
+    {
+      std::cerr << "build_gbwt: Cannot load an index when building an empty GBWT" << std::endl;
+      return false;
+    }
+    if(this->output_base.empty())
+    {
+      std::cerr << "build_gbwt: No output file specified for empty GBWT" << std::endl;
+      return false;
+    }
+    if(this->input == Config::input_parse)
+    {
+      std::cerr << "build_gbwt: Cannot build empty GBWT from a parsed VCF file" << std::endl;
+      return false;
+    }
+    if(this->verify_index)
+    {
+      std::cerr << "build_gbwt: Cannot verify an empty GBWT" << std::endl;
+      return false;
+    }
+  }
+
+  return true;
+}
+
 void
-printUsage(int exit_code)
+Config::usage()
 {
   Version::print(std::cerr, tool_name);
 
@@ -413,11 +415,153 @@ printUsage(int exit_code)
   std::cerr << "  -R    Resample sequence ids in the loaded index (implies -l)" << std::endl;
   std::cerr << "  -s N  Sample sequence ids at one out of N positions (default: " << DynamicGBWT::SAMPLE_INTERVAL << "; use 0 for no samples)" << std::endl;
   std::cerr << "  -S    Skip overlapping variants (use with -p)" << std::endl;
+  std::cerr << "  -t    The input is a text file (each line is a comma-separated sequence of nodes)" << std::endl;
   std::cerr << "  -v    Verify the index after construction" << std::endl;
   std::cerr << std::endl;
-
-  std::exit(exit_code);
 }
+
+//------------------------------------------------------------------------------
+
+void
+MetadataConfig::from(const DynamicGBWT& index)
+{
+  this->need_sample_names = false;
+  this->use_contig_names = (index.hasMetadata() && index.metadata.hasContigNames());
+  if(index.hasMetadata()) { this->contig_id = index.metadata.contigs(); }
+  this->use_path_names = (index.hasMetadata() && index.metadata.hasPathNames());
+}
+
+void
+MetadataConfig::applyTo(DynamicGBWT& index) const
+{
+  if(this->have_sample_names) { index.metadata.setSamples(this->sample_names); }
+  else { index.metadata.setSamples(this->samples.size()); }
+
+  index.metadata.setHaplotypes(this->haplotypes.size());
+
+  if(this->use_contig_names) { index.metadata.setContigs(this->contig_names); }
+  else { index.metadata.setContigs(this->contig_id); }
+}
+
+void
+MetadataConfig::addContigs(DynamicGBWT& index) const
+{
+  if(this->use_contig_names)
+  {
+    index.metadata.addContigs(this->contig_names);
+  }
+  else
+  {
+    index.metadata.clearContigNames();
+    index.metadata.setContigs(this->contig_id);
+  }
+}
+
+//------------------------------------------------------------------------------
+
+size_type
+insertParse(DynamicGBWT& index, const std::string& filename, const Config& config, MetadataConfig& metadata)
+{
+  // Load the parse and determine if we still want to use sample/contig names.
+  VariantPaths variants;
+  if(!sdsl::load_from_file(variants, filename))
+  {
+    std::cerr << "build_gbwt: Cannot load variants from " << filename << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  metadata.need_sample_names &= variants.hasSampleNames();
+  if(metadata.need_sample_names && !(metadata.have_sample_names))
+  {
+    metadata.sample_names = variants.getSampleNames();
+    metadata.have_sample_names = true;
+  }
+  metadata.use_contig_names &= variants.hasContigName();
+  if(metadata.use_contig_names)
+  {
+    metadata.contig_names.emplace_back(variants.getContigName());
+  }
+
+  // Build GBWT from the parse.
+  if(config.check_overlaps) { checkOverlaps(variants, std::cerr, true); }
+  std::set<range_type> overlaps;
+  size_type node_width = variants.nodeWidth(config.both_orientations);
+  size_type old_size = index.size();
+  GBWTBuilder builder(node_width, config.batch_size * MILLION, config.sample_interval);
+  builder.swapIndex(index);
+  generateHaplotypes(variants, config.phasing_files,
+    [](size_type) -> bool { return true; },
+    [&](const Haplotype& haplotype)
+    {
+      builder.insert(haplotype.path, config.both_orientations);
+      metadata.samples.insert(haplotype.sample);
+      metadata.haplotypes.insert(range_type(haplotype.sample, haplotype.phase));
+      if(metadata.use_path_names)
+      {
+        builder.index.metadata.addPath({
+          static_cast<PathName::path_name_type>(haplotype.sample),
+          static_cast<PathName::path_name_type>(metadata.contig_id),
+          static_cast<PathName::path_name_type>(haplotype.phase),
+          static_cast<PathName::path_name_type>(haplotype.count)
+        });
+      }
+    },
+    [&](size_type site, size_type allele) -> bool
+    {
+      if(config.check_overlaps) { overlaps.insert(range_type(site, allele)); }
+      return config.skip_overlaps;
+    });
+  builder.finish();
+  builder.swapIndex(index);
+  if(config.check_overlaps && !overlaps.empty())
+  {
+    std::cerr << overlaps.size() << " unresolved overlaps:" << std::endl;
+    for(range_type overlap : overlaps)
+    {
+      std::cerr << "- site " << overlap.first << ", allele " << overlap.second << std::endl;
+    }
+  }
+
+  metadata.contig_id++;
+  return index.size() - old_size;
+}
+
+size_type
+insertTextFile(DynamicGBWT& index, const std::string& filename, const Config& config)
+{
+  // TODO: How to determine width?
+  GBWTBuilder builder(64, config.batch_size * MILLION, config.sample_interval);
+  builder.swapIndex(index);
+
+  size_type input_size = 0;
+  std::ifstream infile(filename, std::ios_base::binary);
+  if(!infile)
+  {
+    std::cerr << "build_gbwt: Cannot open " << filename << " for reading" << std::endl;
+    std::exit(EXIT_FAILURE);
+  }
+  std::string buffer;
+  while(std::getline(infile, buffer))
+  {
+    vector_type sequence;
+    size_t start = 0;
+    while(start < buffer.length())
+    {
+      size_t limit = buffer.find(',', start);
+      if(limit == std::string::npos) { limit = buffer.length(); }
+      sequence.push_back(std::stoul(buffer.substr(start, limit - start)));
+      start = limit + 1;
+    }
+    input_size += (sequence.size() + 1) * (config.both_orientations ? 2 : 1);
+    builder.insert(sequence, config.both_orientations);
+  }
+  infile.close();
+
+  builder.finish();
+  builder.swapIndex(index);
+  return input_size;
+}
+
+//------------------------------------------------------------------------------
 
 size_type
 totalLength(const std::vector<SearchState>& states)
