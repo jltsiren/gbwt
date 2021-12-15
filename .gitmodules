@@ -1,3 +1,0 @@
-[submodule "deps/sdsl-lite"]
-	path = deps/sdsl-lite
-	url = https://github.com/vgteam/sdsl-lite.git

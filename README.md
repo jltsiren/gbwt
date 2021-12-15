@@ -5,6 +5,8 @@ Haplotypes are essentially sequences of nodes in the variation graph, and GBWT i
 
 See [the wiki](https://github.com/jltsiren/gbwt/wiki) for further documentation.
 
+There is also a partial [Rust implementation](https://github.com/jltsiren/gbwt-rs) of the GBWT.
+
 ## Overview
 
 GBWT is a multi-string FM-index for indexing large collections of similar paths over a graph. The paths are interpreted as sequences of node identifiers, and the sequences are stored in the FM-index. The index is stored in a number of records corresponding to the nodes of the graph. Hence the GBWT can often take advantage memory locality when the queries traverse adjacent nodes.
@@ -23,15 +25,21 @@ The GBWT uses three main construction algorithms:
 
 ## Compiling GBWT
 
-The implementation is based on the [vgteam fork](https://github.com/vgteam/sdsl-lite) of the Succinct Data Structure Library 2.0 (SDSL). As the implementation uses C++14, OpenMP, and libstdc++ parallel mode, you need g++ 6.1 or newer to compile. On Apple systems, GBWT can also be built with Apple Clang, but libomp must be installed via Macports or Homebrew, and the lack of libstdc++'s parallel mode extensions will result in slower index construction.
+As the GBWT implementation uses C++14, OpenMP, and libstdc++ parallel mode, you need g++ 6.1 or newer to compile. On Apple systems, the GBWT can also be built with Apple Clang, but libomp must be installed via Macports or Homebrew. Some algorithms are slower when compiled with Clang, because there is no multithreaded `std::sort`.
 
-GBWT is frequently tested in the following environments:
+The GBWT is frequently tested in the following environments:
 
 * Intel Linux (Ubuntu) with GCC.
 * Intel macOS with GCC and Apple Clang.
 * ARM macOS with Apple Clang.
 
-Before compiling, set `SDSL_DIR` in the Makefile to point to your SDSL directory (the default is `../sdsl-lite`). To compile, simply run `make`. Use `install.sh` to compile GBWT and install the headers and library to your home directory, or `install.sh prefix` to specify another install prefix.
+There is only one dependency:
+
+* [vgteam fork](https://github.com/vgteam/sdsl-lite) of the Succinct Data Structure Library 2.0 (SDSL). The latest `master` should always work.
+
+Before compiling, set `SDSL_DIR` in the Makefile to point to your SDSL directory. The default is `../sdsl-lite`, which is usually appropriate. The makefile reads `$SDSL_DIR/Make.helper` to determine compilers and compiler options.
+
+To compile, simply run `make`. Use `install.sh` to compile GBWT and install the headers and library to your home directory, or `install.sh prefix` to specify another install prefix.
 
 ## Citing GBWT
 
