@@ -235,7 +235,7 @@ struct Version
 
   constexpr static size_type MAJOR_VERSION    = 1;
   constexpr static size_type MINOR_VERSION    = 3;
-  constexpr static size_type PATCH_VERSION    = 0;
+  constexpr static size_type PATCH_VERSION    = 1;
 
   constexpr static size_type GBWT_VERSION     = 5;
   constexpr static size_type METADATA_VERSION = 2;
