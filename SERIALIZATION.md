@@ -1,6 +1,8 @@
 # Simple-SDS serialization format
 
-GBWT version 5, Metadata version 2. Updated 2021-11-23.
+GBWT version 5, Metadata version 2. Updated 2022-01-31.
+
+Based on Simple-SDS version 0.2.0.
 
 ## Basics
 
