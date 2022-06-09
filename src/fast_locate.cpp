@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2020, 2021 Jouni Siren
+  Copyright (c) 2020, 2021, 2022 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -432,6 +432,34 @@ FastLocate::locate(SearchState state, size_type first) const
   }
 
   removeDuplicates(result, false);
+  return result;
+}
+
+std::vector<size_type>
+FastLocate::decompressSA(node_type node) const
+{
+  std::vector<size_type> result;
+  SearchState state = this->index->find(node);
+  if(state.empty()) { return result; }
+
+  result.reserve(state.size());
+  result.push_back(this->locateFirst(node));
+  for(size_type i = state.range.first; i < state.range.second; i++)
+  {
+    result.push_back(this->locateNext(result.back()));
+  }
+
+  return result;
+}
+
+std::vector<size_type>
+FastLocate::decompressDA(node_type node) const
+{
+  std::vector<size_type> result = this->decompressSA(node);
+  for(size_type i = 0; i < result.size(); i++)
+  {
+    result[i] = this->seqId(result[i]);
+  }
   return result;
 }
 

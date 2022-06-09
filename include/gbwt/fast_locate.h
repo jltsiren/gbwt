@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2020 Jouni Siren
+  Copyright (c) 2020, 2022 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -162,12 +162,16 @@ public:
     return this->locate(SearchState(node, range), first);
   }
 
+  std::vector<size_type> decompressSA(node_type node) const;
+
+  std::vector<size_type> decompressDA(node_type node) const;
+
 //------------------------------------------------------------------------------
 
   /*
-    Low-level interface. The interface assumes that sequence identifiers and offsets
-    are valid. The validity of the identifier can be checked using sequences() in the
-    source GBWT. There is no check for the offset.
+    Low-level interface. The interface assumes that the arguments are valid. This
+    be checked with index->contains(node) and seq_id < index->sequences(). There is
+    no check for the offset.
   */
 
   size_type pack(size_type seq_id, size_type seq_offset) const
@@ -181,6 +185,11 @@ public:
   std::pair<size_type, size_type> unpack(size_type offset) const
   {
     return std::make_pair(this->seqId(offset), this->seqOffset(offset));
+  }
+
+  size_type locateFirst(node_type node) const
+  {
+    return this->getSample(node, 0);
   }
 
   size_type locateNext(size_type prev) const;

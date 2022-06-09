@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2021 Jouni Siren
+  Copyright (c) 2019, 2021, 2022 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -223,6 +223,26 @@ TEST(RIndexTest, OnlyEmptyPaths)
 
   ASSERT_EQ(r_index.locate(ENDMARKER, range_type(0, index.sequences() - 1)), endmarker_result) << "Invalid locate results at the endmarker";
   ASSERT_EQ(r_index.locate(node, range_type(0, index.nodeSize(node) - 1)), locate_result) << "Invalid locate results at node " << node;
+}
+
+TEST(RIndexTest, LocateAll)
+{
+  std::vector<vector_type> paths
+  {
+    short_path, alt_path, empty_path, short_path
+  };
+  GBWT index = buildGBWT<GBWT>(paths);
+  FastLocate r_index(index);
+
+  for(node_type node = index.firstNode(); node < index.sigma(); node++)
+  {
+    SearchState state = index.find(node);
+    std::vector<size_type> correct_result = index.locate(state);
+    std::vector<size_type> r_index_result = r_index.decompressDA(node);
+    ASSERT_EQ(r_index_result.size(), state.size()) << "Invalid DA size for node " << node;
+    removeDuplicates(r_index_result, false);
+    ASSERT_EQ(r_index_result, correct_result) << "Invalid decompressDA() result for node " << node;
+  }
 }
 
 //------------------------------------------------------------------------------
