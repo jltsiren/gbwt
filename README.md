@@ -1,5 +1,11 @@
-# GBWT
+# GBWT parallel
 
+## Resources
+- See [google drive](https://drive.google.com/drive/folders/11-KXk3ihS5JeqGFmDvyYtA9V7fPmYlnB?usp=share_link) to get our sample data.
+- See [google slide](https://docs.google.com/presentation/d/1UxviAaf6UflXCRRtiADXmqd0C5mpochioFCASzQNj3g/edit?usp=sharing) to keep update our progress.
+
+---
+# GBWT original
 Graph BWT is an independent implementation of the graph extension (gPBWT) of the positional Burrows-Wheeler transform (PBWT). Its initial purpose is to embed observed haplotypes in a [variation graph](https://github.com/vgteam/vg).
 Haplotypes are essentially sequences of nodes in the variation graph, and GBWT is best seen as the multi-string BWT of the node sequences.
 
