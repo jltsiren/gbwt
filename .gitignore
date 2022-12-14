@@ -8,6 +8,7 @@ bin
 lib
 obj
 build
+data
 
 # Tools
 build_gbwt
