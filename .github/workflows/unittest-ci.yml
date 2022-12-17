@@ -1,0 +1,29 @@
+name: Makefile CI
+
+on:
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install sdsl-lite dependencies
+      run: |
+        cd ..
+        git clone https://github.com/vgteam/sdsl-lite.git
+        cd sdsl-lite
+        ./install.sh
+    - name: Compile gbwt-parallel project
+      run: |
+        cd ${{ github.workspace }}
+        make -j 8
+    - name: Run unit tests
+      run: |
+        cd ${{ github.workspace }}/unittest
+        make
+        ./test_build
