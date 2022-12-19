@@ -672,6 +672,91 @@ updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, size_type iteratio
   gbwt.header.size += seqs.size();
 }
 
+// type of source should be modified(decided)
+void
+updateRecordsParallel(DynamicGBWT& gbwt, const Source &source, 
+  std::vector<std::vector<std::pair<size_type, node_type>>> &sorted_mat, 
+  const node_type &curr_node, size_type sample_interval,
+  std::unique_ptr<std::unordered_map<node_type, size_type>>& endmarker_edges)
+{
+  for(size_type i = 0; i < sorted_mat[curr_node].size(); ++i)
+  {
+    node_type curr = seqs[i].curr;
+    DynamicRecord& current = gbwt.record(curr);
+    RunMerger new_body(current.outdegree());
+    std::vector<sample_type> new_samples;
+    std::vector<run_type>::iterator iter = current.body.begin();
+    std::vector<sample_type>::iterator sample_iter = current.ids.begin();
+    size_type insert_count = 0;
+    while(i < seqs.size() && seqs[i].curr == curr)
+    {
+      // Determine the edge to the next node or add it if it does not exist.
+      rank_type outrank = 0;
+      if(curr == ENDMARKER)
+      {
+        auto iter = endmarker_edges->find(seqs[i].next);
+        if(iter != endmarker_edges->end()) { outrank = iter->second; }
+        else
+        {
+          outrank = current.outdegree();
+          current.outgoing.push_back(edge_type(seqs[i].next, 0));
+          new_body.addEdge();
+          (*endmarker_edges)[seqs[i].next] = outrank;
+        }
+      }
+      else
+      {
+        outrank = current.edgeToLinear(seqs[i].next);
+        if(outrank >= current.outdegree())
+        {
+          current.outgoing.push_back(edge_type(seqs[i].next, 0));
+          new_body.addEdge();
+        }
+      }
+      // Add old runs until 'offset'.
+      while(new_body.size() < seqs[i].offset)
+      {
+        if(iter->second <= seqs[i].offset - new_body.size()) { new_body.insert(*iter); ++iter; }
+        else
+        {
+          run_type temp(iter->first, seqs[i].offset - new_body.size());
+          new_body.insert(temp);
+          iter->second -= temp.second;
+        }
+      }
+      // Add old samples until 'offset'.
+      while(sample_iter != current.ids.end() && sample_iter->first + insert_count < seqs[i].offset)
+      {
+        new_samples.push_back(sample_type(sample_iter->first + insert_count, sample_iter->second));
+        ++sample_iter;
+      }
+      if(iteration % sample_interval == 0 || seqs[i].next == ENDMARKER)  // Sample sequence id.
+      {
+        new_samples.push_back(sample_type(seqs[i].offset, seqs[i].id));
+      }
+      seqs[i].offset = new_body.counts[outrank]; // rank(next) within the record.
+      new_body.insert(outrank); insert_count++;
+      if(seqs[i].next != ENDMARKER)  // The endmarker does not have incoming edges.
+      {
+        gbwt.record(seqs[i].next).increment(curr);
+      }
+      i++;
+    }
+    while(iter != current.body.end()) // Add the rest of the old body.
+    {
+      new_body.insert(*iter); ++iter;
+    }
+    while(sample_iter != current.ids.end()) // Add the rest of the old samples.
+    {
+      new_samples.push_back(sample_type(sample_iter->first + insert_count, sample_iter->second));
+      ++sample_iter;
+    }
+    swapBody(current, new_body);
+    current.ids.swap(new_samples);
+  }
+  gbwt.header.size += seqs.size();
+}
+
 /*
   Compute the source offset for each sequence at the next position, assuming that the
   records have been sorted by the node at the current position.
@@ -866,6 +951,63 @@ insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source, siz
     }
   }
 
+  // sort sequences
+
+  std::vector<std::vector<std::pair<size_type, node_type>> sorted;
+  std::vector<std::pair<size_type, size_type>> seq_idx; // index in text for every sequence
+  std::vector<std::pair<size_type, node_type> text; // current node for every sequence
+  for (Sequence &s:seqs) {
+    seq_idx.push_back(std::make_pair(s.pos, s.id));
+    text.push_back(std::make_pair(s.pos, s.curr));
+  }
+
+  std::vector<size_type> prev_sorted;
+
+  // for node 0(endmarker)
+  // advance position and update current node
+  for (int i=0;i<seq_idx.size();++i) {
+    prev_sorted.push_back(std::make_pair(s.id, s.next));
+    sorted.push_back(prev_sorted);
+    ++seq_idx[i].first;
+    ++text[i].first;
+    text[i].second = source[text[i].first];
+  }
+
+  // record sorted result
+  while (1) {
+    std::vector<size_type> curr_sorted;
+    std::sort(text.begin(), text.end(), 
+      [](const std::pair<size_type, node_type>& a, const std::pair<size_type, node_type> &b) -> bool
+      {
+        return a.second<b.second;
+      });
+    node_type curr = text[0].second;
+    for (int i=0;i<text.size();++i) {
+      if (text[i].second==curr) {
+        for (int j=0;j<seq_idx.size();++j) {
+          if (seq_idx[j].first==text[i].first) {
+            ++seq_idx[j].first; // advance position
+            curr_sorted.push_back(seq_idx[j].second);
+            break;
+          } 
+          ++text[i].first; // advance position
+          text[i].second = source[text[i].first]; // update current node
+          if (text[i].second==ENDMARKER) { // remove the sequence has reach the end
+            std::vector<std::pair<size_type, node_type>>::iterator it = text.begin();
+            std::advance(it, i);
+            text.erase(it);
+            --i;
+          }
+        } 
+      } else {
+        break;
+      }
+    } sorted.push_back(curr_sorted);
+    prev_sorted = curr_sorted;
+  }
+
+  // old implementation
+  /*
   for(size_type iterations = 1; ; iterations++)
   {
     updateRecords(gbwt, seqs, iterations, sample_interval, endmarker_edges); // Insert the next nodes into the GBWT.
@@ -874,6 +1016,13 @@ insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source, siz
     if(seqs.empty()) { return iterations; }
     rebuildOffsets(gbwt, seqs, endmarker_edges); // Rebuild offsets in outgoing edges and sequences.
     advancePosition(seqs, source); // Move the sequences to the next position.
+  }
+  */
+  // parallel update nodes
+  size_type node_num = gbwt.nodeSize();
+  for (node_type i=0;i<node_num;++i) {
+    // add to thread pool later
+    updateRecordsParallel(gbwt, source, sorted, i, sample_interval, endmarker_edges);
   }
 }
 
