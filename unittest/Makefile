@@ -4,6 +4,7 @@ include $(SDSL_DIR)/Make.helper
 GBWT_DIR=..
 LIBRARY=$(GBWT_DIR)/lib/libgbwt.a
 
+MY_CXX_FLAGS=-std=c++17
 CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -I$(GBWT_DIR)/include -I$(INC_DIR)
 
 HEADERS=$(wildcard $(GBWT_DIR)/include/gbwt/*.h)
