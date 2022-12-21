@@ -755,7 +755,7 @@ printSortedMatrix(
 	{
 	  for (size_t j=0; j < sorted[i].size(); j++)
 	  {
-	  	 std::cout << "(" << (int) i << ", " << (int) j << ")->"
+	  	 std::cout << "(" << (int) i << ", " << (int) j << ") -> "
 				   << "Pair(" 
 				   << (int) sorted[i][j].first 
 				   << ", "
@@ -807,27 +807,25 @@ sortAllSequencesAllPosition(
   std::vector<std::vector<std::pair<size_type, node_type>>>& sorted,
   const Source& source)
 {
+  //FIXME: copy constructor wastes time and space
   std::vector<Sequence> tmp(seqs);
-  node_type curr = 0;
-  while (1) 
-  {
+  node_type curr = 1;
+  while (1) {
     std::vector<std::pair<size_type, node_type>> curr_sorted;
-    for (Sequence& s : tmp) 
-	{
-      if (curr == s.curr) 
-	  {
-        curr_sorted.emplace_back(std::make_pair(s.id, s.next));
+    for (Sequence& s : tmp) {
+      if (curr == s.next) {
         nextSequencePosition(s);
         advanceSequencePosition(s, source);
+        curr_sorted.emplace_back(std::make_pair(s.id, s.next));
       }
     }
     sorted.emplace_back(curr_sorted);
     sortSequences(tmp);
-	curr++;
     if (tmp.empty()) {
-      // printSortedMatrix(sorted);
+      //printSortedMatrix(sorted);
       return;
     }
+    curr++;
   }
 }
 
