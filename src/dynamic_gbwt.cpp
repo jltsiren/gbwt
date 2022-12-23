@@ -24,7 +24,6 @@
 */
 
 #include <gbwt/dynamic_gbwt.h>
-#include <gbwt/bwtmerge.h>
 
 #include <memory>
 #include <unordered_map>

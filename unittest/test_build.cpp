@@ -1,9 +1,13 @@
+#include <gbwt/bwtmerge.h>
 #include <gbwt/dynamic_gbwt.h>
+
 #include <gtest/gtest.h>
 
 #include <iostream>
 #include <random>
 #include <vector>
+
+using namespace gbwt;
 
 int
 getMax(int array[], int n)
@@ -94,11 +98,50 @@ sortSequences(std::vector<std::vector<int>>& seqs,
         isAllEmpty = isAllEmpty && seqs[i].empty();
       }
     }
-	seqLastRank.swap(seqCurrRank);
+    seqLastRank.swap(seqCurrRank);
     sortedSeqs.push_back(sortedPosition);
     pos++;
   }
 }
+text_type
+getTextBuffer(const std::vector<vector_type>& sequences)
+{
+  size_type node_width = MILLION;
+  text_type input_buffer(64, 0, node_width);
+  size_type input_tail = 0;
+  for (auto sequence : sequences) {
+    for (auto node : sequence) {
+      input_buffer[input_tail] = node;
+      input_tail++;
+    }
+    input_buffer[input_tail] = ENDMARKER;
+    input_tail++;
+  }
+  return input_buffer;
+}
+
+std::vector<Sequence>
+getVectorOfSequences(text_type& text)
+{
+  std::vector<Sequence> seqs;
+
+  size_type text_length = 17;
+  bool seq_start = true;
+  int index_sequences = 0;
+  for (size_type i = 0; i < text_length; i++) {
+    if (seq_start) {
+      seqs.push_back(Sequence(text, i, index_sequences));
+      seq_start = false;
+      index_sequences++;
+    }
+    if (text[i] == ENDMARKER) {
+      seq_start = true;
+    }
+  }
+  return seqs;
+}
+
+//------------------------------------------------------------------------------
 TEST(RadixSortTest, Scalar)
 {
   int array[] = { 121, 432, 564, 23, 1, 45, 788 };
@@ -133,6 +176,43 @@ TEST(RadixSortTest, Sequences)
       << ans[i].size() << "at offset " << i;
     for (size_t j = 0; j < sortedSeqs[i].size(); j++) {
       EXPECT_EQ(sortedSeqs[i][j], ans[i][j])
+        << "Wrong value at offset " << i << "," << j;
+    }
+  }
+}
+TEST(RadixSortTest, VectorOfPair)
+{
+  // Test Case shown on paper
+  std::vector<vector_type> test_seqs{ { 1, 2, 4, 6, 7 },
+                                      { 1, 2, 5, 7 },
+                                      { 1, 3, 4, 5, 7 } };
+  text_type text_buffer = getTextBuffer(test_seqs);
+  std::vector<Sequence> vec_seqs = getVectorOfSequences(text_buffer);
+
+  std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs;
+
+  // serial version
+  sortAllSequencesAllPosition(vec_seqs, sorted_seqs, text_buffer);
+
+  std::vector<std::vector<std::pair<size_type, node_type>>> ans{
+    { { 0, 2 }, { 1, 2 }, { 2, 3 } }, // Node 1
+    { { 0, 4 }, { 1, 5 } },
+    { { 2, 4 } },
+    { { 0, 6 }, { 2, 5 } },
+    { { 1, 7 }, { 2, 7 } },
+    { { 0, 7 } },
+    { { 1, 0 }, { 2, 0 }, { 0, 0 } }, // Node 7
+  };
+
+  EXPECT_EQ(sorted_seqs.size(), ans.size())
+    << "Sequences size are not consistent " << sorted_seqs.size() << "and"
+    << ans.size();
+  for (size_t i = 0; i < sorted_seqs.size(); i++) {
+    EXPECT_EQ(sorted_seqs[i].size(), ans[i].size())
+      << "Sizes are not consistent " << sorted_seqs[i].size() << "and"
+      << ans[i].size() << "at offset " << i;
+    for (size_t j = 0; j < sorted_seqs[i].size(); j++) {
+      EXPECT_EQ(sorted_seqs[i][j], ans[i][j])
         << "Wrong value at offset " << i << "," << j;
     }
   }
