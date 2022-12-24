@@ -24,7 +24,6 @@
 */
 
 #include <gbwt/dynamic_gbwt.h>
-#include <gbwt/bwtmerge.h>
 
 #include <memory>
 #include <unordered_map>
@@ -747,6 +746,88 @@ sortSequences(std::vector<Sequence>& seqs)
   }
 }
 
+void 
+printSortedMatrix(
+	std::vector<std::vector<std::pair<size_type, node_type>>>& sorted)
+{
+	for (size_t i=0; i < sorted.size(); i++) 
+	{
+	  for (size_t j=0; j < sorted[i].size(); j++)
+	  {
+	  	 std::cout << "(" << (int) i << ", " << (int) j << ") -> "
+				   << "Pair(" 
+				   << (int) sorted[i][j].first 
+				   << ", "
+				   << (int) sorted[i][j].second << ")\n";
+	  }
+	  std::cout << "\n";
+	} 
+}
+
+/*
+ * [Authored by KaiYin] Sort all sequences in advance
+ */
+
+void
+nextSequencePosition(Sequence& seq)
+{
+  seq.pos++;
+}
+
+void
+advanceSequencePosition(Sequence& seq, const text_type& text)
+{
+  seq.curr = seq.next;
+  seq.next = text[seq.pos];
+}
+
+void
+advanceSequencePosition(Sequence& seq, const vector_type& text)
+{
+  seq.curr = seq.next;
+  seq.next = text[seq.pos];
+}
+
+void
+advanceSequencePosition(Sequence& seq, const GBWT& source)
+{
+  node_type curr = seq.next;
+  const CompressedRecord current = source.record(curr);
+  CompressedRecordIterator iter(current);
+  seq.curr = seq.next;
+  while(iter.offset() <= seq.pos) { ++iter; }
+  seq.next = current.successor(iter->first);
+}
+
+template<class Source>
+void
+sortAllSequencesAllPosition(
+  std::vector<Sequence>& seqs,
+  std::vector<std::vector<std::pair<size_type, node_type>>>& sorted,
+  const Source& source)
+{
+  //FIXME: copy constructor wastes time and space
+  std::vector<Sequence> tmp(seqs);
+  node_type curr = 1;
+  while (1) {
+    std::vector<std::pair<size_type, node_type>> curr_sorted;
+    for (Sequence& s : tmp) {
+      if (curr == s.next) {
+        nextSequencePosition(s);
+        advanceSequencePosition(s, source);
+        curr_sorted.emplace_back(std::make_pair(s.id, s.next));
+      }
+    }
+    sorted.emplace_back(curr_sorted);
+    sortSequences(tmp);
+    if (tmp.empty()) {
+      //printSortedMatrix(sorted);
+      return;
+    }
+    curr++;
+  }
+}
+
 /*
   Rebuild the edge offsets in the outgoing edges to each 'next' node. The offsets will be
   valid after the insertions in the next iteration.
@@ -865,6 +946,10 @@ insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source, siz
       (*endmarker_edges)[endmarker.successor(outrank)] = outrank;
     }
   }
+
+  //Pair<path_id, next_node>
+  std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs;	
+  sortAllSequencesAllPosition(seqs, sorted_seqs, source);
 
   for(size_type iterations = 1; ; iterations++)
   {
