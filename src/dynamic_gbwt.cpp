@@ -24,6 +24,7 @@
 */
 
 #include <gbwt/BS_thread_pool_light.h>
+#include <thrust_sort.cuh>
 
 #include <gbwt/bwtmerge.h>
 #include <gbwt/dynamic_gbwt.h>
@@ -924,10 +925,8 @@ void update_incoming_edge(DynamicGBWT &gbwt, const text_type &paths,
   node_type next_node_id = paths[position + 1];
   do {
     // get the current and next DynamicRecord
-    gbwt_mutex.lock_shared();
     DynamicRecord &current_record = gbwt.record(current_node_id);
     DynamicRecord &next_record = gbwt.record(next_node_id);
-    gbwt_mutex.unlock_shared();
 
     // update incoming edges except for ENDMARKER
     if (next_node_id != ENDMARKER) {
@@ -985,17 +984,33 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
     }
   }
 
-  // ---- Radix Sort  ---- //
+  // ---- Store the start position ---- //
+  std::vector<size_type> start_pos;
+  for (auto &sequence : seqs) {
+    start_pos.emplace_back(sequence.pos);
+  }
 
-  // ---- Update incoming edge ---- //
   const int thread_num = std::min((unsigned int)gbwt.sigma(),
                                   std::thread::hardware_concurrency() - 1);
   BS::thread_pool_light pool(thread_num);
+  // ---- Radix Sort  ---- //
+  auto sorted_seqs = radix_sort(source, start_pos, gbwt.sigma());
+  int tmp = 0;
+  // debug section of radix sort
+  /*
+  for (auto &vec : sorted_seqs) {
+    std::cout << "\nid: " << tmp++ << "\n";
+    for (auto &item : vec) {
+      std::cout << "(" << item.first << ", " << item.second << ") ";
+    }
+  }
+  */
+
+  // ---- Update incoming edge ---- //
 
   // add the incoming for the first path's first node since sdsl does not put
   // the endmarker at the begining.
   gbwt.record(source[seqs[0].pos]).increment(ENDMARKER);
-  // gbwt.record(ENDMARKER).body.emplace_back(run_type{0, 1});
 
   std::shared_mutex gbwt_mutex;
   for (auto &sequence : seqs) {
@@ -1012,6 +1027,7 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
   pool.wait_for_tasks();
 
   // debug section of outgoing_offset_map
+  /*
   for (short_type node_id = 1; node_id < gbwt.sigma(); ++node_id) {
     DynamicRecord &record = gbwt.record(node_id);
     std::cout << "node_id: " << node_id << "\n";
@@ -1019,6 +1035,7 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
       std::cout << "(" << item.first << ", " << item.second << ")\n";
     }
   }
+  */
 
   // ---- Given the radix sort table, update Records ---- //
 
@@ -1027,7 +1044,7 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
   std::cerr << "------------------------------------\n";
 
   return 1;
-}
+} // namespace gbwt
 
 //------------------------------------------------------------------------------
 
