@@ -674,87 +674,68 @@ updateRecords(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, size_type iteratio
 
 // type of source should be modified(decided)
 void
-updateRecordsParallel(DynamicGBWT& gbwt, const Source &source, 
+updateRecordsParallel(DynamicGBWT& gbwt, const text_type &source, 
   std::vector<std::vector<std::pair<size_type, node_type>>> &sorted_mat, 
   const node_type &curr_node, size_type sample_interval,
   std::unique_ptr<std::unordered_map<node_type, size_type>>& endmarker_edges)
 {
+  DynamicRecord& current = gbwt.record(curr_node);
+  RunMerger new_body(current.outdegree());
+  std::vector<sample_type> new_samples;
+  std::vector<run_type>::iterator iter = current.body.begin();
+  std::vector<sample_type>::iterator sample_iter = current.ids.begin();
+  size_type insert_count = 0;
+  // Add old runs until the lastest run.
+  while(new_body.size() < current.outdegree()-1)
+  {
+    new_body.insert(*iter);
+    ++iter;
+  }
+  // Add old samples until the end.
+  while(sample_iter != current.ids.end())
+  {
+    new_samples.push_back(sample_type(sample_iter->first, sample_iter->second));
+    ++sample_iter;
+  }
   for(size_type i = 0; i < sorted_mat[curr_node].size(); ++i)
   {
-    node_type curr = seqs[i].curr;
-    DynamicRecord& current = gbwt.record(curr);
-    RunMerger new_body(current.outdegree());
-    std::vector<sample_type> new_samples;
-    std::vector<run_type>::iterator iter = current.body.begin();
-    std::vector<sample_type>::iterator sample_iter = current.ids.begin();
-    size_type insert_count = 0;
-    while(i < seqs.size() && seqs[i].curr == curr)
+    // Determine the edge to the next node or add it if it does not exist.
+    rank_type outrank = 0;
+    node_type next_node = sorted_mat[curr_node][i].second;
+    if(curr == ENDMARKER)
     {
-      // Determine the edge to the next node or add it if it does not exist.
-      rank_type outrank = 0;
-      if(curr == ENDMARKER)
-      {
-        auto iter = endmarker_edges->find(seqs[i].next);
-        if(iter != endmarker_edges->end()) { outrank = iter->second; }
-        else
-        {
-          outrank = current.outdegree();
-          current.outgoing.push_back(edge_type(seqs[i].next, 0));
-          new_body.addEdge();
-          (*endmarker_edges)[seqs[i].next] = outrank;
-        }
-      }
+      auto iter = endmarker_edges->find(next_node);
+      if(iter != endmarker_edges->end()) { outrank = iter->second; }
       else
       {
-        outrank = current.edgeToLinear(seqs[i].next);
-        if(outrank >= current.outdegree())
-        {
-          current.outgoing.push_back(edge_type(seqs[i].next, 0));
-          new_body.addEdge();
-        }
+        outrank = current.outdegree();
+        // find incoming of next node to determine offset
+        size_type outgoing_offset = current.outgoing_offset_map[next_node];
+        current.outgoing.push_back(edge_type(next_node, outgoing_offset));
+        new_body.addEdge();
+        (*endmarker_edges)[next_node] = outrank;
       }
-      // Add old runs until 'offset'.
-      while(new_body.size() < seqs[i].offset)
-      {
-        if(iter->second <= seqs[i].offset - new_body.size()) { new_body.insert(*iter); ++iter; }
-        else
-        {
-          run_type temp(iter->first, seqs[i].offset - new_body.size());
-          new_body.insert(temp);
-          iter->second -= temp.second;
-        }
-      }
-      // Add old samples until 'offset'.
-      while(sample_iter != current.ids.end() && sample_iter->first + insert_count < seqs[i].offset)
-      {
-        new_samples.push_back(sample_type(sample_iter->first + insert_count, sample_iter->second));
-        ++sample_iter;
-      }
-      if(iteration % sample_interval == 0 || seqs[i].next == ENDMARKER)  // Sample sequence id.
-      {
-        new_samples.push_back(sample_type(seqs[i].offset, seqs[i].id));
-      }
-      seqs[i].offset = new_body.counts[outrank]; // rank(next) within the record.
-      new_body.insert(outrank); insert_count++;
-      if(seqs[i].next != ENDMARKER)  // The endmarker does not have incoming edges.
-      {
-        gbwt.record(seqs[i].next).increment(curr);
-      }
-      i++;
     }
-    while(iter != current.body.end()) // Add the rest of the old body.
+    else
     {
-      new_body.insert(*iter); ++iter;
+      outrank = current.edgeToLinear(next_node);
+      if(outrank >= current.outdegree())
+      {
+        size_type outgoing_offset = current.outgoing_offset_map[next_node];
+        current.outgoing.push_back(edge_type(next_node, outgoing_offset));
+        new_body.addEdge();
+      }
     }
-    while(sample_iter != current.ids.end()) // Add the rest of the old samples.
+    if(next_node == ENDMARKER)  // Sample sequence id.
     {
-      new_samples.push_back(sample_type(sample_iter->first + insert_count, sample_iter->second));
-      ++sample_iter;
+      int size = new_samples.size();
+      new_samples.push_back(sample_type(size, seqs[i].id));
     }
-    swapBody(current, new_body);
-    current.ids.swap(new_samples);
+    new_body.insert(outrank);
+    insert_count++;
   }
-  gbwt.header.size += seqs.size();
+  swapBody(current, new_body);
+  current.ids.swap(new_samples);
 }
 
 /*
@@ -931,9 +912,9 @@ advancePosition(std::vector<Sequence>& seqs, const DynamicGBWT& source)
   Update the bidirectional flag in the header before calling this.
 */
 
-template<class Source>
+template<>
 size_type
-insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source, size_type sample_interval)
+insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const text_type& source, size_type sample_interval)
 {
   // Sanity check sample interval only here.
   if(sample_interval == 0) { sample_interval = std::numeric_limits<size_type>::max(); }
@@ -1006,8 +987,34 @@ insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source, siz
     prev_sorted = curr_sorted;
   }
 
-  // old implementation
-  /*
+  // parallel update nodes
+  size_type node_num = gbwt.nodeSize();
+  for (node_type i=0;i<node_num;++i) {
+    // add to thread pool later
+    updateRecordsParallel(gbwt, source, sorted, i, sample_interval, endmarker_edges);
+  }
+}
+
+template<class Source>
+size_type
+insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source, size_type sample_interval)
+{
+  // Sanity check sample interval only here.
+  if(sample_interval == 0) { sample_interval = std::numeric_limits<size_type>::max(); }
+
+  // The outgoing edges are not expected to be sorted during construction. As the endmarker
+  // may have millions of outgoing edges, we need a faster way of mapping destination nodes
+  // to edges.
+  std::unique_ptr<std::unordered_map<node_type, size_type>> endmarker_edges(new std::unordered_map<node_type, size_type>);
+  if(gbwt.sigma() > 0)
+  {
+    const DynamicRecord& endmarker = gbwt.record(ENDMARKER);
+    for(rank_type outrank = 0; outrank < endmarker.outdegree(); outrank++)
+    {
+      (*endmarker_edges)[endmarker.successor(outrank)] = outrank;
+    }
+  }
+
   for(size_type iterations = 1; ; iterations++)
   {
     updateRecords(gbwt, seqs, iterations, sample_interval, endmarker_edges); // Insert the next nodes into the GBWT.
@@ -1016,13 +1023,6 @@ insert(DynamicGBWT& gbwt, std::vector<Sequence>& seqs, const Source& source, siz
     if(seqs.empty()) { return iterations; }
     rebuildOffsets(gbwt, seqs, endmarker_edges); // Rebuild offsets in outgoing edges and sequences.
     advancePosition(seqs, source); // Move the sequences to the next position.
-  }
-  */
-  // parallel update nodes
-  size_type node_num = gbwt.nodeSize();
-  for (node_type i=0;i<node_num;++i) {
-    // add to thread pool later
-    updateRecordsParallel(gbwt, source, sorted, i, sample_interval, endmarker_edges);
   }
 }
 
