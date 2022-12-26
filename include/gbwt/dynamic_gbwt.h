@@ -425,12 +425,12 @@ private:
 }; // class GBWTBuilder
 
 //------------------------------------------------------------------------------
-template<class Source>
 void
 sortAllSequencesAllPosition(
   std::vector<Sequence>& seqs,
   std::vector<std::vector<std::pair<size_type, node_type>>>& sorted,
-  const Source& source);
+  const text_type& source);
+
 //------------------------------------------------------------------------------
 } // namespace gbwt
 

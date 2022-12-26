@@ -785,12 +785,11 @@ advanceSequencePosition(Sequence& seq, const GBWT& source)
   seq.next = current.successor(iter->first);
 }
 
-template<class Source>
 void
 sortAllSequencesAllPosition(
   std::vector<Sequence>& seqs,
   std::vector<std::vector<std::pair<size_type, node_type>>>& sorted,
-  const Source& source)
+  const text_type& source)
 {
   //FIXME: copy constructor wastes time and space
   std::vector<Sequence> tmp(seqs);
@@ -959,9 +958,9 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
     }
   }
 
-  std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs;	
+  //std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs;	
   // Serial version
-  sortAllSequencesAllPosition(seqs, sorted_seqs, source);
+  //sortAllSequencesAllPosition(seqs, sorted_seqs, source);
 
   for(size_type iterations = 1; ; iterations++)
   {

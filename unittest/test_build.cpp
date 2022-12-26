@@ -11,6 +11,9 @@
 
 using namespace gbwt;
 
+namespace {
+//------------------------------------------------------------------------------
+
 int
 getMax(int array[], int n)
 {
@@ -194,7 +197,7 @@ TEST(RadixSortTest, SerialRadixSort)
   std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs;
 
   // serial version
-  gbwt::sortAllSequencesAllPosition(vec_seqs, sorted_seqs, text_buffer);
+  sortAllSequencesAllPosition(vec_seqs, sorted_seqs, text_buffer);
 
   std::vector<std::vector<std::pair<size_type, node_type>>> ans{
     { { 0, 2 }, { 1, 2 }, { 2, 3 } }, // Node 1
@@ -260,3 +263,6 @@ TEST(RadixSortTest, ThrustRadixSort)
     }
   }
 }
+//-----------------------------------------------------------------
+
+} // namespace
