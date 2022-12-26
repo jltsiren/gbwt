@@ -194,7 +194,7 @@ TEST(RadixSortTest, SerialRadixSort)
   std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs;
 
   // serial version
-  sortAllSequencesAllPosition(vec_seqs, sorted_seqs, text_buffer);
+  gbwt::sortAllSequencesAllPosition(vec_seqs, sorted_seqs, text_buffer);
 
   std::vector<std::vector<std::pair<size_type, node_type>>> ans{
     { { 0, 2 }, { 1, 2 }, { 2, 3 } }, // Node 1
