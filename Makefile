@@ -32,7 +32,8 @@ ifeq ($(shell uname -s), Darwin)
     endif
 endif
 
-CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -Iinclude -I$(INC_DIR)
+MY_CXX_FLAGS=-std=c++17
+CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -Iinclude  -I$(INC_DIR)
 
 HEADERS=$(wildcard include/gbwt/*.h)
 LIBOBJS=$(addprefix $(BUILD_OBJ)/,algorithms.o bwtmerge.o cached_gbwt.o dynamic_gbwt.o fast_locate.o files.o gbwt.o internal.o metadata.o support.o test.o utils.o variants.o)
@@ -56,13 +57,13 @@ $(BUILD_OBJ):
 	mkdir -p $@
 
 $(BUILD_OBJ)/%.o:$(SOURCE_DIR)/%.cpp $(HEADERS)
-	$(MY_CXX) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -c -o $@ $<
+	$(MY_CXX) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -c  -o $@ $< 
 
 $(LIBRARY):$(LIBOBJS)
 	ar rcs $@ $(LIBOBJS)
 
 $(BUILD_BIN)/%:$(BUILD_OBJ)/%.o $(LIBRARY)
-	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $<  $(LIBRARY) $(LIBS)
 
 test:$(LIBRARY)
 	cd tests && $(MAKE) test
