@@ -22,12 +22,11 @@
   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
   SOFTWARE.
 */
-
 #include <gbwt/BS_thread_pool_light.h>
-#include <thrust_sort.cuh>
-
 #include <gbwt/bwtmerge.h>
 #include <gbwt/dynamic_gbwt.h>
+
+#include <thrust_sort.cuh>
 
 #include <memory>
 #include <shared_mutex>
@@ -733,6 +732,88 @@ void sortSequences(std::vector<Sequence> &seqs) {
   }
 }
 
+void 
+printSortedMatrix(
+	std::vector<std::vector<std::pair<size_type, node_type>>>& sorted)
+{
+	for (size_t i=0; i < sorted.size(); i++) 
+	{
+	  for (size_t j=0; j < sorted[i].size(); j++)
+	  {
+	  	 std::cout << "(" << (int) i << ", " << (int) j << ") -> "
+				   << "Pair(" 
+				   << (int) sorted[i][j].first 
+				   << ", "
+				   << (int) sorted[i][j].second << ")\n";
+	  }
+	  std::cout << "\n";
+	} 
+}
+
+/*
+ * [Authored by KaiYin] Sort all sequences in advance
+ */
+
+void
+nextSequencePosition(Sequence& seq)
+{
+  seq.pos++;
+}
+
+void
+advanceSequencePosition(Sequence& seq, const text_type& text)
+{
+  seq.curr = seq.next;
+  seq.next = text[seq.pos];
+}
+
+void
+advanceSequencePosition(Sequence& seq, const vector_type& text)
+{
+  seq.curr = seq.next;
+  seq.next = text[seq.pos];
+}
+
+void
+advanceSequencePosition(Sequence& seq, const GBWT& source)
+{
+  node_type curr = seq.next;
+  const CompressedRecord current = source.record(curr);
+  CompressedRecordIterator iter(current);
+  seq.curr = seq.next;
+  while(iter.offset() <= seq.pos) { ++iter; }
+  seq.next = current.successor(iter->first);
+}
+
+template<class Source>
+void
+sortAllSequencesAllPosition(
+  std::vector<Sequence>& seqs,
+  std::vector<std::vector<std::pair<size_type, node_type>>>& sorted,
+  const Source& source)
+{
+  //FIXME: copy constructor wastes time and space
+  std::vector<Sequence> tmp(seqs);
+  node_type curr = 1;
+  while (1) {
+    std::vector<std::pair<size_type, node_type>> curr_sorted;
+    for (Sequence& s : tmp) {
+      if (curr == s.next) {
+        nextSequencePosition(s);
+        advanceSequencePosition(s, source);
+        curr_sorted.emplace_back(std::make_pair(s.id, s.next));
+      }
+    }
+    sorted.emplace_back(curr_sorted);
+    sortSequences(tmp);
+    if (tmp.empty()) {
+      //printSortedMatrix(sorted);
+      return;
+    }
+    curr++;
+  }
+}
+
 /*
   Rebuild the edge offsets in the outgoing edges to each 'next' node. The
   offsets will be valid after the insertions in the next iteration.
@@ -878,36 +959,17 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
     }
   }
 
-  for (size_type iterations = 1;; iterations++) {
-    // std::cout << "before updating:\n";
-    // print_seq(seqs);
-    // print_record(gbwt.bwt);
-    // std::cout << "\n";
-    updateRecords(gbwt, seqs, iterations, sample_interval,
-                  endmarker_edges); // Insert the next nodes into the GBWT.
-    // std::cout << "after updating:\n";
-    // print_seq(seqs);
-    // print_record(gbwt.bwt);
-    // std::cout << "\n";
+  std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs;	
+  // Serial version
+  sortAllSequencesAllPosition(seqs, sorted_seqs, source);
 
-    nextPosition(seqs,
-                 source); // Determine the next position for each sequence.
-    sortSequences(seqs); // Sort for the next iteration and remove the ones that
-                         // have finished.
-    if (seqs.empty()) {
-      // std::cerr << "\n-------- final condition  ---------";
-      // print_seq(seqs);
-      // print_record(gbwt.bwt);
-      // std::cerr << "-----------------------------------\n";
-      return iterations;
-    }
-    rebuildOffsets(
-        gbwt, seqs,
-        endmarker_edges); // Rebuild offsets in outgoing edges and sequences.
-    // std::cout << "after rebuildOffsets:\n";
-    // print_seq(seqs);
-    // print_record(gbwt.bwt);
-    // std::cerr << "-----------------------------------\n";
+  for(size_type iterations = 1; ; iterations++)
+  {
+    updateRecords(gbwt, seqs, iterations, sample_interval, endmarker_edges); // Insert the next nodes into the GBWT.
+    nextPosition(seqs, source); // Determine the next position for each sequence.
+    sortSequences(seqs); // Sort for the next iteration and remove the ones that have finished.
+    if(seqs.empty()) { return iterations; }
+    rebuildOffsets(gbwt, seqs, endmarker_edges); // Rebuild offsets in outgoing edges and sequences.
     advancePosition(seqs, source); // Move the sequences to the next position.
   }
 }
