@@ -16,6 +16,7 @@ jobs:
         cuda: '11.7.0'
 
     - run: nvcc -V
+    - run: nvidia-smi
     
     - uses: actions/checkout@v3
 
