@@ -1059,14 +1059,14 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
   auto sorted_seqs = radix_sort(source, start_pos, gbwt.sigma());
   int tmp = 0;
   // debug section of radix sort
-  /*
+  
   for (auto &vec : sorted_seqs) {
     std::cout << "\nid: " << tmp++ << "\n";
     for (auto &item : vec) {
       std::cout << "(" << item.first << ", " << item.second << ") ";
     }
   }
-  */
+  
 
   // ---- Update incoming edge ---- //
 

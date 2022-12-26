@@ -433,4 +433,5 @@ sortAllSequencesAllPosition(
   const Source& source);
 //------------------------------------------------------------------------------
 } // namespace gbwt
+
 #endif // GBWT_DYNAMIC_GBWT_H
