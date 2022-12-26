@@ -7,7 +7,7 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
     - uses: Jimver/cuda-toolkit@v0.2.8
@@ -16,7 +16,6 @@ jobs:
         cuda: '11.7.0'
 
     - run: nvcc -V
-    - run: nvidia-smi
     
     - uses: actions/checkout@v3
 
