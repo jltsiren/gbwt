@@ -15,12 +15,13 @@ jobs:
       with:
         cuda: '11.7.0'
 
-    - run: echo "Installed cuda version is: ${{steps.cuda-toolkit.outputs.cuda}}"
-    - run: echo "Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}"
     - run: nvcc -V
     
+    - uses: actions/checkout@v3
+
     - name: Install sdsl-lite dependencies
       run: |
+        cd ${{ github.workspace }}
         cd ..
         git clone https://github.com/vgteam/sdsl-lite.git
         cd sdsl-lite
@@ -28,6 +29,8 @@ jobs:
     - name: Compile gbwt-parallel project
       run: |
         cd ${{ github.workspace }}
+        pwd
+        ls
         make -j 8
     - name: Run unit tests
       run: |
