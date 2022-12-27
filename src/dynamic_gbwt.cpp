@@ -1205,13 +1205,13 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
   size_type node_num = gbwt.sigma();
   for (node_type i=0;i<node_num;++i) {
     if (i==0) {
-      // updateRecordsParallel(gbwt, source, endmarker_sorted, i, sample_interval, endmarker_edges);
+      //updateRecordsParallel(gbwt, source, endmarker_sorted, i, sample_interval, endmarker_edges);
       pool.push_task(&gbwt::updateRecordsParallel, std::ref(gbwt), 
         std::cref(source), std::ref(sorted_seqs), std::cref(i), sample_interval, 
         std::ref(endmarker_edges));
     }
     else {
-      // updateRecordsParallel(gbwt, source, sorted_seqs, i, sample_interval, endmarker_edges);
+      //updateRecordsParallel(gbwt, source, sorted_seqs, i, sample_interval, endmarker_edges);
       pool.push_task(&gbwt::updateRecordsParallel, std::ref(gbwt), 
         std::cref(source), std::ref(sorted_seqs), std::cref(i), sample_interval, 
         std::ref(endmarker_edges));
