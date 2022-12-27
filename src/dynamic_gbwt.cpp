@@ -899,7 +899,7 @@ sortAllSequencesAllPosition(
     sorted.emplace_back(curr_sorted);
     serialSortSequences(tmp);
     if (tmp.empty()) {
-      printSortedMatrix(sorted);
+      //printSortedMatrix(sorted);
       return;
     }
     curr++;
@@ -1150,13 +1150,17 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
                                   std::thread::hardware_concurrency() - 1);
   BS::thread_pool_light pool(thread_num);
   
-  // ---- Radix Sort  ---- //
+  // ---- Thrust Radix Sort  ---- //
   auto sorted_seqs = radix_sort(source, start_pos, gbwt.sigma());
   int tmp = 0;
   /*
   std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs;
   sortAllSequencesAllPosition(seqs, sorted_seqs, source);
   */
+  
+  // ---- Serial Radix Sort  ---- //
+  //std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs;	
+  //sortAllSequencesAllPosition(seqs, sorted_seqs, source);
   
   // debug section of radix sort
   /*
@@ -1189,6 +1193,7 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
   pool.wait_for_tasks();
   
   // debug section of outgoing_offset_map
+  /*
   for (short_type node_id = 1; node_id < gbwt.sigma(); ++node_id) {
     DynamicRecord &record = gbwt.record(node_id);
     std::cout << "node_id: " << node_id << "\n";
@@ -1196,6 +1201,7 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
       std::cout << "(" << item.first << ", " << item.second << ")\n";
     }
   }
+  */
 
   // ---- Given the radix sort table, update outgoing edges, body, and ids of Records(nodes) ---- //
   std::vector<std::vector<std::pair<size_type, node_type>>> endmarker_sorted;
@@ -1222,9 +1228,9 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
   }
   pool.wait_for_tasks();
 
-  std::cerr << "\n-----  Record Before Recode  -----\n";
-  print_record(gbwt.bwt);
-  std::cerr << "------------------------------------\n";
+  //std::cerr << "\n-----  Record Before Recode  -----\n";
+  //print_record(gbwt.bwt);
+  //std::cerr << "------------------------------------\n";
 
   return 1;
 } // namespace gbwt
@@ -2101,9 +2107,9 @@ void GBWTBuilder::finish() {
 
   // Finally recode the index to make it serializable.
   this->index.recode();
-  std::cerr << "\n-----  Record After Recode  -----\n";
-  print_record(this->index.bwt);
-  std::cerr << "----------------------------------\n";
+  //std::cerr << "\n-----  Record After Recode  -----\n";
+  //print_record(this->index.bwt);
+  //std::cerr << "----------------------------------\n";
 }
 
 void GBWTBuilder::flush() {

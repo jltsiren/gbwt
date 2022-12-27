@@ -23,9 +23,9 @@ radix_sort(const text_type &source,
 
   // emplace_back the ENDMARKER's outgoing node
   size_type i = 0;
-  for (auto &first_node_pos : start_position) {
-    sorted_seqs[0].emplace_back(std::make_pair(i++, source[first_node_pos]));
-  }
+  //for (auto &first_node_pos : start_position) {
+  //  sorted_seqs[0].emplace_back(std::make_pair(i++, source[first_node_pos]));
+  //}
 
   for (size_type position = 0; seqs_size > 0; ++position) {
     i = 0;
@@ -57,7 +57,7 @@ radix_sort(const text_type &source,
     i = 0;
     for (auto &idx : seq_id) {
       node_type next_node_id = source[start_position[idx] + position + 1];
-      sorted_seqs[keys[i++]].emplace_back(std::make_pair(idx, next_node_id));
+      sorted_seqs[keys[i++] - 1].emplace_back(std::make_pair(idx, next_node_id));
     }
 
     seqs_size = seq_id.size();
