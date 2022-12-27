@@ -842,6 +842,42 @@ advanceSequencePosition(Sequence& seq, const GBWT& source)
   seq.next = current.successor(iter->first);
 }
 
+void 
+printSortedMatrix(
+	std::vector<std::vector<std::pair<size_type, node_type>>>& sorted)
+{
+	for (size_t i=0; i < sorted.size(); i++) 
+	{
+	  for (size_t j=0; j < sorted[i].size(); j++)
+	  {
+	  	 std::cout << "(" << (int) i << ", " << (int) j << ") -> "
+				   << "Pair(" 
+				   << (int) sorted[i][j].first 
+				   << ", "
+				   << (int) sorted[i][j].second << ")\n";
+	  }
+	  std::cout << "\n";
+	} 
+}
+
+void serialSortSequences(std::vector<Sequence> &seqs) {
+  std::sort(seqs.begin(), seqs.end(), 
+    [](const Sequence & a, const Sequence & b) -> bool
+  { 
+      return a.curr < b.curr; 
+  });
+  size_type head = 0;
+  while (head < seqs.size() && seqs[head].next == ENDMARKER) {
+    head++;
+  }
+  if (head > 0) {
+    for (size_type j = 0; head + j < seqs.size(); j++) {
+      seqs[j] = seqs[head + j];
+    }
+    seqs.resize(seqs.size() - head);
+  }
+}
+
 void
 sortAllSequencesAllPosition(
   std::vector<Sequence>& seqs,
@@ -861,7 +897,7 @@ sortAllSequencesAllPosition(
       }
     }
     sorted.emplace_back(curr_sorted);
-    sortSequences(tmp);
+    serialSortSequences(tmp);
     if (tmp.empty()) {
       //printSortedMatrix(sorted);
       return;
@@ -1161,24 +1197,6 @@ void build_offset_map(DynamicGBWT &gbwt, const size_type node_id) {
   return;
 }
 
-void 
-printSortedMatrix(
-	std::vector<std::vector<std::pair<size_type, node_type>>>& sorted)
-{
-	for (size_t i=0; i < sorted.size(); i++) 
-	{
-	  for (size_t j=0; j < sorted[i].size(); j++)
-	  {
-	  	 std::cout << "(" << (int) i << ", " << (int) j << ") -> "
-				   << "Pair(" 
-				   << (int) sorted[i][j].first 
-				   << ", "
-				   << (int) sorted[i][j].second << ")\n";
-	  }
-	  std::cout << "\n";
-	} 
-}
-
 template<class Source>
 void
 sortAllSequencesAllPosition(
@@ -1199,9 +1217,9 @@ sortAllSequencesAllPosition(
       }
     }
     sorted.emplace_back(curr_sorted);
-    sortSequences(tmp);
+    serialSortSequences(tmp);
     if (tmp.empty()) {
-      printSortedMatrix(sorted);
+      //printSortedMatrix(sorted);
       return;
     }
     curr++;

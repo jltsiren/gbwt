@@ -185,7 +185,7 @@ TEST(RadixSortTest, Sequences)
     }
   }
 }
-TEST(RadixSortTest, SerialRadixSort)
+TEST(RadixSortTest, SerialRadixSort_1)
 {
   // Test Case shown on paper
   std::vector<vector_type> test_seqs{ { 1, 2, 4, 6, 7 },
@@ -223,6 +223,41 @@ TEST(RadixSortTest, SerialRadixSort)
   }
 }
 
+TEST(RadixSortTest, SerialRadixSort_2)
+{
+  // Test Case shown on paper
+  std::vector<vector_type> test_seqs{ { 1, 2, 3, 5 },
+                                      { 1, 3, 4, 5 },
+                                      { 1, 2, 4, 5 } };
+  text_type text_buffer = getTextBuffer(test_seqs);
+  std::vector<Sequence> vec_seqs = getVectorOfSequences(text_buffer);
+
+  std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs;
+
+  // serial version
+  sortAllSequencesAllPosition(vec_seqs, sorted_seqs, text_buffer);
+
+  std::vector<std::vector<std::pair<size_type, node_type>>> ans{
+    { { 0, 2 }, { 1, 3 }, { 2, 2 } }, // Node 1
+    { { 0, 3 }, { 2, 4 } },
+    { { 1, 4 }, { 0, 5} },
+    { { 2, 5 }, { 1, 5 } },
+    { { 0, 0 }, { 2, 0 }, {1, 0} },
+  };
+
+  EXPECT_EQ(sorted_seqs.size(), ans.size())
+    << "Sequences size are not consistent " << sorted_seqs.size() << "and"
+    << ans.size();
+  for (size_t i = 0; i < sorted_seqs.size(); i++) {
+    EXPECT_EQ(sorted_seqs[i].size(), ans[i].size())
+      << "Sizes are not consistent " << sorted_seqs[i].size() << "and"
+      << ans[i].size() << "at offset " << i;
+    for (size_t j = 0; j < sorted_seqs[i].size(); j++) {
+      EXPECT_EQ(sorted_seqs[i][j], ans[i][j])
+        << "Wrong value at offset " << i << "," << j;
+    }
+  }
+}
 TEST(RadixSortTest, ThrustRadixSort)
 {
   // Test Case shown on paper
