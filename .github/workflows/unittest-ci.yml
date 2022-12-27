@@ -7,13 +7,21 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
+    - uses: Jimver/cuda-toolkit@v0.2.8
+      id: cuda-toolkit
+      with:
+        cuda: '11.7.0'
+
+    - run: nvcc -V
+    
     - uses: actions/checkout@v3
 
     - name: Install sdsl-lite dependencies
       run: |
+        cd ${{ github.workspace }}
         cd ..
         git clone https://github.com/vgteam/sdsl-lite.git
         cd sdsl-lite
@@ -21,6 +29,8 @@ jobs:
     - name: Compile gbwt-parallel project
       run: |
         cd ${{ github.workspace }}
+        pwd
+        ls
         make -j 8
     - name: Run unit tests
       run: |

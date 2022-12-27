@@ -4,6 +4,7 @@ include $(SDSL_DIR)/Make.helper
 BUILD_BIN=bin
 BUILD_LIB=lib
 BUILD_OBJ=obj
+BUILD_CUDA_OBJ=obj
 SOURCE_DIR=src
 
 # Multithreading with OpenMP.
@@ -32,10 +33,16 @@ ifeq ($(shell uname -s), Darwin)
     endif
 endif
 
-CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -Iinclude -I$(INC_DIR)
+MY_CXX_FLAGS=-std=c++17
+CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -Iinclude  -I$(INC_DIR)
 
-HEADERS=$(wildcard include/gbwt/*.h)
-LIBOBJS=$(addprefix $(BUILD_OBJ)/,algorithms.o bwtmerge.o cached_gbwt.o dynamic_gbwt.o fast_locate.o files.o gbwt.o internal.o metadata.o support.o test.o utils.o variants.o)
+NVCC=nvcc
+NVCC_FLAGS=-arch=sm_75 -use_fast_math -Iinclude -I$(INC_DIR)
+NVCC_LIBS=
+CUDA_LINK_LIBS= -lcudart -L/usr/local/cuda/lib64
+
+HEADERS=$(wildcard include/gbwt/*.h include/*.cuh)
+LIBOBJS=$(addprefix $(BUILD_OBJ)/,algorithms.o bwtmerge.o cached_gbwt.o dynamic_gbwt.o fast_locate.o files.o gbwt.o internal.o metadata.o support.o test.o thrust_sort.o utils.o variants.o)
 LIBRARY=$(BUILD_LIB)/libgbwt.a
 
 PROGRAMS=$(addprefix $(BUILD_BIN)/,build_gbwt build_ri merge_gbwt benchmark metadata_tool remove_seq)
@@ -55,14 +62,17 @@ $(BUILD_LIB):
 $(BUILD_OBJ):
 	mkdir -p $@
 
+$(BUILD_CUDA_OBJ)/%.o:$(SOURCE_DIR)/%.cu $(HEADERS)
+	$(NVCC) $(NVCC_FLAGS) -c $< -o $@ $(NVCC_LIBS)
+
 $(BUILD_OBJ)/%.o:$(SOURCE_DIR)/%.cpp $(HEADERS)
-	$(MY_CXX) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -c -o $@ $<
+	$(MY_CXX) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) $(CUDA_LINK_LIBS) -c -o $@ $<
 
 $(LIBRARY):$(LIBOBJS)
 	ar rcs $@ $(LIBOBJS)
 
 $(BUILD_BIN)/%:$(BUILD_OBJ)/%.o $(LIBRARY)
-	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
+	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS) $(CUDA_LINK_LIBS)
 
 test:$(LIBRARY)
 	cd tests && $(MAKE) test

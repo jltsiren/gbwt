@@ -36,3 +36,7 @@ test_variants
 
 # vscode
 .vscode
+
+# test files
+*.txt 
+*.gbwt

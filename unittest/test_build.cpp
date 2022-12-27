@@ -1,6 +1,8 @@
 #include <gbwt/bwtmerge.h>
 #include <gbwt/dynamic_gbwt.h>
 
+#include <thrust_sort.cuh>
+
 #include <gtest/gtest.h>
 
 #include <iostream>
@@ -8,6 +10,9 @@
 #include <vector>
 
 using namespace gbwt;
+
+namespace {
+//------------------------------------------------------------------------------
 
 int
 getMax(int array[], int n)
@@ -180,7 +185,7 @@ TEST(RadixSortTest, Sequences)
     }
   }
 }
-TEST(RadixSortTest, VectorOfPair)
+TEST(RadixSortTest, SerialRadixSort)
 {
   // Test Case shown on paper
   std::vector<vector_type> test_seqs{ { 1, 2, 4, 6, 7 },
@@ -217,3 +222,47 @@ TEST(RadixSortTest, VectorOfPair)
     }
   }
 }
+
+TEST(RadixSortTest, ThrustRadixSort)
+{
+  // Test Case shown on paper
+  std::vector<vector_type> test_seqs{ { 1, 2, 4, 6, 7 },
+                                      { 1, 2, 5, 7 },
+                                      { 1, 3, 4, 5, 7 } };
+  text_type text_buffer = getTextBuffer(test_seqs);
+  std::vector<Sequence> vec_seqs = getVectorOfSequences(text_buffer);
+
+  std::vector<size_type> start_pos;
+  for (auto& sequence : vec_seqs) {
+    start_pos.emplace_back(sequence.pos);
+  }
+  // cuda version
+  auto sorted_seqs = radix_sort(text_buffer, start_pos, 8);
+
+  std::vector<std::vector<std::pair<size_type, node_type>>> ans{
+    { { 0, 1 }, { 1, 1 }, { 2, 1 } }, // Node $
+    { { 0, 2 }, { 1, 2 }, { 2, 3 } }, // Node 1
+    { { 0, 4 }, { 1, 5 } },
+    { { 2, 4 } },
+    { { 0, 6 }, { 2, 5 } },
+    { { 1, 7 }, { 2, 7 } },
+    { { 0, 7 } },
+    { { 1, 0 }, { 2, 0 }, { 0, 0 } }, // Node 7
+  };
+
+  EXPECT_EQ(sorted_seqs.size(), ans.size())
+    << "Sequences size are not consistent " << sorted_seqs.size() << "and"
+    << ans.size();
+  for (size_t i = 0; i < sorted_seqs.size(); i++) {
+    EXPECT_EQ(sorted_seqs[i].size(), ans[i].size())
+      << "Sizes are not consistent " << sorted_seqs[i].size() << "and"
+      << ans[i].size() << "at offset " << i;
+    for (size_t j = 0; j < sorted_seqs[i].size(); j++) {
+      EXPECT_EQ(sorted_seqs[i][j], ans[i][j])
+        << "Wrong value at offset " << i << "," << j;
+    }
+  }
+}
+//-----------------------------------------------------------------
+
+} // namespace
