@@ -1180,12 +1180,12 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
   BS::thread_pool_light pool(thread_num);
   
   // ---- Radix Sort  ---- //
-  /*
   auto sorted_seqs = radix_sort(source, start_pos, gbwt.sigma());
   int tmp = 0;
-  */
+  /*
   std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs;
   sortAllSequencesAllPosition(seqs, sorted_seqs, source);
+  */
   
   // debug section of radix sort
   /*
