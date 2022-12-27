@@ -669,7 +669,7 @@ void updateRecords(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
 void
 updateRecordsParallel(DynamicGBWT& gbwt, const text_type &source, 
   std::vector<std::vector<std::pair<size_type, node_type>>> &sorted_mat, 
-  const node_type &curr_node, size_type sample_interval,
+  const node_type curr_node, size_type sample_interval,
   std::unique_ptr<std::unordered_map<node_type, size_type>>& endmarker_edges)
 {
   int index;
@@ -899,7 +899,7 @@ sortAllSequencesAllPosition(
     sorted.emplace_back(curr_sorted);
     serialSortSequences(tmp);
     if (tmp.empty()) {
-      //printSortedMatrix(sorted);
+      printSortedMatrix(sorted);
       return;
     }
     curr++;
@@ -1153,6 +1153,10 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
   // ---- Radix Sort  ---- //
   auto sorted_seqs = radix_sort(source, start_pos, gbwt.sigma());
   int tmp = 0;
+  /*
+  std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs;
+  sortAllSequencesAllPosition(seqs, sorted_seqs, source);
+  */
   
   // debug section of radix sort
   /*
@@ -1163,7 +1167,6 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
     }
   }
   */
-  
 
   // ---- Update incoming edge ---- //
 
@@ -1207,13 +1210,13 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
     if (i==0) {
       //updateRecordsParallel(gbwt, source, endmarker_sorted, i, sample_interval, endmarker_edges);
       pool.push_task(&gbwt::updateRecordsParallel, std::ref(gbwt), 
-        std::cref(source), std::ref(sorted_seqs), std::cref(i), sample_interval, 
+        std::cref(source), std::ref(endmarker_sorted), i, sample_interval, 
         std::ref(endmarker_edges));
     }
     else {
       //updateRecordsParallel(gbwt, source, sorted_seqs, i, sample_interval, endmarker_edges);
       pool.push_task(&gbwt::updateRecordsParallel, std::ref(gbwt), 
-        std::cref(source), std::ref(sorted_seqs), std::cref(i), sample_interval, 
+        std::cref(source), std::ref(sorted_seqs), i, sample_interval, 
         std::ref(endmarker_edges));
     }
   }
