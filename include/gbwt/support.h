@@ -100,11 +100,15 @@ struct DynamicRecord {
   std::vector<edge_type> incoming, outgoing;
   std::vector<run_type> body;
   std::vector<sample_type> ids;
+  size_type min_pos;
+  size_type max_pos;
 
   std::shared_mutex record_mutex;
 
   // the key is the node_id, and value is the offset
   std::unordered_map<node_type, size_type> outgoing_offset_map;
+  std::unordered_map<size_type, unsigned int> body_accumulate_offset_map;
+  std::unordered_map<size_type, unsigned int> sample_accumulate_offset_map;
 
   //------------------------------------------------------------------------------
 
@@ -120,6 +124,13 @@ struct DynamicRecord {
 
   void clear();
   void swap(DynamicRecord &another);
+
+  //------------------------------------------------------------------------------
+
+  unsigned int getBodyOffset(size_type pos);
+  void updateBodyOffset(size_type pos);
+  unsigned int getSampleOffset(size_type pos);
+  void updateSampleOffset(size_type pos);
 
   //------------------------------------------------------------------------------
 

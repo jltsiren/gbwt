@@ -670,7 +670,8 @@ void
 updateRecordsParallel(DynamicGBWT& gbwt, const text_type &source, 
   std::vector<std::vector<std::pair<size_type, node_type>>> &sorted_mat, 
   const node_type curr_node, size_type sample_interval,
-  std::unique_ptr<std::unordered_map<node_type, size_type>>& endmarker_edges)
+  std::unique_ptr<std::unordered_map<node_type, size_type>>& endmarker_edges,
+  std::unique_ptr<std::unordered_map<size_type, size_type>> &start_pos)
 {
   int index;
   if (curr_node==ENDMARKER)
@@ -678,26 +679,14 @@ updateRecordsParallel(DynamicGBWT& gbwt, const text_type &source,
   else
     index = curr_node-1;
   DynamicRecord& current = gbwt.record(curr_node);
-  RunMerger new_body(current.outdegree());
-  std::vector<sample_type> new_samples;
-  std::vector<run_type>::iterator iter = current.body.begin();
-  std::vector<sample_type>::iterator sample_iter = current.ids.begin();
   size_type insert_count = 0;
-  int outgoing_size = current.outdegree();
-  // Add old runs until the end.
-  while(new_body.size() < outgoing_size)
-  {
-    new_body.insert(*iter);
-    ++iter;
-  }
-  // Add old samples until the end.
-  while(sample_iter != current.ids.end())
-  {
-    new_samples.push_back(sample_type(sample_iter->first, sample_iter->second));
-    ++sample_iter;
-  }
   for(size_type i = 0; i < sorted_mat[index].size(); ++i)
   {
+    std::vector<run_type>::iterator iter = current.body.begin();
+    std::vector<sample_type>::iterator sample_iter = current.ids.begin();
+    RunMerger new_body(current.outdegree());
+    std::vector<sample_type> new_samples;
+    
     // Determine the edge to the next node or add it if it does not exist.
     rank_type outrank = 0;
     size_type seq_id = sorted_mat[index][i].first;
@@ -725,17 +714,76 @@ updateRecordsParallel(DynamicGBWT& gbwt, const text_type &source,
         current.outgoing.push_back(edge_type(next_node, outgoing_offset));
         new_body.addEdge();
       }
+    
     }
-    if(next_node == ENDMARKER)  // Sample sequence id.
+    // TODO: Get body offset
+    // linear search for current position
+    size_type cur_pos;
+    if (curr_node!=ENDMARKER) {
+      size_type pos = (*start_pos)[seq_id];
+      for (size_type cur=pos;cur<source.size();++cur) {
+        if (source[cur]==curr_node && source[cur+1]==next_node) {
+          cur_pos = cur - pos;
+          break;
+        }
+        else if (source[cur]==ENDMARKER) {
+          std::cerr << "Cannt find position.\n";
+          std::exit(1);
+        }
+      }
+    } else {
+      cur_pos = current.body.size();
+    }
+    // find offset(insert position) of body
+    int body_offset = current.getBodyOffset(cur_pos);
+    int outgoing_size = current.outdegree();
+    // Add old runs until the offset.
+    while(new_body.size() < body_offset)
     {
-      int size = new_samples.size();
-      new_samples.push_back(sample_type(size, seq_id));
+      if (iter->second <= body_offset - new_body.size()) {
+        new_body.insert(*iter);
+        ++iter;
+      } else {
+        run_type temp(iter->first, body_offset - new_body.size());
+        new_body.insert(temp);
+        iter->second -= temp.second;
+      }
     }
     new_body.insert(outrank);
-    insert_count++;
+    ++insert_count;
+    // Add runs until the end.
+    while(iter!=current.body.end())
+    {
+      new_body.insert(*iter);
+      ++iter;
+    }
+    swapBody(current, new_body);
+    // update body offset
+    current.updateBodyOffset(cur_pos);
+    
+    // Sample sequence id.
+    if(next_node == ENDMARKER)  {
+      unsigned int sample_offset = current.getSampleOffset(cur_pos);
+      // Add old samples until the offset.
+      while(sample_iter!=current.ids.end() &&
+        sample_iter->first < sample_offset)
+      {
+        new_samples.push_back(sample_type(sample_iter->first, sample_iter->second));
+        ++sample_iter;
+      }
+      int size = new_samples.size();
+      new_samples.push_back(sample_type(size, seq_id));
+      while (sample_iter != current.ids.end()) // Add the rest of the old samples.
+      {
+        new_samples.push_back(
+            sample_type(sample_iter->first + 1, sample_iter->second));
+        ++sample_iter;
+      }
+      current.ids.swap(new_samples);
+      // update sample offset
+      current.updateSampleOffset(cur_pos);
+    }
   }
-  swapBody(current, new_body);
-  current.ids.swap(new_samples);
 }
 
 /*
@@ -1151,8 +1199,11 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
   BS::thread_pool_light pool(thread_num);
   
   // ---- Thrust Radix Sort  ---- //
+  // ERROR ???
+  // NO sequence id informations
   auto sorted_seqs = radix_sort(source, start_pos, gbwt.sigma());
   int tmp = 0;
+  //printSortedMatrix(sorted_seqs);
   /*
   std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs;
   sortAllSequencesAllPosition(seqs, sorted_seqs, source);
@@ -1210,27 +1261,33 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
     end_sort.emplace_back(std::make_pair(sequence.id, sequence.next));
   } endmarker_sorted.emplace_back(end_sort);
 
+  // build unordered map of start position for 
+  std::unique_ptr<std::unordered_map<size_type, size_type>> start_pos_map(
+      new std::unordered_map<size_type, size_type>);
+  for (auto &sequence:seqs)
+    (*start_pos_map)[sequence.id] = sequence.pos;
+
   // parallel update nodes
   size_type node_num = gbwt.sigma();
   for (node_type i=0;i<node_num;++i) {
     if (i==0) {
-      //updateRecordsParallel(gbwt, source, endmarker_sorted, i, sample_interval, endmarker_edges);
+      //updateRecordsParallel(gbwt, source, endmarker_sorted, i, sample_interval, endmarker_edges, start_pos_map);
       pool.push_task(&gbwt::updateRecordsParallel, std::ref(gbwt), 
         std::cref(source), std::ref(endmarker_sorted), i, sample_interval, 
-        std::ref(endmarker_edges));
+        std::ref(endmarker_edges), std::ref(start_pos_map));
     }
     else {
-      //updateRecordsParallel(gbwt, source, sorted_seqs, i, sample_interval, endmarker_edges);
+      //updateRecordsParallel(gbwt, source, sorted_seqs, i, sample_interval, endmarker_edges, start_pos_map);
       pool.push_task(&gbwt::updateRecordsParallel, std::ref(gbwt), 
         std::cref(source), std::ref(sorted_seqs), i, sample_interval, 
-        std::ref(endmarker_edges));
+        std::ref(endmarker_edges), std::ref(start_pos_map));
     }
   }
   pool.wait_for_tasks();
 
-  //std::cerr << "\n-----  Record Before Recode  -----\n";
-  //print_record(gbwt.bwt);
-  //std::cerr << "------------------------------------\n";
+  std::cerr << "\n-----  Record Before Recode  -----\n";
+  print_record(gbwt.bwt);
+  std::cerr << "------------------------------------\n";
 
   return 1;
 } // namespace gbwt
