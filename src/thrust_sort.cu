@@ -12,25 +12,26 @@ void print_vec(const thrust::host_vector<size_type> &vec) {
 }
 
 std::vector<std::vector<std::pair<size_type, node_type>>>
-radix_sort(const text_type &source, const std::vector<size_type> &sequence_id,
+radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
            const std::unique_ptr<std::unordered_map<size_type, size_type>>
                &start_pos_map,
            const std::uint64_t total_nodes) {
+
+  std::cerr << "init sorting\n";
   std::chrono::steady_clock::time_point begin, end;
   double init_time = 0;
   begin = std::chrono::steady_clock::now();
 
   size_type seqs_size = (*start_pos_map).size();
-  std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs(
-      total_nodes);
-  // sorted_seqs.reserve(total_nodes);
-  for (auto &s : sorted_seqs) {
-    s.reserve(seqs_size);
-  }
+  std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs;
+  sorted_seqs.reserve(total_nodes);
+
   thrust::host_vector<size_type> seq_id(sequence_id);
-  thrust::host_vector<node_type> keys(sequence_id);
+  // thrust::host_vector<size_type> seq_id(seqs_size);
+  thrust::host_vector<node_type> keys(seqs_size);
   thrust::device_vector<node_type> d_keys;
   thrust::device_vector<size_type> d_seq_id;
+  // std::iota(seq_id.begin(), seq_id.end(), 0);
 
   // emplace_back the ENDMARKER's outgoing node
   size_type i = 0;
@@ -41,6 +42,7 @@ radix_sort(const text_type &source, const std::vector<size_type> &sequence_id,
   double key_time = 0, h2d_copy_time = 0, sort_time, d2h_copy_time = 0,
          remove_time = 0, place_time = 0;
 
+  std::cout << "start sorting\n";
   for (size_type position = 0; seqs_size > 0; ++position) {
     begin = std::chrono::steady_clock::now();
     i = 0;
