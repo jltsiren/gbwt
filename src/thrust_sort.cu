@@ -17,7 +17,6 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
                &start_pos_map,
            const std::uint64_t total_nodes) {
 
-  std::cerr << "init sorting\n";
   std::chrono::steady_clock::time_point begin, end;
   double init_time = 0;
   begin = std::chrono::steady_clock::now();
@@ -42,7 +41,6 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
   double key_time = 0, h2d_copy_time = 0, sort_time, d2h_copy_time = 0,
          remove_time = 0, place_time = 0;
 
-  std::cout << "start sorting\n";
   for (size_type position = 0; seqs_size > 0; ++position) {
     begin = std::chrono::steady_clock::now();
     i = 0;
@@ -113,7 +111,6 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
         std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
             .count();
   }
-  std::cout << "finish sorting\n";
   std::cout << "init_time: " << init_time << " [μs]\n";
   std::cout << "key_time: " << key_time << " [μs]\n";
   std::cout << "h2d_copy_time: " << h2d_copy_time << " [μs]\n";
