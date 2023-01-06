@@ -97,6 +97,12 @@ DynamicRecord::DynamicRecord(const DynamicRecord &source) {
   outgoing.assign(source.outgoing.begin(), source.outgoing.end());
   body.assign(source.body.begin(), source.body.end());
   ids.assign(source.ids.begin(), source.ids.end());
+  //
+  min_pos = source.min_pos;
+  max_pos = source.max_pos;
+  outgoing_offset_map = source.outgoing_offset_map;
+  body_accumulate_offset_map = source.body_accumulate_offset_map;
+  sample_accumulate_offset_map = source.sample_accumulate_offset_map;
 }
 
 DynamicRecord &DynamicRecord::operator=(const DynamicRecord &source) {
@@ -120,6 +126,12 @@ void DynamicRecord::swap(DynamicRecord &another) {
     this->outgoing.swap(another.outgoing);
     this->body.swap(another.body);
     this->ids.swap(another.ids);
+    //
+    std::swap(this->min_pos, another.min_pos);
+    std::swap(this->max_pos, another.max_pos);
+    this->outgoing_offset_map.swap(another.outgoing_offset_map);
+    this->body_accumulate_offset_map.swap(another.body_accumulate_offset_map);
+    this->sample_accumulate_offset_map.swap(another.sample_accumulate_offset_map);
   }
 }
 
@@ -129,6 +141,68 @@ std::pair<size_type, size_type> DynamicRecord::runs() const {
     result.second += (this->successor(run.first) == ENDMARKER ? run.second : 1);
   }
   return result;
+}
+
+//------------------------------------------------------------------------------
+
+unsigned int DynamicRecord::getBodyOffset(size_type pos) {
+  if (this->body_accumulate_offset_map.count(pos)==0) {
+    if (this->body_size==0) {
+      this->body_accumulate_offset_map[pos] = 0;
+      this->min_pos = pos;
+      this->max_pos = pos;
+    }
+    else {
+      unsigned int accumulate_offset = 0;
+      for (size_type i=this->min_pos;i<=this->max_pos;++i) {
+        if (i>pos)
+          break;
+        if (this->body_accumulate_offset_map.count(i)!=0)
+          accumulate_offset+=this->body_accumulate_offset_map[pos];
+      } 
+      if (pos<min_pos)
+        this->min_pos = pos;
+      if (pos>max_pos)
+        this->max_pos = pos;
+      this->body_accumulate_offset_map[pos] = accumulate_offset;
+    } 
+  }
+  return this->body_accumulate_offset_map[pos];
+}
+
+void DynamicRecord::updateBodyOffset(size_type pos) {
+  ++this->body_accumulate_offset_map[pos];
+  for(size_type cur=pos+1;cur<=this->max_pos;++cur) {
+    if (this->body_accumulate_offset_map.count(cur)!=0)
+      ++body_accumulate_offset_map[cur];
+  }
+}
+
+unsigned int DynamicRecord::getSampleOffset(size_type pos) {
+  if (this->sample_accumulate_offset_map.count(pos)==0) {
+    if (this->body_size==0) {
+      this->sample_accumulate_offset_map[pos] = 0;
+    }
+    else {
+      unsigned int accumulate_offset = 0;
+      for (size_type i=this->min_pos;i<=this->max_pos;++i) {
+        if (i>pos)
+          break;
+        if (this->sample_accumulate_offset_map.count(i)!=0)
+          accumulate_offset+=this->sample_accumulate_offset_map[pos];
+      } 
+      this->sample_accumulate_offset_map[pos] = accumulate_offset;
+    } 
+  }
+  return this->sample_accumulate_offset_map[pos];
+}
+
+void DynamicRecord::updateSampleOffset(size_type pos) {
+  ++this->sample_accumulate_offset_map[pos];
+  for(size_type cur=pos+1;cur<=this->max_pos;++cur) {
+    if (this->sample_accumulate_offset_map.count(cur)!=0)
+      ++sample_accumulate_offset_map[cur];
+  }
 }
 
 //------------------------------------------------------------------------------

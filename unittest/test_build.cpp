@@ -272,10 +272,9 @@ TEST(RadixSortTest, ThrustRadixSort)
     start_pos.emplace_back(sequence.pos);
   }
   // cuda version
-  auto sorted_seqs = radix_sort(text_buffer, start_pos, 8);
+  auto sorted_seqs = radix_sort(text_buffer, start_pos, 7);
 
   std::vector<std::vector<std::pair<size_type, node_type>>> ans{
-    { { 0, 1 }, { 1, 1 }, { 2, 1 } }, // Node $
     { { 0, 2 }, { 1, 2 }, { 2, 3 } }, // Node 1
     { { 0, 4 }, { 1, 5 } },
     { { 2, 4 } },
