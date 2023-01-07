@@ -167,11 +167,38 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
             .count();
 
     begin = std::chrono::steady_clock::now();
-    for (size_type i = 0; i < seqs_left; ++i) {
+	/*for (size_type i = 0; i < seqs_left; ++i) {
       size_type seq_id = h_seq_id[i];
       node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
       sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
+    }*/
+    for (size_type i = 0; i < (seqs_left/5) ; i+=5) {
+      size_type seq_id = h_seq_id[i];
+      node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
+	  
+	  seq_id = h_seq_id[i+1];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i+1] - 1].push_back({seq_id, next_node_id});
+	  
+	  seq_id = h_seq_id[i+2];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i+2] - 1].push_back({seq_id, next_node_id});
+	  
+	  seq_id = h_seq_id[i+3];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i+3] - 1].push_back({seq_id, next_node_id});
+	  
+	  seq_id = h_seq_id[i+4];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i+4] - 1].push_back({seq_id, next_node_id});
     }
+	size_type start = (seqs_left/5) * 5;
+    for (size_type i = start; i < seqs_left; ++i) {
+      size_type seq_id = h_seq_id[i];
+      node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
+	}
     end = std::chrono::steady_clock::now();
     place_time +=
         std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
