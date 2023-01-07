@@ -68,8 +68,9 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
   std::chrono::steady_clock::time_point begin, end;
   begin = std::chrono::steady_clock::now();
 
-  std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs;
-  sorted_seqs.reserve(total_nodes);
+  std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs(
+      total_nodes);
+  // sorted_seqs.reserve(total_nodes);
 
   // ---- Prepare values to be used ---- //
   // width of the integers which are accessed via the [] operator
@@ -103,8 +104,8 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
 
   // use gpu to assign keys
   // there about 2000~ sequences passed in
-  thrust::host_vector<node_type> h_keys_vec;
-  h_keys_vec.reserve(seqs_size);
+  thrust::host_vector<node_type> h_keys_vec(seqs_size);
+  // h_keys_vec.reserve(seqs_size);
   thrust::device_ptr<node_type> d_keys =
       thrust::device_malloc(sizeof(node_type) * seqs_size);
   node_type *d_keys_raw = thrust::raw_pointer_cast(d_keys);
@@ -143,10 +144,12 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
             .count();
 
     //---- Remove paths that reaches the ENDMARKER(zero): version1 ----//
+    /*
     begin = std::chrono::steady_clock::now();
-    arr_start_idx = thrust::find_if_not(thrust::device, d_keys + arr_start_idx,
-                                        d_keys + seqs_size, is_zero()) -
-                    d_keys;
+    arr_start_idx_thr =
+        thrust::find_if_not(thrust::device, d_keys + arr_start_idx,
+                            d_keys + seqs_size, is_zero()) -
+        d_keys;
     seqs_left = seqs_size - arr_start_idx;
     end = std::chrono::steady_clock::now();
     remove_time +=
@@ -154,7 +157,9 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
             .count();
     if (seqs_left <= 0)
       break;
+    */
 
+    //---- Remove paths that reaches the ENDMARKER(zero): version2 ----//
     //---- Copy keys and sequence id back to host ----//
     begin = std::chrono::steady_clock::now();
     thrust::copy(d_seq_id + arr_start_idx, d_seq_id + seqs_size,
@@ -166,39 +171,60 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
         std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
             .count();
 
+    // remove
     begin = std::chrono::steady_clock::now();
-	/*for (size_type i = 0; i < seqs_left; ++i) {
-      size_type seq_id = h_seq_id[i];
-      node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
-    }*/
-    for (size_type i = 0; i < (seqs_left/5) ; i+=5) {
-      size_type seq_id = h_seq_id[i];
-      node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
-	  
-	  seq_id = h_seq_id[i+1];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i+1] - 1].push_back({seq_id, next_node_id});
-	  
-	  seq_id = h_seq_id[i+2];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i+2] - 1].push_back({seq_id, next_node_id});
-	  
-	  seq_id = h_seq_id[i+3];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i+3] - 1].push_back({seq_id, next_node_id});
-	  
-	  seq_id = h_seq_id[i+4];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i+4] - 1].push_back({seq_id, next_node_id});
+    size_type end_counter = 0;
+    for (size_type i = 0; i < seqs_left; ++i) {
+      if (h_keys_vec[i] != gbwt::ENDMARKER) {
+        break;
+      } else {
+        ++end_counter;
+      }
     }
-	size_type start = (seqs_left/5) * 5;
-    for (size_type i = start; i < seqs_left; ++i) {
+    arr_start_idx += end_counter;
+    seqs_left = seqs_size - arr_start_idx;
+    end = std::chrono::steady_clock::now();
+    remove_time +=
+        std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
+            .count();
+    if (seqs_left <= 0)
+      break;
+
+    begin = std::chrono::steady_clock::now();
+    /*
+    for (size_type i = 0; i < seqs_left; ++i) {
       size_type seq_id = h_seq_id[i];
       node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
       sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
-	}
+    }
+    */
+    for (size_type i = end_counter; i < (seqs_left / 5); i += 5) {
+      size_type seq_id = h_seq_id[i];
+      node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
+
+      seq_id = h_seq_id[i + 1];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i + 1] - 1].push_back({seq_id, next_node_id});
+
+      seq_id = h_seq_id[i + 2];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i + 2] - 1].push_back({seq_id, next_node_id});
+
+      seq_id = h_seq_id[i + 3];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i + 3] - 1].push_back({seq_id, next_node_id});
+
+      seq_id = h_seq_id[i + 4];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i + 4] - 1].push_back({seq_id, next_node_id});
+    }
+    size_type start = (seqs_left / 5) * 5;
+    for (size_type i = end_counter + start; i < seqs_left + end_counter; ++i) {
+      size_type seq_id = h_seq_id[i];
+      node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
+    }
     end = std::chrono::steady_clock::now();
     place_time +=
         std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
