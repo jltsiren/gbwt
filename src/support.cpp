@@ -111,6 +111,8 @@ DynamicRecord &DynamicRecord::operator=(const DynamicRecord &source) {
   outgoing.assign(source.outgoing.begin(), source.outgoing.end());
   body.assign(source.body.begin(), source.body.end());
   ids.assign(source.ids.begin(), source.ids.end());
+  min_pos = source.min_pos;
+  max_pos = source.max_pos;
   return *this;
 }
 
@@ -154,16 +156,19 @@ unsigned int DynamicRecord::getBodyOffset(size_type pos) {
     }
     else {
       unsigned int accumulate_offset = 0;
-      for (size_type i=this->min_pos;i<=this->max_pos;++i) {
-        if (i>pos)
-          break;
-        if (this->body_accumulate_offset_map.count(i)!=0)
-          accumulate_offset+=this->body_accumulate_offset_map[pos];
-      } 
-      if (pos<min_pos)
-        this->min_pos = pos;
-      if (pos>max_pos)
+      if (pos>this->max_pos) {
+        accumulate_offset = this->body_accumulate_offset_map[this->max_pos];
         this->max_pos = pos;
+      } else if (pos < this->min_pos) {
+        this->min_pos = pos;
+      } else {
+        for (size_type i=pos;i>=this->min_pos;--i) {
+          if (this->body_accumulate_offset_map.count(i)!=0) {
+            accumulate_offset = this->body_accumulate_offset_map[i];
+            break;
+          }
+        } 
+      }
       this->body_accumulate_offset_map[pos] = accumulate_offset;
     } 
   }
@@ -185,12 +190,12 @@ unsigned int DynamicRecord::getSampleOffset(size_type pos) {
     }
     else {
       unsigned int accumulate_offset = 0;
-      for (size_type i=this->min_pos;i<=this->max_pos;++i) {
-        if (i>pos)
+      for (size_type i=pos;i>=this->min_pos;--i) {
+        if (this->body_accumulate_offset_map.count(i)!=0) {
+          accumulate_offset = this->body_accumulate_offset_map[i];
           break;
-        if (this->sample_accumulate_offset_map.count(i)!=0)
-          accumulate_offset+=this->sample_accumulate_offset_map[pos];
-      } 
+        }
+      }
       this->sample_accumulate_offset_map[pos] = accumulate_offset;
     } 
   }

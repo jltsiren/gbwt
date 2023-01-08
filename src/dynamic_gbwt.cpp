@@ -757,9 +757,9 @@ updateRecordsParallel(DynamicGBWT& gbwt, const text_type &source,
       new_body.insert(*iter);
       ++iter;
     }
+    current.updateBodyOffset(cur_pos);
     swapBody(current, new_body);
     // update body offset
-    current.updateBodyOffset(cur_pos);
     
     // Sample sequence id.
     if(next_node == ENDMARKER)  {
@@ -779,9 +779,9 @@ updateRecordsParallel(DynamicGBWT& gbwt, const text_type &source,
             sample_type(sample_iter->first + 1, sample_iter->second));
         ++sample_iter;
       }
+      current.updateSampleOffset(cur_pos);
       current.ids.swap(new_samples);
       // update sample offset
-      current.updateSampleOffset(cur_pos);
     }
   }
 }
@@ -2164,9 +2164,9 @@ void GBWTBuilder::finish() {
 
   // Finally recode the index to make it serializable.
   this->index.recode();
-  //std::cerr << "\n-----  Record After Recode  -----\n";
-  //print_record(this->index.bwt);
-  //std::cerr << "----------------------------------\n";
+  std::cerr << "\n-----  Record After Recode  -----\n";
+  print_record(this->index.bwt);
+  std::cerr << "----------------------------------\n";
 }
 
 void GBWTBuilder::flush() {
