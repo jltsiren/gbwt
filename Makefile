@@ -33,16 +33,16 @@ ifeq ($(shell uname -s), Darwin)
     endif
 endif
 
-MY_CXX_FLAGS=-std=c++17
+MY_CXX_FLAGS=-std=c++17 -funroll-loops -O3
 CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -Iinclude  -I$(INC_DIR)
 
 NVCC=nvcc
-NVCC_FLAGS=-arch=sm_75 -use_fast_math -Iinclude -I$(INC_DIR)
+NVCC_FLAGS=-arch=sm_75 -use_fast_math -use_fast_math -Iinclude -I$(INC_DIR) -O3
 NVCC_LIBS=
 CUDA_LINK_LIBS= -lcudart -L/usr/local/cuda/lib64
 
 HEADERS=$(wildcard include/gbwt/*.h include/*.cuh)
-LIBOBJS=$(addprefix $(BUILD_OBJ)/,algorithms.o bwtmerge.o cached_gbwt.o dynamic_gbwt.o fast_locate.o files.o gbwt.o internal.o metadata.o support.o test.o thrust_sort.o utils.o variants.o)
+LIBOBJS=$(addprefix $(BUILD_OBJ)/,algorithms.o bwtmerge.o cached_gbwt.o dynamic_gbwt.o fast_locate.o files.o gbwt.o internal.o metadata.o support.o test.o thrust_sort_optimize.o utils.o variants.o)
 LIBRARY=$(BUILD_LIB)/libgbwt.a
 
 PROGRAMS=$(addprefix $(BUILD_BIN)/,build_gbwt build_ri merge_gbwt benchmark metadata_tool remove_seq)

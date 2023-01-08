@@ -9,5 +9,6 @@ using gbwt::text_type;
 
 std::vector<std::vector<std::pair<size_type, node_type>>>
 radix_sort(const text_type &source,
-           const std::vector<size_type> &start_position,
-           const std::uint64_t total_nodes);
+          std::vector<size_type> &sequence_id,
+          const std::unique_ptr<std::unordered_map<size_type, size_type>> &start_pos_map,
+          const std::uint64_t total_nodes);
