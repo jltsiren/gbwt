@@ -31,9 +31,8 @@ __device__ uint64_t get_int(const uint64_t *m_data, const size_type idx,
 
 __global__ void test_get_int(const uint64_t *d_source, node_type *d_test,
                              const size_type vec_size,
-                             const size_type start_idx, const int t_width,
-                             const int thread_per_block) {
-  size_type idx = blockIdx.x * thread_per_block + threadIdx.x;
+                             const size_type start_idx, const int t_width) {
+  size_type idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < vec_size) {
     d_test[idx] =
         get_int(d_source, size_type((start_idx + idx)) * t_width, t_width);
@@ -44,9 +43,8 @@ __global__ void test_get_int(const uint64_t *d_source, node_type *d_test,
 __global__ void assign_key(const uint64_t *d_source,
                            const size_type *d_start_pos, node_type *d_keys,
                            size_type *d_seq_id, const size_type position,
-                           const size_type seqs_size, const int t_width,
-                           const int thread_per_block) {
-  size_type idx = blockIdx.x * thread_per_block + threadIdx.x;
+                           const size_type seqs_size, const int t_width) {
+  size_type idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < seqs_size) {
     d_keys[idx] = get_int(
         d_source, (d_start_pos[d_seq_id[idx]] + position) * t_width, t_width);
@@ -63,14 +61,27 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
            const std::unique_ptr<std::unordered_map<size_type, size_type>>
                &start_pos_map,
            const std::uint64_t total_nodes) {
-  double init_time = 0, key_time = 0, h2d_copy_time = 0, sort_time = 0,
+  double init_time = 0, key_time = 0, /*h2d_copy_time = 0,*/ sort_time = 0,
          d2h_copy_time = 0, remove_time = 0, place_time = 0;
   std::chrono::steady_clock::time_point begin, end;
   begin = std::chrono::steady_clock::now();
 
+  // lambda function to get the nearest number of power of 2
+  /*
+  auto round_up_32 = [](unsigned int v) {
+    --v;
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    ++v;
+    return v;
+  };
+  */
+
   std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs(
       total_nodes);
-  // sorted_seqs.reserve(total_nodes);
 
   // ---- Prepare values to be used ---- //
   // width of the integers which are accessed via the [] operator
@@ -79,10 +90,13 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
   const size_type seqs_size = (*start_pos_map).size(); // total sequence size
 
   // copy source to device memory
+  // cudaMallocHost((void **)&source, source_size_byte, cudaHostAllocDefault);
   uint64_t *d_source;
   cudaMalloc(&d_source, source_size_byte);
   cudaMemcpyAsync(d_source, source.data(), source_size_byte,
                   cudaMemcpyHostToDevice);
+  // cudaMemcpy(d_source, source.data(), source_size_byte,
+  // cudaMemcpyHostToDevice);
 
   // copy start_position
   thrust::host_vector<size_type> start_pos;
@@ -92,7 +106,8 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
   }
   thrust::device_vector<size_type> start_pos_vec = start_pos;
   size_type *d_start_pos = thrust::raw_pointer_cast(&start_pos_vec[0]);
-  // thrust::device_ptr<size_type> d_start_pos = start_pos_vec.data();
+  // thrust::device_ptr<size_type> d_start_pos =
+  // start_pos_vec.data();
 
   // copy sequence_id
   thrust::host_vector<size_type> h_seq_id(sequence_id);
@@ -105,16 +120,13 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
   // use gpu to assign keys
   // there about 2000~ sequences passed in
   thrust::host_vector<node_type> h_keys_vec(seqs_size);
-  // h_keys_vec.reserve(seqs_size);
   thrust::device_ptr<node_type> d_keys =
       thrust::device_malloc(sizeof(node_type) * seqs_size);
   node_type *d_keys_raw = thrust::raw_pointer_cast(d_keys);
-  // node_type *d_keys;
-  // cudaMalloc(&d_keys, sizeof(node_type) * seqs_size);
 
-  size_type arr_start_idx = 0; // first index which is not an ENDMARKER
-  size_type seqs_left =
-      seqs_size; // sequences that have not reached the ENDMARKER
+  size_type arr_start_idx = 0;     // first index which is not an ENDMARKER
+  size_type seqs_left = seqs_size; // sequences that have not
+                                   // reached the ENDMARKER
   const int thread_per_block = 256;
   cudaDeviceSynchronize();
   end = std::chrono::steady_clock::now();
@@ -127,8 +139,7 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
         (seqs_left + thread_per_block - 1) / thread_per_block;
     assign_key<<<block_per_grid, thread_per_block>>>(
         d_source, d_start_pos, d_keys_raw + arr_start_idx,
-        d_seq_id_raw + arr_start_idx, position, seqs_left, t_width,
-        thread_per_block);
+        d_seq_id_raw + arr_start_idx, position, seqs_left, t_width);
     end = std::chrono::steady_clock::now();
     key_time +=
         std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
@@ -137,29 +148,12 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
     //---- Radix Sort ----//
     begin = std::chrono::steady_clock::now();
     thrust::stable_sort_by_key(d_keys + arr_start_idx, d_keys + seqs_size,
-                               d_seq_id);
+                               d_seq_id + arr_start_idx);
     end = std::chrono::steady_clock::now();
     sort_time +=
         std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
             .count();
 
-    //---- Remove paths that reaches the ENDMARKER(zero): version1 ----//
-    /*
-    begin = std::chrono::steady_clock::now();
-    arr_start_idx_thr =
-        thrust::find_if_not(thrust::device, d_keys + arr_start_idx,
-                            d_keys + seqs_size, is_zero()) -
-        d_keys;
-    seqs_left = seqs_size - arr_start_idx;
-    end = std::chrono::steady_clock::now();
-    remove_time +=
-        std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
-            .count();
-    if (seqs_left <= 0)
-      break;
-    */
-
-    //---- Remove paths that reaches the ENDMARKER(zero): version2 ----//
     //---- Copy keys and sequence id back to host ----//
     begin = std::chrono::steady_clock::now();
     thrust::copy(d_seq_id + arr_start_idx, d_seq_id + seqs_size,
@@ -171,7 +165,9 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
         std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
             .count();
 
-    // remove
+    //---- Remove paths that reaches the ENDMARKER(zero):  version2 ----//
+    // remove: find the first index in h_keys_vec that is not an ENDMARKER
+    ///*
     begin = std::chrono::steady_clock::now();
     size_type end_counter = 0;
     for (size_type i = 0; i < seqs_left; ++i) {
@@ -189,17 +185,12 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
             .count();
     if (seqs_left <= 0)
       break;
-
+    //*/
     begin = std::chrono::steady_clock::now();
-    /*
-    for (size_type i = 0; i < seqs_left; ++i) {
-      size_type seq_id = h_seq_id[i];
-      node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
-    }
-    */
-	const int unroll_num = 16;
-    for (size_type i = end_counter; i < (seqs_left / unroll_num); i += unroll_num) {
+    const int unroll_num = 16;
+    ///*
+    for (size_type i = end_counter; i < (seqs_left / unroll_num);
+         i += unroll_num) {
       size_type seq_id = h_seq_id[i];
       node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
       sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
@@ -264,6 +255,7 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
       next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
       sorted_seqs[h_keys_vec[i + 15] - 1].push_back({seq_id, next_node_id});
     }
+    //*/
     size_type start = (seqs_left / unroll_num) * unroll_num;
     for (size_type i = end_counter + start; i < seqs_left + end_counter; ++i) {
       size_type seq_id = h_seq_id[i];
@@ -293,6 +285,14 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
     std::cout << "\n";
   }
   */
+  /* print a specific sequence
+  node_type node_id = 2;
+  auto node2_vec = sorted_seqs[node_id - 1];
+  for (auto &item : node2_vec) {
+    std::cout << "(" << item.first << ", " << item.second << ") ";
+  }
+  std::cout << "\n";
+  */
   return sorted_seqs;
 }
 
@@ -304,8 +304,7 @@ size_type vec_size = 10;
 cudaMalloc(&d_test, sizeof(node_type) * vec_size);
 int test_block = (vec_size + thread_per_block - 1) / thread_per_block;
 test_get_int<<<test_block, thread_per_block>>>(d_source, d_test, vec_size,
-                                               start_idx, t_width,
-                                               thread_per_block);
+                                               start_idx, t_width);
 for (int i = start_idx; i < start_idx + vec_size; ++i) {
   std::cout << source[i] << " ";
 }
@@ -321,4 +320,16 @@ cudaFree(d_test);
 delete[] d_test_H;
 std::cout << "\n";
 // test section: get_int
+*/
+
+/* test a specific sequence
+for (size_type i = end_counter; i < (seqs_left / unroll_num);
+     i += unroll_num) {
+  size_type seq_id = h_seq_id[i];
+  node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+  sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
+  if (seq_id == 716) {
+    std::cout << "key: " << h_keys_vec[i] << "\n";
+  }
+}
 */
