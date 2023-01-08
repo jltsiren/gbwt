@@ -198,7 +198,8 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
       sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
     }
     */
-    for (size_type i = end_counter; i < (seqs_left / 5); i += 5) {
+	const int unroll_num = 16;
+    for (size_type i = end_counter; i < (seqs_left / unroll_num); i += unroll_num) {
       size_type seq_id = h_seq_id[i];
       node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
       sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
@@ -218,8 +219,52 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
       seq_id = h_seq_id[i + 4];
       next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
       sorted_seqs[h_keys_vec[i + 4] - 1].push_back({seq_id, next_node_id});
+
+      seq_id = h_seq_id[i + 5];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i + 5] - 1].push_back({seq_id, next_node_id});
+
+      seq_id = h_seq_id[i + 6];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i + 6] - 1].push_back({seq_id, next_node_id});
+
+      seq_id = h_seq_id[i + 7];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i + 7] - 1].push_back({seq_id, next_node_id});
+
+      seq_id = h_seq_id[i + 8];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i + 8] - 1].push_back({seq_id, next_node_id});
+
+      seq_id = h_seq_id[i + 9];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i + 9] - 1].push_back({seq_id, next_node_id});
+
+      seq_id = h_seq_id[i + 10];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i + 10] - 1].push_back({seq_id, next_node_id});
+
+      seq_id = h_seq_id[i + 11];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i + 11] - 1].push_back({seq_id, next_node_id});
+
+      seq_id = h_seq_id[i + 12];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i + 12] - 1].push_back({seq_id, next_node_id});
+
+      seq_id = h_seq_id[i + 13];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i + 13] - 1].push_back({seq_id, next_node_id});
+
+      seq_id = h_seq_id[i + 14];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i + 14] - 1].push_back({seq_id, next_node_id});
+
+      seq_id = h_seq_id[i + 15];
+      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i + 15] - 1].push_back({seq_id, next_node_id});
     }
-    size_type start = (seqs_left / 5) * 5;
+    size_type start = (seqs_left / unroll_num) * unroll_num;
     for (size_type i = end_counter + start; i < seqs_left + end_counter; ++i) {
       size_type seq_id = h_seq_id[i];
       node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];

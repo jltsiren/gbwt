@@ -33,11 +33,11 @@ ifeq ($(shell uname -s), Darwin)
     endif
 endif
 
-MY_CXX_FLAGS=-std=c++17 -O3
+MY_CXX_FLAGS=-std=c++17 -funroll-loops -O3
 CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -Iinclude  -I$(INC_DIR)
 
 NVCC=nvcc
-NVCC_FLAGS=-arch=sm_75 -use_fast_math -Iinclude -I$(INC_DIR)
+NVCC_FLAGS=-arch=sm_75 -use_fast_math -use_fast_math -Iinclude -I$(INC_DIR) -O3
 NVCC_LIBS=
 CUDA_LINK_LIBS= -lcudart -L/usr/local/cuda/lib64
 
