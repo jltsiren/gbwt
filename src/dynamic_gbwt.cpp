@@ -715,19 +715,10 @@ void updateRecordsParallel(
     if (curr_node != ENDMARKER) {
       size_type pos = (*start_pos)[seq_id];
       for (size_type cur = pos; cur < source.size(); ++cur) {
-        if (seq_id==4367) {
-          std::cout << "current position in source: " << cur << ", ";
-          std::cout << "node: " << source[cur] << std::endl;
-        }
         if (source[cur] == curr_node && source[cur + 1] == next_node) {
           cur_pos = cur - pos;
           break;
         } else if (source[cur] == ENDMARKER) {
-          std::cout << "seq id: " << seq_id << std::endl;
-          std::cout << "current node, next node\n";
-          std::cout << curr_node << ", " << next_node << std::endl;
-          std::cout << "start position: " << pos << std::endl;
-          std::cout << "current position: " << cur << std::endl;
           std::cerr << "Cannt find position.\n";
           std::exit(1);
         }
@@ -1192,7 +1183,11 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
       std::cout << "in Insert():\n";
       std::cout << "seq id: " << sequence.id << ", start pos: " << sequence.pos << std::endl;
       std::cout << "start node: " << source[sequence.pos] << std::endl;;
+      std::cout << "start node: " << source[99730521] << std::endl;;
     }
+  }
+  if (seqs[0].id<2320 || seqs[0].id>4371) {
+    return 1;
   }
 
 // ---- Thrust Radix Sort  ---- //
@@ -1283,31 +1278,35 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
   size_type node_num = gbwt.sigma();
   for (node_type i = 0; i < node_num; ++i) {
     if (i == 0) {
+      /*
       if (seqs[0].id > 2320) {
       updateRecordsParallel(gbwt, source, endmarker_sorted, i,
         sample_interval, endmarker_edges, start_pos_map);
-      /*
-      */
       }
       else {
+      */
       pool.push_task(&gbwt::updateRecordsParallel, std::ref(gbwt),
                      std::cref(source), std::ref(endmarker_sorted), i,
                      sample_interval, std::ref(endmarker_edges),
                      std::ref(start_pos_map));
+      /*
       }
+      */
     } else {
+      /*
       if (seqs[0].id > 2320) {
       updateRecordsParallel(gbwt, source, sorted_seqs, i, sample_interval,
         endmarker_edges, start_pos_map);
-      /*
-      */
       }
       else {
+      */
       pool.push_task(&gbwt::updateRecordsParallel, std::ref(gbwt),
                      std::cref(source), std::ref(sorted_seqs), i,
                      sample_interval, std::ref(endmarker_edges),
                      std::ref(start_pos_map));
+      /*
       }
+      */
     }
   }
   pool.wait_for_tasks();
