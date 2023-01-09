@@ -127,7 +127,7 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
   size_type arr_start_idx = 0;     // first index which is not an ENDMARKER
   size_type seqs_left = seqs_size; // sequences that have not
                                    // reached the ENDMARKER
-  const int thread_per_block = 256;
+  const int thread_per_block = 512;
   cudaDeviceSynchronize();
   end = std::chrono::steady_clock::now();
   init_time = std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
@@ -187,81 +187,103 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
       break;
     //*/
     begin = std::chrono::steady_clock::now();
-    const int unroll_num = 16;
-    ///*
+    for (size_type i = end_counter; i < seqs_left; ++i) {
+      size_type seq_id = h_seq_id[i];
+      node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
+      sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
+    }
+    // const int unroll_num = 8;
+    /*
     for (size_type i = end_counter; i < (seqs_left / unroll_num);
          i += unroll_num) {
       size_type seq_id = h_seq_id[i];
       node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
       sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
 
-      seq_id = h_seq_id[i + 1];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i + 1] - 1].push_back({seq_id, next_node_id});
+      size_type seq_id1 = h_seq_id[i + 1];
+      node_type next_node_id1 =
+          source[(*start_pos_map)[seq_id1] + position + 1];
+      sorted_seqs[h_keys_vec[i + 1] - 1].push_back({seq_id1, next_node_id1});
 
-      seq_id = h_seq_id[i + 2];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i + 2] - 1].push_back({seq_id, next_node_id});
+      size_type seq_id2 = h_seq_id[i + 2];
+      node_type next_node_id2 =
+          source[(*start_pos_map)[seq_id2] + position + 1];
+      sorted_seqs[h_keys_vec[i + 2] - 1].push_back({seq_id2, next_node_id2});
 
-      seq_id = h_seq_id[i + 3];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i + 3] - 1].push_back({seq_id, next_node_id});
+      size_type seq_id3 = h_seq_id[i + 3];
+      node_type next_node_id3 =
+          source[(*start_pos_map)[seq_id3] + position + 1];
+      sorted_seqs[h_keys_vec[i + 3] - 1].push_back({seq_id3, next_node_id3});
 
-      seq_id = h_seq_id[i + 4];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i + 4] - 1].push_back({seq_id, next_node_id});
+      size_type seq_id4 = h_seq_id[i + 4];
+      node_type next_node_id4 =
+          source[(*start_pos_map)[seq_id4] + position + 1];
+      sorted_seqs[h_keys_vec[i + 4] - 1].push_back({seq_id4, next_node_id4});
 
-      seq_id = h_seq_id[i + 5];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i + 5] - 1].push_back({seq_id, next_node_id});
+      size_type seq_id5 = h_seq_id[i + 5];
+      node_type next_node_id5 =
+          source[(*start_pos_map)[seq_id5] + position + 1];
+      sorted_seqs[h_keys_vec[i + 5] - 1].push_back({seq_id5, next_node_id5});
 
-      seq_id = h_seq_id[i + 6];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i + 6] - 1].push_back({seq_id, next_node_id});
+      size_type seq_id6 = h_seq_id[i + 6];
+      node_type next_node_id6 =
+          source[(*start_pos_map)[seq_id6] + position + 1];
+      sorted_seqs[h_keys_vec[i + 6] - 1].push_back({seq_id6, next_node_id6});
 
-      seq_id = h_seq_id[i + 7];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i + 7] - 1].push_back({seq_id, next_node_id});
+      size_type seq_id7 = h_seq_id[i + 7];
+      node_type next_node_id7 =
+          source[(*start_pos_map)[seq_id7] + position + 1];
+      sorted_seqs[h_keys_vec[i + 7] - 1].push_back({seq_id7, next_node_id7});
 
-      seq_id = h_seq_id[i + 8];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i + 8] - 1].push_back({seq_id, next_node_id});
+      size_type seq_id1 = h_seq_id[i + 1];
+      node_type next_node_id1 = source[(*start_pos_map)[seq_id1] + position +
+      1];
+      sorted_seqs[h_keys_vec[i + 1] - 1].push_back({seq_id1, next_node_id1});
 
-      seq_id = h_seq_id[i + 9];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i + 9] - 1].push_back({seq_id, next_node_id});
+      size_type seq_id1 = h_seq_id[i + 1];
+      node_type next_node_id1 = source[(*start_pos_map)[seq_id1] + position +
+      1];
+      sorted_seqs[h_keys_vec[i + 1] - 1].push_back({seq_id1, next_node_id1});
 
-      seq_id = h_seq_id[i + 10];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i + 10] - 1].push_back({seq_id, next_node_id});
+      size_type seq_id1 = h_seq_id[i + 1];
+      node_type next_node_id1 = source[(*start_pos_map)[seq_id1] + position +
+      1];
+      sorted_seqs[h_keys_vec[i + 1] - 1].push_back({seq_id1, next_node_id1});
 
-      seq_id = h_seq_id[i + 11];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i + 11] - 1].push_back({seq_id, next_node_id});
+      size_type seq_id1 = h_seq_id[i + 1];
+      node_type next_node_id1 = source[(*start_pos_map)[seq_id1] + position +
+      1];
+      sorted_seqs[h_keys_vec[i + 1] - 1].push_back({seq_id1, next_node_id1});
 
-      seq_id = h_seq_id[i + 12];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i + 12] - 1].push_back({seq_id, next_node_id});
+      size_type seq_id1 = h_seq_id[i + 1];
+      node_type next_node_id1 = source[(*start_pos_map)[seq_id1] + position +
+      1];
+      sorted_seqs[h_keys_vec[i + 1] - 1].push_back({seq_id1, next_node_id1});
 
-      seq_id = h_seq_id[i + 13];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i + 13] - 1].push_back({seq_id, next_node_id});
+      size_type seq_id1 = h_seq_id[i + 1];
+      node_type next_node_id1 = source[(*start_pos_map)[seq_id1] + position +
+      1];
+      sorted_seqs[h_keys_vec[i + 1] - 1].push_back({seq_id1, next_node_id1});
 
-      seq_id = h_seq_id[i + 14];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i + 14] - 1].push_back({seq_id, next_node_id});
+      size_type seq_id1 = h_seq_id[i + 1];
+      node_type next_node_id1 = source[(*start_pos_map)[seq_id1] + position +
+      1];
+      sorted_seqs[h_keys_vec[i + 1] - 1].push_back({seq_id1, next_node_id1});
 
-      seq_id = h_seq_id[i + 15];
-      next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
-      sorted_seqs[h_keys_vec[i + 15] - 1].push_back({seq_id, next_node_id});
-    }
-    //*/
+      size_type seq_id1 = h_seq_id[i + 1];
+      node_type next_node_id1 = source[(*start_pos_map)[seq_id1] + position +
+      1];
+      sorted_seqs[h_keys_vec[i + 1] - 1].push_back({seq_id1, next_node_id1});
+  }
+  */
+    /*
     size_type start = (seqs_left / unroll_num) * unroll_num;
     for (size_type i = end_counter + start; i < seqs_left + end_counter; ++i) {
       size_type seq_id = h_seq_id[i];
       node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
       sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
     }
+    */
     end = std::chrono::steady_clock::now();
     place_time +=
         std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
@@ -289,9 +311,8 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
   node_type node_id = 2;
   auto node2_vec = sorted_seqs[node_id - 1];
   for (auto &item : node2_vec) {
-    std::cout << "(" << item.first << ", " << item.second << ") ";
+    std::cout << "(" << item.first << ", " << item.second << ")\n";
   }
-  std::cout << "\n";
   */
   return sorted_seqs;
 }
@@ -304,17 +325,17 @@ size_type vec_size = 10;
 cudaMalloc(&d_test, sizeof(node_type) * vec_size);
 int test_block = (vec_size + thread_per_block - 1) / thread_per_block;
 test_get_int<<<test_block, thread_per_block>>>(d_source, d_test, vec_size,
-                                               start_idx, t_width);
+                                             start_idx, t_width);
 for (int i = start_idx; i < start_idx + vec_size; ++i) {
-  std::cout << source[i] << " ";
+std::cout << source[i] << " ";
 }
 // std::cout << source.data()[start_idx] << "\n";
 std::cout << "\n========================\n";
 node_type *d_test_H = new node_type[vec_size + 1];
 cudaMemcpy(d_test_H, d_test, sizeof(node_type) * vec_size,
-           cudaMemcpyDeviceToHost);
+         cudaMemcpyDeviceToHost);
 for (int i = 0; i < vec_size; ++i) {
-  std::cout << d_test_H[i] << " ";
+std::cout << d_test_H[i] << " ";
 }
 cudaFree(d_test);
 delete[] d_test_H;
