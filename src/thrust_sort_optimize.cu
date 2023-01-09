@@ -1,4 +1,5 @@
 #include <chrono>
+#include <iostream>
 #include <thrust/device_free.h>
 #include <thrust/device_malloc.h>
 #include <thrust/device_ptr.h>

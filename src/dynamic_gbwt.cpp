@@ -715,6 +715,10 @@ void updateRecordsParallel(
     if (curr_node != ENDMARKER) {
       size_type pos = (*start_pos)[seq_id];
       for (size_type cur = pos; cur < source.size(); ++cur) {
+        if (seq_id==4367) {
+          std::cout << "current position in source: " << cur << ", ";
+          std::cout << "node: " << source[cur] << std::endl;
+        }
         if (source[cur] == curr_node && source[cur + 1] == next_node) {
           cur_pos = cur - pos;
           break;
@@ -1155,6 +1159,9 @@ void build_offset_map(DynamicGBWT &gbwt, const size_type node_id) {
 template <>
 size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
                  const text_type &source, size_type sample_interval) {
+#include <chrono>
+  std::chrono::steady_clock::time_point begin, end;
+  
   // Sanity check sample interval only here.
   if (sample_interval == 0) {
     sample_interval = std::numeric_limits<size_type>::max();
@@ -1181,11 +1188,14 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
   for (auto &sequence : seqs) {
     (*start_pos_map)[sequence.id] = sequence.pos;
     sequence_id.emplace_back(sequence.id);
+    if (sequence.id==4367) {
+      std::cout << "in Insert():\n";
+      std::cout << "seq id: " << sequence.id << ", start pos: " << sequence.pos << std::endl;
+      std::cout << "start node: " << source[sequence.pos] << std::endl;;
+    }
   }
 
 // ---- Thrust Radix Sort  ---- //
-#include <chrono>
-  std::chrono::steady_clock::time_point begin, end;
   begin = std::chrono::steady_clock::now();
   std::cout << "[info] before radix_sort\n";
   auto sorted_seqs =
@@ -1215,6 +1225,16 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
     }
   }
   */
+
+  if (seqs[0].id>2320) {
+    std::cout << "Radix sort mat\n";
+    std::cout << "At node: 608776\n";
+    for (int i=0;i<sorted_seqs[608775].size();++i)
+      std::cout << sorted_seqs[608775][i].first << " ";
+    std::cout << std::endl;
+  } else {
+    return 1;
+  }
 
   // ---- Update incoming edge ---- //
   const int thread_num = std::min((unsigned int)gbwt.sigma(),
@@ -1263,23 +1283,31 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
   size_type node_num = gbwt.sigma();
   for (node_type i = 0; i < node_num; ++i) {
     if (i == 0) {
+      if (seqs[0].id > 2320) {
       updateRecordsParallel(gbwt, source, endmarker_sorted, i,
         sample_interval, endmarker_edges, start_pos_map);
       /*
+      */
+      }
+      else {
       pool.push_task(&gbwt::updateRecordsParallel, std::ref(gbwt),
                      std::cref(source), std::ref(endmarker_sorted), i,
                      sample_interval, std::ref(endmarker_edges),
                      std::ref(start_pos_map));
-      */
+      }
     } else {
+      if (seqs[0].id > 2320) {
       updateRecordsParallel(gbwt, source, sorted_seqs, i, sample_interval,
         endmarker_edges, start_pos_map);
       /*
+      */
+      }
+      else {
       pool.push_task(&gbwt::updateRecordsParallel, std::ref(gbwt),
                      std::cref(source), std::ref(sorted_seqs), i,
                      sample_interval, std::ref(endmarker_edges),
                      std::ref(start_pos_map));
-      */
+      }
     }
   }
   pool.wait_for_tasks();
