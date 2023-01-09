@@ -192,7 +192,7 @@ unsigned int DynamicRecord::getSampleOffset(size_type pos) {
       unsigned int accumulate_offset = 0;
       for (size_type i=pos;i>=this->min_pos;--i) {
         if (this->body_accumulate_offset_map.count(i)!=0) {
-          accumulate_offset = this->body_accumulate_offset_map[i];
+          accumulate_offset = this->sample_accumulate_offset_map[i];
           break;
         }
       }

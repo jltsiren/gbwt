@@ -719,6 +719,11 @@ void updateRecordsParallel(
           cur_pos = cur - pos;
           break;
         } else if (source[cur] == ENDMARKER) {
+          std::cout << "seq id: " << seq_id << std::endl;
+          std::cout << "current node, next node\n";
+          std::cout << curr_node << ", " << next_node << std::endl;
+          std::cout << "start position: " << pos << std::endl;
+          std::cout << "current position: " << cur << std::endl;
           std::cerr << "Cannt find position.\n";
           std::exit(1);
         }
@@ -1258,26 +1263,30 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
   size_type node_num = gbwt.sigma();
   for (node_type i = 0; i < node_num; ++i) {
     if (i == 0) {
-      // updateRecordsParallel(gbwt, source, endmarker_sorted, i,
-      // sample_interval, endmarker_edges, start_pos_map);
+      updateRecordsParallel(gbwt, source, endmarker_sorted, i,
+        sample_interval, endmarker_edges, start_pos_map);
+      /*
       pool.push_task(&gbwt::updateRecordsParallel, std::ref(gbwt),
                      std::cref(source), std::ref(endmarker_sorted), i,
                      sample_interval, std::ref(endmarker_edges),
                      std::ref(start_pos_map));
+      */
     } else {
-      // updateRecordsParallel(gbwt, source, sorted_seqs, i, sample_interval,
-      // endmarker_edges, start_pos_map);
+      updateRecordsParallel(gbwt, source, sorted_seqs, i, sample_interval,
+        endmarker_edges, start_pos_map);
+      /*
       pool.push_task(&gbwt::updateRecordsParallel, std::ref(gbwt),
                      std::cref(source), std::ref(sorted_seqs), i,
                      sample_interval, std::ref(endmarker_edges),
                      std::ref(start_pos_map));
+      */
     }
   }
   pool.wait_for_tasks();
 
-  // std::cerr << "\n-----  Record Before Recode  -----\n";
-  // print_record(gbwt.bwt);
-  // std::cerr << "------------------------------------\n";
+  std::cerr << "\n-----  Record Before Recode  -----\n";
+  print_record(gbwt.bwt);
+  std::cerr << "------------------------------------\n";
 
   return 1;
 } // namespace gbwt
