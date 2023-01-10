@@ -98,11 +98,9 @@ DynamicRecord::DynamicRecord(const DynamicRecord &source) {
   body.assign(source.body.begin(), source.body.end());
   ids.assign(source.ids.begin(), source.ids.end());
   //
-  min_pos = source.min_pos;
-  max_pos = source.max_pos;
   outgoing_offset_map = source.outgoing_offset_map;
-  body_accumulate_offset_map = source.body_accumulate_offset_map;
-  sample_accumulate_offset_map = source.sample_accumulate_offset_map;
+  incoming_offset_map = source.incoming_offset_map;
+  sample_incoming_offset_map = source.sample_incoming_offset_map;
 }
 
 DynamicRecord &DynamicRecord::operator=(const DynamicRecord &source) {
@@ -111,8 +109,10 @@ DynamicRecord &DynamicRecord::operator=(const DynamicRecord &source) {
   outgoing.assign(source.outgoing.begin(), source.outgoing.end());
   body.assign(source.body.begin(), source.body.end());
   ids.assign(source.ids.begin(), source.ids.end());
-  min_pos = source.min_pos;
-  max_pos = source.max_pos;
+  //
+  outgoing_offset_map = source.outgoing_offset_map;
+  incoming_offset_map = source.incoming_offset_map;
+  sample_incoming_offset_map = source.sample_incoming_offset_map;
   return *this;
 }
 
@@ -129,11 +129,9 @@ void DynamicRecord::swap(DynamicRecord &another) {
     this->body.swap(another.body);
     this->ids.swap(another.ids);
     //
-    std::swap(this->min_pos, another.min_pos);
-    std::swap(this->max_pos, another.max_pos);
     this->outgoing_offset_map.swap(another.outgoing_offset_map);
-    this->body_accumulate_offset_map.swap(another.body_accumulate_offset_map);
-    this->sample_accumulate_offset_map.swap(another.sample_accumulate_offset_map);
+    this->incoming_offset_map.swap(another.incoming_offset_map);
+    this->sample_incoming_offset_map.swap(another.sample_incoming_offset_map);
   }
 }
 
@@ -147,66 +145,50 @@ std::pair<size_type, size_type> DynamicRecord::runs() const {
 
 //------------------------------------------------------------------------------
 
-unsigned int DynamicRecord::getBodyOffset(size_type pos) {
-  if (this->body_accumulate_offset_map.count(pos)==0) {
-    if (this->body_size==0) {
-      this->body_accumulate_offset_map[pos] = 0;
-      this->min_pos = pos;
-      this->max_pos = pos;
+std::uint64_t DynamicRecord::getBodyOffset(std::uint64_t &income_id) {
+  std::uint64_t accumulate = 0;
+  std::uint64_t body_offset = 0;
+  for (auto &e:this->incoming) {
+    if (this->incoming_offset_map.count(e.first)==0) {
+      income_id = e.first;
+      this->incoming_offset_map[income_id] = 0;
+      break;
+    } else if ((e.second-this->incoming_offset_map[e.first])>0) {
+      income_id = e.first;
+      accumulate += this->incoming_offset_map[e.first];
+      break;
+    } else {
+      accumulate += e.second;
     }
-    else {
-      unsigned int accumulate_offset = 0;
-      if (pos>this->max_pos) {
-        accumulate_offset = this->body_accumulate_offset_map[this->max_pos];
-        this->max_pos = pos;
-      } else if (pos < this->min_pos) {
-        this->min_pos = pos;
-      } else {
-        for (size_type i=pos;i>=this->min_pos;--i) {
-          if (this->body_accumulate_offset_map.count(i)!=0) {
-            accumulate_offset = this->body_accumulate_offset_map[i];
-            break;
-          }
-        } 
+  }
+  body_offset = accumulate;
+  return body_offset;
+}
+
+void DynamicRecord::updateBodyOffset(const std::uint64_t &income_id) {
+  ++this->incoming_offset_map[income_id];
+}
+
+std::uint64_t DynamicRecord::getSampleOffset(const size_type &income_id) {
+  if (this->sample_incoming_offset_map.count(income_id)==0) {
+    std::uint64_t accumulate = 0;
+    for (auto &e:incoming) {
+      if (e.first>income_id)
+        break;
+      else {
+        if (this->sample_incoming_offset_map.count(e.first)!=0)
+          accumulate+=this->sample_incoming_offset_map[e.first];
       }
-      this->body_accumulate_offset_map[pos] = accumulate_offset;
-    } 
+    } this->sample_incoming_offset_map[income_id] = accumulate;
   }
-  return this->body_accumulate_offset_map[pos];
+  return this->sample_incoming_offset_map[income_id];
 }
 
-void DynamicRecord::updateBodyOffset(size_type pos) {
-  ++this->body_accumulate_offset_map[pos];
-  for(size_type cur=pos+1;cur<=this->max_pos;++cur) {
-    if (this->body_accumulate_offset_map.count(cur)!=0)
-      ++body_accumulate_offset_map[cur];
-  }
-}
-
-unsigned int DynamicRecord::getSampleOffset(size_type pos) {
-  if (this->sample_accumulate_offset_map.count(pos)==0) {
-    if (this->body_size==0) {
-      this->sample_accumulate_offset_map[pos] = 0;
-    }
-    else {
-      unsigned int accumulate_offset = 0;
-      for (size_type i=pos;i>=this->min_pos;--i) {
-        if (this->body_accumulate_offset_map.count(i)!=0) {
-          accumulate_offset = this->sample_accumulate_offset_map[i];
-          break;
-        }
-      }
-      this->sample_accumulate_offset_map[pos] = accumulate_offset;
-    } 
-  }
-  return this->sample_accumulate_offset_map[pos];
-}
-
-void DynamicRecord::updateSampleOffset(size_type pos) {
-  ++this->sample_accumulate_offset_map[pos];
-  for(size_type cur=pos+1;cur<=this->max_pos;++cur) {
-    if (this->sample_accumulate_offset_map.count(cur)!=0)
-      ++sample_accumulate_offset_map[cur];
+void DynamicRecord::updateSampleOffset(const size_type &income_id) {
+  ++this->sample_incoming_offset_map[income_id];
+  for(auto &e:incoming) {
+    if (e.first>income_id && this->sample_incoming_offset_map.count(e.first)!=0)
+      ++sample_incoming_offset_map[e.first];
   }
 }
 

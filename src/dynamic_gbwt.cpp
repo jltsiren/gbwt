@@ -671,24 +671,34 @@ void updateRecordsParallel(
     std::vector<std::vector<std::pair<size_type, node_type>>> &sorted_mat,
     const node_type curr_node, size_type sample_interval,
     std::unique_ptr<std::unordered_map<node_type, size_type>> &endmarker_edges,
-    std::unique_ptr<std::unordered_map<size_type, size_type>> &start_pos) {
+    std::unique_ptr<std::unordered_map<size_type, size_type>> &start_pos
+    , const node_type max_size_node) {
+#include <chrono>
+  
+  std::chrono::steady_clock::time_point begin, end;
+  begin = std::chrono::steady_clock::now();
   int index;
   if (curr_node == ENDMARKER)
     index = curr_node;
   else
     index = curr_node - 1;
-  DynamicRecord &current = gbwt.record(curr_node);
-  size_type insert_count = 0;
-  for (size_type i = 0; i < sorted_mat[index].size(); ++i) {
-    std::vector<run_type>::iterator iter = current.body.begin();
-    std::vector<sample_type>::iterator sample_iter = current.ids.begin();
-    RunMerger new_body(current.outdegree());
-    std::vector<sample_type> new_samples;
 
-    // Determine the edge to the next node or add it if it does not exist.
+  DynamicRecord &current = gbwt.record(curr_node);
+  std::uint64_t insert_count = 0;
+  std::uint64_t curr_income_id = 0;
+  std::uint64_t body_offset;
+
+  std::vector<run_type>::iterator iter = current.body.begin();
+  std::vector<sample_type>::iterator sample_iter = current.ids.begin();
+  RunMerger new_body(current.outdegree());
+  std::vector<sample_type> new_samples;
+  for (size_type i = 0; i < sorted_mat[index].size(); ++i) {
     rank_type outrank = 0;
     size_type seq_id = sorted_mat[index][i].first;
     node_type next_node = sorted_mat[index][i].second;
+
+    // Determine the edge to the next node or add it if it does not exist.
+    // determine outrank
     if (curr_node == ENDMARKER) {
       auto iter = endmarker_edges->find(next_node);
       if (iter != endmarker_edges->end()) {
@@ -709,25 +719,9 @@ void updateRecordsParallel(
         new_body.addEdge();
       }
     }
-    // TODO: Get body offset
-    // linear search for current position
-    size_type cur_pos;
-    if (curr_node != ENDMARKER) {
-      size_type pos = (*start_pos)[seq_id];
-      for (size_type cur = pos; cur < source.size(); ++cur) {
-        if (source[cur] == curr_node && source[cur + 1] == next_node) {
-          cur_pos = cur - pos;
-          break;
-        } else if (source[cur] == ENDMARKER) {
-          std::cerr << "Cannt find position.\n";
-          std::exit(1);
-        }
-      }
-    } else {
-      cur_pos = current.body.size();
-    }
-    // find offset(insert position) of body
-    int body_offset = current.getBodyOffset(cur_pos);
+    
+    // find position of body
+    body_offset = current.getBodyOffset(curr_income_id);
     int outgoing_size = current.outdegree();
     // Add old runs until the offset.
     while (new_body.size() < body_offset) {
@@ -742,18 +736,11 @@ void updateRecordsParallel(
     }
     new_body.insert(outrank);
     ++insert_count;
-    // Add runs until the end.
-    while (iter != current.body.end()) {
-      new_body.insert(*iter);
-      ++iter;
-    }
-    current.updateBodyOffset(cur_pos);
-    swapBody(current, new_body);
-    // update body offset
-    
+    current.updateBodyOffset(curr_income_id);
+
     // Sample sequence id.
     if (next_node == ENDMARKER) {
-      unsigned int sample_offset = current.getSampleOffset(cur_pos);
+      std::uint64_t sample_offset = current.getSampleOffset(curr_income_id);
       // Add old samples until the offset.
       while (sample_iter != current.ids.end() &&
              sample_iter->first < sample_offset) {
@@ -763,18 +750,29 @@ void updateRecordsParallel(
       }
       int size = new_samples.size();
       new_samples.push_back(sample_type(size, seq_id));
-      while (sample_iter !=
-             current.ids.end()) // Add the rest of the old samples.
-      {
-        new_samples.push_back(
-            sample_type(sample_iter->first + 1, sample_iter->second));
-        ++sample_iter;
-      }
-      current.updateSampleOffset(cur_pos);
-      current.ids.swap(new_samples);
-
-      // update sample offset
+      current.updateSampleOffset(curr_income_id);
     }
+  }
+  // Add runs until the end.
+  while (iter != current.body.end()) {
+    new_body.insert(*iter);
+    ++iter;
+  }
+  swapBody(current, new_body);
+  // Add the rest of the old samples.
+  while (sample_iter != current.ids.end())
+  {
+    new_samples.push_back(
+        sample_type(sample_iter->first + insert_count, sample_iter->second));
+    ++sample_iter;
+  }
+  current.ids.swap(new_samples);
+  end = std::chrono::steady_clock::now();
+  if (curr_node==max_size_node) {
+    auto init_time = std::chrono::duration<double>{end- begin};
+  
+    std::cout << "Update max size node finish.\n";
+    std::cout << "Time Used: " << init_time.count() << "s.\n";
   }
 }
 
@@ -1150,8 +1148,10 @@ void build_offset_map(DynamicGBWT &gbwt, const size_type node_id) {
 template <>
 size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
                  const text_type &source, size_type sample_interval) {
-#include <chrono>
+//#include <chrono>
   std::chrono::steady_clock::time_point begin, end;
+
+  std::cout << "Inside insertion\n";
   
   // Sanity check sample interval only here.
   if (sample_interval == 0) {
@@ -1170,6 +1170,7 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
     }
   }
 
+  begin = std::chrono::steady_clock::now();
   // ---- Store the start position ---- //
   // build unordered map of start position for each sequence
   std::unique_ptr<std::unordered_map<size_type, size_type>> start_pos_map(
@@ -1179,22 +1180,19 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
   for (auto &sequence : seqs) {
     (*start_pos_map)[sequence.id] = sequence.pos;
     sequence_id.emplace_back(sequence.id);
-    if (sequence.id==4367) {
-      std::cout << "in Insert():\n";
-      std::cout << "seq id: " << sequence.id << ", start pos: " << sequence.pos << std::endl;
-      std::cout << "start node: " << source[sequence.pos] << std::endl;;
-      std::cout << "start node: " << source[99730521] << std::endl;;
-    }
   }
-  if (seqs[0].id<2320 || seqs[0].id>4371) {
-    return 1;
-  }
+  end = std::chrono::steady_clock::now();
+  auto init_time = std::chrono::duration<double>{end- begin};
+
+  std::cout << "Pass initialization of start_pos_map and sequence_id\n";
+  std::cout << "Time Used: " << init_time.count() << "s.\n";
+
+  std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs(gbwt.sigma());
 
 // ---- Thrust Radix Sort  ---- //
   begin = std::chrono::steady_clock::now();
   std::cout << "[info] before radix_sort\n";
-  auto sorted_seqs =
-      radix_sort(source, sequence_id, start_pos_map, gbwt.sigma());
+  radix_sort(source, sequence_id, start_pos_map, sorted_seqs, gbwt.sigma());
   std::cout << "[info] after radix_sort\n";
   end = std::chrono::steady_clock::now();
   auto sort_time =
@@ -1221,21 +1219,12 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
   }
   */
 
-  if (seqs[0].id>2320) {
-    std::cout << "Radix sort mat\n";
-    std::cout << "At node: 608776\n";
-    for (int i=0;i<sorted_seqs[608775].size();++i)
-      std::cout << sorted_seqs[608775][i].first << " ";
-    std::cout << std::endl;
-  } else {
-    return 1;
-  }
-
   // ---- Update incoming edge ---- //
   const int thread_num = std::min((unsigned int)gbwt.sigma(),
                                   std::thread::hardware_concurrency() - 1);
   BS::thread_pool_light pool(thread_num);
 
+  begin = std::chrono::steady_clock::now();
   // add the incoming for the first path's first node since sdsl does not put
   // the endmarker at the begining.
   gbwt.record(source[seqs[0].pos]).increment(ENDMARKER);
@@ -1247,12 +1236,23 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
                    std::cref(source), start_position, std::ref(gbwt_mutex));
   }
   pool.wait_for_tasks();
+  end = std::chrono::steady_clock::now();
+  auto update_incoming_time = std::chrono::duration<double>{end- begin};
 
+  std::cout << "Pass update incoming edges.\n";
+  std::cout << "Time Used: " << update_incoming_time.count() << "s.\n";
+
+  begin = std::chrono::steady_clock::now();
   // ---- Build outgoing_offset_map ---- //
   for (short_type node_id = 1; node_id < gbwt.sigma(); ++node_id) {
     pool.push_task(&gbwt::build_offset_map, std::ref(gbwt), node_id);
   }
   pool.wait_for_tasks();
+  end = std::chrono::steady_clock::now();
+  auto build_offset_time = std::chrono::duration<double>{end- begin};
+
+  std::cout << "Pass build outgoing offset map.\n";
+  std::cout << "Time Used: " << build_offset_time.count() << "s.\n";
 
   // debug section of outgoing_offset_map
   /*
@@ -1265,55 +1265,70 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
   }
   */
 
+  size_type max_size = 0;
+  node_type max_size_node;
+  int i=0;
+
+  for (auto &node:sorted_seqs) {
+    if (node.size()>max_size) {
+      max_size_node = i+1;
+      max_size = node.size();
+    }
+    ++i;
+  }
+  std::cout << "Max size node id: " << max_size_node << std::endl;
+  std::cout << "Max size: " << max_size << std::endl << std::endl;
+
   // ---- Given the radix sort table, update outgoing edges, body, and ids of
   // Records(nodes) ---- //
+  begin = std::chrono::steady_clock::now();
   std::vector<std::vector<std::pair<size_type, node_type>>> endmarker_sorted;
   std::vector<std::pair<size_type, node_type>> end_sort;
   for (auto &sequence : seqs) {
     end_sort.emplace_back(std::make_pair(sequence.id, sequence.next));
   }
   endmarker_sorted.emplace_back(end_sort);
+  end = std::chrono::steady_clock::now();
+  auto endmarker_radix_sort_time = std::chrono::duration<double>{end- begin};
 
+  std::cout << "Pass endmarker radix sort.\n";
+  std::cout << "Time Used: " << endmarker_radix_sort_time.count() << "s.\n";
+
+  begin = std::chrono::steady_clock::now();
   // parallel update nodes
   size_type node_num = gbwt.sigma();
   for (node_type i = 0; i < node_num; ++i) {
     if (i == 0) {
       /*
-      if (seqs[0].id > 2320) {
       updateRecordsParallel(gbwt, source, endmarker_sorted, i,
-        sample_interval, endmarker_edges, start_pos_map);
-      }
-      else {
+        sample_interval, endmarker_edges, start_pos_map, max_size_node);
       */
       pool.push_task(&gbwt::updateRecordsParallel, std::ref(gbwt),
                      std::cref(source), std::ref(endmarker_sorted), i,
                      sample_interval, std::ref(endmarker_edges),
-                     std::ref(start_pos_map));
-      /*
-      }
-      */
+                     std::ref(start_pos_map), max_size_node);
     } else {
       /*
-      if (seqs[0].id > 2320) {
       updateRecordsParallel(gbwt, source, sorted_seqs, i, sample_interval,
-        endmarker_edges, start_pos_map);
-      }
-      else {
+        endmarker_edges, start_pos_map, max_size_node);
       */
       pool.push_task(&gbwt::updateRecordsParallel, std::ref(gbwt),
                      std::cref(source), std::ref(sorted_seqs), i,
                      sample_interval, std::ref(endmarker_edges),
-                     std::ref(start_pos_map));
-      /*
-      }
-      */
+                     std::ref(start_pos_map), max_size_node);
     }
   }
   pool.wait_for_tasks();
+  end = std::chrono::steady_clock::now();
+  auto update_nodes_time = std::chrono::duration<double>{end- begin};
 
-  std::cerr << "\n-----  Record Before Recode  -----\n";
-  print_record(gbwt.bwt);
-  std::cerr << "------------------------------------\n";
+  std::cout << "Pass update outgoing, body, and ids.\n";
+  std::cout << "Time Used: " << update_nodes_time.count() << "s.\n";
+  
+  // std::cerr << "\n-----  Record Before Recode  -----\n";
+  // print_record(gbwt.bwt);
+  // std::cerr << "------------------------------------\n";
+  // std::exit(1);
 
   return 1;
 } // namespace gbwt
@@ -2190,9 +2205,9 @@ void GBWTBuilder::finish() {
 
   // Finally recode the index to make it serializable.
   this->index.recode();
-  std::cerr << "\n-----  Record After Recode  -----\n";
-  print_record(this->index.bwt);
-  std::cerr << "----------------------------------\n";
+  // std::cerr << "\n-----  Record After Recode  -----\n";
+  // print_record(this->index.bwt);
+  // std::cerr << "----------------------------------\n";
 }
 
 void GBWTBuilder::flush() {

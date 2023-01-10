@@ -60,18 +60,27 @@ struct is_zero {
   __host__ __device__ bool operator()(int x) { return (x == 0); }
 };
 
-std::vector<std::vector<std::pair<size_type, node_type>>>
+void 
 radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
            const std::unique_ptr<std::unordered_map<size_type, size_type>>
                &start_pos_map,
+           std::vector<std::vector<std::pair<size_type, node_type>>> &sorted_seqs,
            const std::uint64_t total_nodes) {
   double init_time = 0, key_time = 0, /*h2d_copy_time = 0,*/ sort_time = 0,
          d2h_copy_time = 0, remove_time = 0, place_time = 0;
   std::chrono::steady_clock::time_point begin, end;
   begin = std::chrono::steady_clock::now();
 
+  std::chrono::steady_clock::time_point sub_begin, sub_end;
+  /*
+  sub_begin = std::chrono::steady_clock::now();
   std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs(
       total_nodes);
+  sub_end = std::chrono::steady_clock::now();
+  auto construct_vector_of_vector_time = std::chrono::duration<double>(sub_end-sub_begin);
+  std::cout << "Pass construction of vector of vecotr.\n";
+  std::cout << "Time Used: " << construct_vector_of_vector_time.count() << std::endl;
+  */
 
   // ---- Prepare values to be used ---- //
   // width of the integers which are accessed via the [] operator
@@ -82,13 +91,19 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
 
   // copy source to device memory
   // cudaMallocHost((void **)&source, source_size_byte, cudaHostAllocDefault);
+  sub_begin = std::chrono::steady_clock::now();
   uint64_t *d_source;
   cudaMalloc(&d_source, source_size_byte);
   cudaMemcpyAsync(d_source, source.data(), source_size_byte,
                   cudaMemcpyHostToDevice);
   // cudaMemcpy(d_source, source.data(), source_size_byte,
   // cudaMemcpyHostToDevice);
+  sub_end = std::chrono::steady_clock::now();
+  auto device_malloc_and_pass_time = std::chrono::duration<double>(sub_end-sub_begin);
+  std::cout << "Pass cuda malloc and copy async.\n";
+  std::cout << "Time Used: " << device_malloc_and_pass_time.count() << std::endl;
 
+  sub_begin = std::chrono::steady_clock::now();
   // copy start_position
   thrust::host_vector<size_type> start_pos;
   start_pos.reserve(seqs_size);
@@ -99,7 +114,12 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
   size_type *d_start_pos = thrust::raw_pointer_cast(&start_pos_vec[0]);
   // thrust::device_ptr<size_type> d_start_pos =
   // start_pos_vec.data();
+  sub_end = std::chrono::steady_clock::now();
+  auto start_position_copy_time = std::chrono::duration<double>(sub_end-sub_begin);
+  std::cout << "Pass copy start position to device.\n";
+  std::cout << "Time Used: " << start_position_copy_time.count() << std::endl;
 
+  sub_begin = std::chrono::steady_clock::now();
   // copy sequence_id
   thrust::host_vector<size_type> h_seq_id(sequence_id);
   thrust::device_vector<size_type> seq_id_vec = h_seq_id;
@@ -107,19 +127,33 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
       thrust::device_pointer_cast(&seq_id_vec[0]);
   size_type *d_seq_id_raw = thrust::raw_pointer_cast(&seq_id_vec[0]);
   // thrust::device_ptr<size_type> d_seq_id = seq_id_vec.data();
+  sub_end = std::chrono::steady_clock::now();
+  auto seq_id_copy_time = std::chrono::duration<double>(sub_end-sub_begin);
+  std::cout << "Pass copy sequence id to device.\n";
+  std::cout << "Time Used: " << seq_id_copy_time.count() << std::endl;
 
+  sub_begin = std::chrono::steady_clock::now();
   // use gpu to assign keys
   // there about 2000~ sequences passed in
   thrust::host_vector<node_type> h_keys_vec(seqs_size);
   thrust::device_ptr<node_type> d_keys =
       thrust::device_malloc(sizeof(node_type) * seqs_size);
   node_type *d_keys_raw = thrust::raw_pointer_cast(d_keys);
+  sub_end = std::chrono::steady_clock::now();
+  auto key_alloc_time = std::chrono::duration<double>(sub_end-sub_begin);
+  std::cout << "Pass allocate device mem for key.\n";
+  std::cout << "Time Used: " << key_alloc_time.count() << std::endl;
 
   size_type arr_start_idx = 0;     // first index which is not an ENDMARKER
   size_type seqs_left = seqs_size; // sequences that have not
                                    // reached the ENDMARKER
   const int thread_per_block = 512;
+  sub_begin = std::chrono::steady_clock::now();
   cudaDeviceSynchronize();
+  sub_end = std::chrono::steady_clock::now();
+  auto wait_sync_time = std::chrono::duration<double>(sub_end-sub_begin);
+  std::cout << "Pass wait async memcpy for source.\n";
+  std::cout << "Time Used: " << wait_sync_time.count() << std::endl;
   end = std::chrono::steady_clock::now();
   init_time = std::chrono::duration_cast<std::chrono::microseconds>(end - begin)
                   .count();
@@ -180,7 +214,7 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
       break;
     //*/
     begin = std::chrono::steady_clock::now();
-    for (size_type i = end_counter; i < seqs_left; ++i) {
+    for (size_type i = end_counter; i < seqs_left+end_counter; ++i) {
       size_type seq_id = h_seq_id[i];
       node_type next_node_id = source[(*start_pos_map)[seq_id] + position + 1];
       sorted_seqs[h_keys_vec[i] - 1].push_back({seq_id, next_node_id});
@@ -215,7 +249,7 @@ radix_sort(const text_type &source, std::vector<size_type> &sequence_id,
     std::cout << "(" << item.first << ", " << item.second << ")\n";
   }
   */
-  return sorted_seqs;
+  // return sorted_seqs;
 }
 
 /*
