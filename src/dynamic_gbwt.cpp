@@ -1170,7 +1170,6 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
     }
   }
 
-  begin = std::chrono::steady_clock::now();
   // ---- Store the start position ---- //
   // build unordered map of start position for each sequence
   std::unique_ptr<std::unordered_map<size_type, size_type>> start_pos_map(
@@ -1181,25 +1180,12 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
     (*start_pos_map)[sequence.id] = sequence.pos;
     sequence_id.emplace_back(sequence.id);
   }
-  end = std::chrono::steady_clock::now();
-  auto init_time = std::chrono::duration<double>{end- begin};
-
-  std::cout << "Pass initialization of start_pos_map and sequence_id\n";
-  std::cout << "Time Used: " << init_time.count() << "s.\n";
 
   std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs(gbwt.sigma());
 
 // ---- Thrust Radix Sort  ---- //
-  begin = std::chrono::steady_clock::now();
-  std::cout << "[info] before radix_sort\n";
+ 
   radix_sort(source, sequence_id, start_pos_map, sorted_seqs, gbwt.sigma());
-  std::cout << "[info] after radix_sort\n";
-  end = std::chrono::steady_clock::now();
-  auto sort_time =
-      std::chrono::duration_cast<std::chrono::milliseconds>(end - begin)
-          .count();
-  std::cerr << "radix sort time: " << sort_time << " ms\n";
-  // printSortedMatrix(sorted_seqs);
   /*
   std::vector<std::vector<std::pair<size_type, node_type>>> sorted_seqs;
   sortAllSequencesAllPosition(seqs, sorted_seqs, source);
@@ -1224,7 +1210,7 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
                                   std::thread::hardware_concurrency() - 1);
   BS::thread_pool_light pool(thread_num);
 
-  begin = std::chrono::steady_clock::now();
+
   // add the incoming for the first path's first node since sdsl does not put
   // the endmarker at the begining.
   gbwt.record(source[seqs[0].pos]).increment(ENDMARKER);
@@ -1236,34 +1222,12 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
                    std::cref(source), start_position, std::ref(gbwt_mutex));
   }
   pool.wait_for_tasks();
-  end = std::chrono::steady_clock::now();
-  auto update_incoming_time = std::chrono::duration<double>{end- begin};
 
-  std::cout << "Pass update incoming edges.\n";
-  std::cout << "Time Used: " << update_incoming_time.count() << "s.\n";
-
-  begin = std::chrono::steady_clock::now();
   // ---- Build outgoing_offset_map ---- //
   for (short_type node_id = 1; node_id < gbwt.sigma(); ++node_id) {
     pool.push_task(&gbwt::build_offset_map, std::ref(gbwt), node_id);
   }
   pool.wait_for_tasks();
-  end = std::chrono::steady_clock::now();
-  auto build_offset_time = std::chrono::duration<double>{end- begin};
-
-  std::cout << "Pass build outgoing offset map.\n";
-  std::cout << "Time Used: " << build_offset_time.count() << "s.\n";
-
-  // debug section of outgoing_offset_map
-  /*
-  for (short_type node_id = 1; node_id < gbwt.sigma(); ++node_id) {
-    DynamicRecord &record = gbwt.record(node_id);
-    std::cout << "node_id: " << node_id << "\n";
-    for (auto &item : record.outgoing_offset_map) {
-      std::cout << "(" << item.first << ", " << item.second << ")\n";
-    }
-  }
-  */
 
   size_type max_size = 0;
   node_type max_size_node;
@@ -1276,25 +1240,16 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
     }
     ++i;
   }
-  std::cout << "Max size node id: " << max_size_node << std::endl;
-  std::cout << "Max size: " << max_size << std::endl << std::endl;
 
   // ---- Given the radix sort table, update outgoing edges, body, and ids of
   // Records(nodes) ---- //
-  begin = std::chrono::steady_clock::now();
   std::vector<std::vector<std::pair<size_type, node_type>>> endmarker_sorted;
   std::vector<std::pair<size_type, node_type>> end_sort;
   for (auto &sequence : seqs) {
     end_sort.emplace_back(std::make_pair(sequence.id, sequence.next));
   }
   endmarker_sorted.emplace_back(end_sort);
-  end = std::chrono::steady_clock::now();
-  auto endmarker_radix_sort_time = std::chrono::duration<double>{end- begin};
 
-  std::cout << "Pass endmarker radix sort.\n";
-  std::cout << "Time Used: " << endmarker_radix_sort_time.count() << "s.\n";
-
-  begin = std::chrono::steady_clock::now();
   // parallel update nodes
   size_type node_num = gbwt.sigma();
   for (node_type i = 0; i < node_num; ++i) {
@@ -1319,17 +1274,8 @@ size_type insert(DynamicGBWT &gbwt, std::vector<Sequence> &seqs,
     }
   }
   pool.wait_for_tasks();
-  end = std::chrono::steady_clock::now();
-  auto update_nodes_time = std::chrono::duration<double>{end- begin};
 
-  std::cout << "Pass update outgoing, body, and ids.\n";
-  std::cout << "Time Used: " << update_nodes_time.count() << "s.\n";
-  
-  // std::cerr << "\n-----  Record Before Recode  -----\n";
-  // print_record(gbwt.bwt);
-  // std::cerr << "------------------------------------\n";
-  // std::exit(1);
-
+  //print_record(gbwt.bwt);
   return 1;
 } // namespace gbwt
 

@@ -1,4 +1,4 @@
-#SDSL_DIR=../sdsl-lite
+SDSL_DIR=../sdsl-lite
 include $(SDSL_DIR)/Make.helper
 
 BUILD_BIN=bin
