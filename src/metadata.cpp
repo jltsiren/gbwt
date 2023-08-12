@@ -192,7 +192,7 @@ Metadata::sanityChecks() const
 void
 Metadata::setSamples(size_type n)
 {
-  if(this->hasSampleNames() && Verbosity::level >= Verbosity::FULL)
+  if(this->hasSampleNames() && n != this->sample_names.size() && Verbosity::level >= Verbosity::FULL)
   {
     std::cerr << "Metadata::setSamples(): Warning: Changing sample count without changing sample names" << std::endl;
   }
@@ -208,7 +208,7 @@ Metadata::setHaplotypes(size_type n)
 void
 Metadata::setContigs(size_type n)
 {
-  if(this->hasContigNames() && Verbosity::level >= Verbosity::FULL)
+  if(this->hasContigNames() && n != this->contig_names.size() && Verbosity::level >= Verbosity::FULL)
   {
     std::cerr << "Metadata::setContigs(): Warning: Changing contig count without changing contig names" << std::endl;
   }
