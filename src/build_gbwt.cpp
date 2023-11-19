@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2018, 2019, 2020, 2021 Jouni Siren
+  Copyright (c) 2018, 2019, 2020, 2021, 2023 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -399,24 +399,30 @@ Config::usage()
   Version::print(std::cerr, tool_name);
 
   std::cerr << "Usage: build_gbwt [options] input1 [input2 ...]" << std::endl;
-  std::cerr << "  -b N  Insert in batches of N million nodes (default: " << (DynamicGBWT::INSERT_BATCH_SIZE / MILLION) << ")" << std::endl;
-  std::cerr << "  -c    Check for overlapping variants in haplotypes (use with -p)" << std::endl;
+  std::cerr << std::endl;
+  std::cerr << "Input / output:" << std::endl;
   std::cerr << "  -e    Build an empty GBWT (the input will not be read)" << std::endl;
-  std::cerr << "  -f    Index the sequences only in forward orientation (default)" << std::endl;
   std::cerr << "  -F X  Read a list of input files from X, one file per line (no input1 needed; may repeat)" << std::endl;
   std::cerr << "  -i X  Insert the sequences into an existing index with base name X" << std::endl;
   std::cerr << "  -l    Load an existing index instead of building it" << std::endl;
-  std::cerr << "  -L X  Read a list of phasing files from X, one file per line (use with -p; may repeat)" << std::endl;
+  std::cerr << "  -R    Resample sequence ids in the loaded index (implies -l)" << std::endl;
   std::cerr << "  -o X  Use base name X for output (default: the only input)" << std::endl;
   std::cerr << "  -O    Output SDSL format instead of simple-sds format" << std::endl;
-  std::cerr << "  -p    The input is a parsed VCF file" << std::endl;
-  std::cerr << "  -P X  Only use the phasing information in file X (use with -p; may repeat)" << std::endl;
-  std::cerr << "  -r    Index the sequences also in reverse orientation" << std::endl;
-  std::cerr << "  -R    Resample sequence ids in the loaded index (implies -l)" << std::endl;
-  std::cerr << "  -s N  Sample sequence ids at one out of N positions (default: " << DynamicGBWT::SAMPLE_INTERVAL << "; use 0 for no samples)" << std::endl;
-  std::cerr << "  -S    Skip overlapping variants (use with -p)" << std::endl;
   std::cerr << "  -t    The input is a text file (each line is a comma-separated sequence of nodes)" << std::endl;
+  std::cerr << std::endl;
+  std::cerr << "Construction parameters:" << std::endl;
+  std::cerr << "  -b N  Insert in batches of N million nodes (default: " << (DynamicGBWT::INSERT_BATCH_SIZE / MILLION) << ")" << std::endl;
+  std::cerr << "  -f    Index the sequences only in forward orientation (default)" << std::endl;
+  std::cerr << "  -r    Index the sequences also in reverse orientation" << std::endl;
+  std::cerr << "  -s N  Sample sequence ids at one out of N positions (default: " << DynamicGBWT::SAMPLE_INTERVAL << "; use 0 for no samples)" << std::endl;
   std::cerr << "  -v    Verify the index after construction" << std::endl;
+  std::cerr << std::endl;
+  std::cerr << "Construction from a parsed VCF file:" << std::endl;
+  std::cerr << "  -p    The input is a parsed VCF file" << std::endl;
+  std::cerr << "  -P X  Only use the phasing information in file X (may repeat)" << std::endl;
+  std::cerr << "  -L X  Read a list of phasing files from X, one file per line (may repeat)" << std::endl;
+  std::cerr << "  -c    Check for overlapping variants in haplotypes" << std::endl;
+  std::cerr << "  -S    Skip overlapping variants" << std::endl;
   std::cerr << std::endl;
 }
 
