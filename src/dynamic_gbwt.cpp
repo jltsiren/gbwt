@@ -1684,17 +1684,18 @@ GBWTBuilder::insert(const vector_type& sequence, bool both_orientations)
 {
   size_type space_required = sequence.size() + 1;
   if(both_orientations) { space_required *= 2; }
-  if(space_required > this->input_buffer.size())
-  {
-    std::cerr << "GBWTBuilder::insert(): Sequence is too long for the buffer, skipping" << std::endl;
-    return;
-  }
   this->has_both_orientations &= both_orientations;
 
   // Flush the buffer if necessary.
   if(this->input_tail + space_required > this->input_buffer.size())
   {
     this->flush();
+    if(space_required > this->input_buffer.size()) {
+      if(Verbosity::level >= Verbosity::EXTENDED) {
+        std::cerr << "GBWTBuilder::insert(): Sequence is too long; increasing buffer size to " << space_required << std::endl;
+      }
+      this->input_buffer.resize(space_required);
+    }
   }
 
   // Forward orientation.
