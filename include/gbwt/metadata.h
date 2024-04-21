@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2020, 2021 Jouni Siren
+  Copyright (c) 2019, 2020, 2021, 2024 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -68,6 +68,18 @@ struct PathName
 
 //------------------------------------------------------------------------------
 
+// This is a standalone version of PathName. The fields are named in a way that is
+// compatible with GFA walk lines.
+struct FullPathName
+{
+  std::string sample_name;
+  std::string contig_name;
+  size_t      haplotype;
+  size_t      offset;
+};
+
+//------------------------------------------------------------------------------
+
 class Metadata
 {
 public:
@@ -108,6 +120,7 @@ public:
   bool hasPathNames() const { return this->header.get(MetadataHeader::FLAG_PATH_NAMES); }
   size_type paths() const { return this->path_names.size(); }
   const PathName& path(size_type i) const { return this->path_names[i]; }
+  FullPathName full_path(size_type i) const;
   std::vector<size_type> findPaths(size_type sample_id, size_type contig_id) const;
   std::vector<size_type> pathsForSample(size_type sample_id) const;
   std::vector<size_type> pathsForContig(size_type contig_id) const;

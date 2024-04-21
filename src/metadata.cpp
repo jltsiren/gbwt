@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2020, 2021 Jouni Siren
+  Copyright (c) 2019, 2020, 2021, 2024 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -216,6 +216,17 @@ Metadata::setContigs(size_type n)
 }
 
 //------------------------------------------------------------------------------
+
+FullPathName
+Metadata::full_path(size_type i) const
+{
+  const PathName& path = this->path(i);
+  std::string sample_name = (this->hasSampleNames() ? this->sample(path.sample) : std::to_string(path.sample));
+  std::string contig_name = (this->hasContigNames() ? this->contig(path.contig) : std::to_string(path.contig));
+  size_t haplotype = path.phase;
+  size_t offset = path.count;
+  return FullPathName { sample_name, contig_name, haplotype, offset };
+}
 
 std::vector<size_type>
 Metadata::findPaths(size_type sample_id, size_type contig_id) const
