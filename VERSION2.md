@@ -32,6 +32,9 @@ Version 2 will make path, sample, and contig names mandatory if metadata is pres
 Fragment field will always store the starting offset of the path fragment, rather than its rank.
 This behavior is consistent with [GFA](https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md) W-lines, and it is already expected in GBZ files.
 
+We will also need data structures that support finding paths by metadata.
+The current approach of scanning the path metadata does not work well with frequency-filtered graphs that may have tens of millions of paths.
+
 ## Serialization
 
 GBWT currently supports two serialization formats: one based on [SDSL](https://github.com/vgteam/sdsl-lite) serialization, and another on [Simple-SDS](https://github.com/jltsiren/simple-sds) serialization.
