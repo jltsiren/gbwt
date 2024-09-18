@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2021 Jouni Siren
+  Copyright (c) 2019, 2021, 2024 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -67,16 +67,16 @@ public:
     };
     this->paths =
     {
-      { static_cast<size_type>(0), static_cast<size_type>(0), static_cast<size_type>(0), static_cast<size_type>(0) },
-      { static_cast<size_type>(0), static_cast<size_type>(0), static_cast<size_type>(1), static_cast<size_type>(0) },
-      { static_cast<size_type>(1), static_cast<size_type>(0), static_cast<size_type>(0), static_cast<size_type>(0) },
-      { static_cast<size_type>(1), static_cast<size_type>(0), static_cast<size_type>(1), static_cast<size_type>(0) },
-      { static_cast<size_type>(1), static_cast<size_type>(1), static_cast<size_type>(0), static_cast<size_type>(0) },
-      { static_cast<size_type>(1), static_cast<size_type>(1), static_cast<size_type>(1), static_cast<size_type>(0) },
-      { static_cast<size_type>(2), static_cast<size_type>(0), static_cast<size_type>(0), static_cast<size_type>(0) },
-      { static_cast<size_type>(2), static_cast<size_type>(0), static_cast<size_type>(0), static_cast<size_type>(1) },
-      { static_cast<size_type>(2), static_cast<size_type>(0), static_cast<size_type>(1), static_cast<size_type>(0) },
-      { static_cast<size_type>(2), static_cast<size_type>(0), static_cast<size_type>(1), static_cast<size_type>(1) }
+      PathName(0, 0, 0, 0),
+      PathName(0, 0, 1, 0),
+      PathName(1, 0, 0, 0),
+      PathName(1, 0, 1, 0),
+      PathName(1, 1, 0, 0),
+      PathName(1, 1, 1, 0),
+      PathName(2, 0, 0, 0),
+      PathName(2, 0, 0, 1),
+      PathName(2, 0, 1, 0),
+      PathName(2, 0, 1, 1)
     };
     this->path_samples = 3;
     this->path_haplotypes = 6;
@@ -651,6 +651,164 @@ TEST_F(MetadataTest, Serialization)
   in.close();
   TempFile::remove(simple_sds_filename);
   EXPECT_EQ(original, simple_sds_copy) << "Simple-SDS serialization failed";
+}
+
+//------------------------------------------------------------------------------
+
+class PathNameTest : public ::testing::Test
+{
+public:
+  Metadata metadata;
+
+  PathNameTest()
+  {
+    Verbosity::set(Verbosity::SILENT);
+  }
+
+  void SetUp() override
+  {
+    std::vector<std::string> samples { "sample1", "sample2" };
+    this->metadata.setSamples(samples);
+    std::vector<std::string> contigs { "contig1", "contig2" };
+    this->metadata.setContigs(contigs);
+    this->metadata.setHaplotypes(4);
+
+    // Sample 1: Not fragmented
+    this->metadata.addPath(0, 0, 0, 0);
+    this->metadata.addPath(0, 0, 1, 0);
+    this->metadata.addPath(0, 1, 0, 0);
+    this->metadata.addPath(0, 1, 1, 0);
+
+    // Sample 2: Fragmented
+    this->metadata.addPath(1, 0, 0, 0);
+    this->metadata.addPath(1, 0, 0, 1000);
+    this->metadata.addPath(1, 0, 0, 2000);
+    this->metadata.addPath(1, 0, 1, 0);
+    this->metadata.addPath(1, 0, 1, 800);
+    this->metadata.addPath(1, 0, 1, 2100);
+    this->metadata.addPath(1, 1, 0, 0);
+    this->metadata.addPath(1, 1, 0, 1400);
+    this->metadata.addPath(1, 1, 1, 0);
+    this->metadata.addPath(1, 1, 1, 1500);
+    this->metadata.addPath(1, 1, 1, 2500);
+  }
+
+  void findFragment(const FullPathName& name, size_type truth_id) const
+  {
+    size_type fragment_id = this->metadata.findFragment(name);
+    ASSERT_EQ(fragment_id, truth_id) << "Wrong fragment for sample " << name.sample_name <<
+      ", contig " << name.contig_name << ", haplotype " << name.haplotype << ", offset " << name.offset;
+  }
+};
+
+TEST_F(PathNameTest, NameConversions)
+{
+  for(size_type path_id = 0; path_id < this->metadata.paths(); path_id++)
+  {
+    PathName path = this->metadata.path(path_id);
+    FullPathName full_path = this->metadata.fullPath(path_id);
+    PathName::path_name_type sample_id = this->metadata.sample(full_path.sample_name);
+    ASSERT_EQ(sample_id, path.sample) << "Wrong sample id for FullPathName " << path_id;
+    PathName::path_name_type contig_id = this->metadata.contig(full_path.contig_name);
+    ASSERT_EQ(contig_id, path.contig) << "Wrong contig id for FullPathName " << path_id;
+
+    PathName converted = this->metadata.path(full_path);
+    ASSERT_EQ(converted, path) << "FullPathName to PathName conversion failed for path " << path_id;
+  }
+
+  {
+    FullPathName wrong_sample { "sample3", "contig1", 1, 0 };
+    PathName converted = this->metadata.path(wrong_sample);
+    PathName truth(2, 0, 1, 0);
+    ASSERT_EQ(converted, truth) << "FullPathName to PathName conversion failed with a non-existing sample";
+  }
+
+  {
+    FullPathName wrong_contig { "sample1", "contig3", 0, 0 };
+    PathName converted = this->metadata.path(wrong_contig);
+    PathName truth(0, 2, 0, 0);
+    ASSERT_EQ(converted, truth) << "FullPathName to PathName conversion failed with a non-existing contig";
+  }
+
+  {
+    FullPathName wrong_haplotype { "sample1", "contig1", 4, 0 };
+    PathName converted = this->metadata.path(wrong_haplotype);
+    PathName truth(0, 0, 4, 0);
+    ASSERT_EQ(converted, truth) << "FullPathName to PathName conversion failed with a non-existing haplotype";
+  }
+
+  {
+    FullPathName wrong_offset { "sample2", "contig2", 0, 3000 };
+    PathName converted = this->metadata.path(wrong_offset);
+    PathName truth(1, 1, 0, 3000);
+    ASSERT_EQ(converted, truth) << "FullPathName to PathName conversion failed with a non-existing offset";
+  }
+}
+
+TEST_F(PathNameTest, FindFragment)
+{
+  // All actual paths with offset - 1, offset, offset + 1
+  for(size_type path_id = 0; path_id < this->metadata.paths(); path_id++)
+  {
+    FullPathName name = this->metadata.fullPath(path_id);
+    if(name.offset > 0)
+    {
+      // In our test data, path fragments appear in order.
+      FullPathName prev = name; prev.offset--;
+      this->findFragment(prev, path_id - 1);
+    }
+    this->findFragment(name, path_id);
+    name.offset++;
+    // In our test data, there are no fragments starting at successive offsets.
+    this->findFragment(name, path_id);
+  }
+
+  {
+    FullPathName wrong_sample { "sample3", "contig1", 1, 0 };
+    ASSERT_EQ(this->metadata.findFragment(wrong_sample), this->metadata.paths()) << "Found a fragment for a non-existing sample";
+  }
+
+  {
+    FullPathName wrong_contig { "sample1", "contig3", 0, 0 };
+    ASSERT_EQ(this->metadata.findFragment(wrong_contig), this->metadata.paths()) << "Found a fragment for a non-existing contig";
+  }
+
+  {
+    FullPathName wrong_haplotype { "sample1", "contig1", 4, 0 };
+    ASSERT_EQ(this->metadata.findFragment(wrong_haplotype), this->metadata.paths()) << "Found a fragment for a non-existing haplotype";
+  }
+
+  size_type old_paths = this->metadata.paths();
+  size_type sample_id = this->metadata.samples();
+  this->metadata.addSamples({ "sample3" });
+  this->metadata.setHaplotypes(this->metadata.haplotypes() + 1);
+  this->metadata.addPath(sample_id, 0, 0, 1000);
+  this->metadata.addPath(sample_id, 0, 0, 501);
+  this->metadata.addPath(sample_id, 0, 0, 500);
+
+  {
+    // Fragments are not in order.
+    FullPathName unordered { "sample3", "contig1", 0, 800 };
+    this->findFragment(unordered, old_paths + 1);
+  }
+
+  {
+    // Before the first fragment.
+    FullPathName before { "sample3", "contig1", 0, 499 };
+    this->findFragment(before, this->metadata.paths());
+  }
+
+  {
+    // First fragment.
+    FullPathName first { "sample3", "contig1", 0, 500 };
+    this->findFragment(first, old_paths + 2);
+  }
+
+  {
+    // Fragment starting immediately after the first fragment.
+    FullPathName after { "sample3", "contig1", 0, 501 };
+    this->findFragment(after, old_paths + 1);
+  }
 }
 
 //------------------------------------------------------------------------------

@@ -217,8 +217,16 @@ Metadata::setContigs(size_type n)
 
 //------------------------------------------------------------------------------
 
+PathName
+Metadata::path(const FullPathName& name) const
+{
+  size_type sample = (this->hasSampleNames() ? this->sample(name.sample_name) : this->samples());
+  size_type contig = (this->hasContigNames() ? this->contig(name.contig_name) : this->contigs());
+  return PathName(sample, contig, name.haplotype, name.offset);
+}
+
 FullPathName
-Metadata::full_path(size_type i) const
+Metadata::fullPath(size_type i) const
 {
   const PathName& path = this->path(i);
   std::string sample_name = (this->hasSampleNames() ? this->sample(path.sample) : std::to_string(path.sample));
@@ -226,6 +234,30 @@ Metadata::full_path(size_type i) const
   size_t haplotype = path.phase;
   size_t offset = path.count;
   return FullPathName { sample_name, contig_name, haplotype, offset };
+}
+
+size_type
+Metadata::findFragment(const PathName& name) const
+{
+  size_type result = this->paths();
+  if(!(this->hasPathNames())) { return result; }
+
+  for(size_type i = 0; i < this->paths(); i++)
+  {
+    const PathName& path = this->path(i);
+    if(path.sample == name.sample && path.contig == name.contig && path.phase == name.phase && path.count <= name.count)
+    {
+      if(result >= this->paths() || path.count > this->path(result).count) { result = i; }
+    }
+  }
+
+  return result;
+}
+
+size_type
+Metadata::findFragment(const FullPathName& name) const
+{
+  return this->findFragment(this->path(name));
 }
 
 std::vector<size_type>
@@ -275,21 +307,13 @@ void
 Metadata::addPath(const PathName& path)
 {
   this->header.set(MetadataHeader::FLAG_PATH_NAMES);
-  this->path_names.emplace_back(path);
+  this->path_names.push_back(path);
 }
 
 void
 Metadata::addPath(size_type sample, size_type contig, size_type phase, size_type count)
 {
-  this->header.set(MetadataHeader::FLAG_PATH_NAMES);
-  PathName path =
-  {
-    static_cast<PathName::path_name_type>(sample),
-    static_cast<PathName::path_name_type>(contig),
-    static_cast<PathName::path_name_type>(phase),
-    static_cast<PathName::path_name_type>(count)
-  };
-  this->path_names.emplace_back(path);
+  this->addPath(PathName(sample, contig, phase, count));
 }
 
 void

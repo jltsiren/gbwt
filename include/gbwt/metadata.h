@@ -50,6 +50,12 @@ struct PathName
   path_name_type phase;
   path_name_type count;
 
+  PathName() : sample(0), contig(0), phase(0), count(0) {}
+  PathName(path_name_type sample, path_name_type contig, path_name_type phase, path_name_type count) :
+    sample(sample), contig(contig), phase(phase), count(count)
+  {
+  }
+
   bool operator==(const PathName& another) const
   {
     return (this->sample == another.sample && this->contig == another.contig && this->phase == another.phase && this->count == another.count);
@@ -120,7 +126,10 @@ public:
   bool hasPathNames() const { return this->header.get(MetadataHeader::FLAG_PATH_NAMES); }
   size_type paths() const { return this->path_names.size(); }
   const PathName& path(size_type i) const { return this->path_names[i]; }
-  FullPathName full_path(size_type i) const;
+  PathName path(const FullPathName& name) const;
+  FullPathName fullPath(size_type i) const;
+  size_type findFragment(const PathName& name) const;
+  size_type findFragment(const FullPathName& name) const;
   std::vector<size_type> findPaths(size_type sample_id, size_type contig_id) const;
   std::vector<size_type> pathsForSample(size_type sample_id) const;
   std::vector<size_type> pathsForContig(size_type contig_id) const;
