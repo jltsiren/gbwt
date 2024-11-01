@@ -41,6 +41,7 @@ int
 main(int argc, char** argv)
 {
   if(argc < 3) { printUsage(); }
+  Verbosity::set(Verbosity::FULL);
 
   // Parse command line options.
   int c = 0;

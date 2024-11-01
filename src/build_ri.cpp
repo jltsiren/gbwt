@@ -51,6 +51,7 @@ int
 main(int argc, char** argv)
 {
   if(argc < 2) { printUsage(); }
+  Verbosity::set(Verbosity::FULL);
 
   std::string base_name;
   bool verify_index = false;

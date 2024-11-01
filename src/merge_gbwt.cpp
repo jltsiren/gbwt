@@ -45,6 +45,7 @@ int
 main(int argc, char** argv)
 {
   if(argc < 5) { printUsage(); }
+  Verbosity::set(Verbosity::FULL);
 
   size_type batch_size = DynamicGBWT::MERGE_BATCH_SIZE, sample_interval = DynamicGBWT::SAMPLE_INTERVAL;
   MergingAlgorithm algorithm = ma_insert;

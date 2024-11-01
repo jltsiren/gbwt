@@ -38,6 +38,7 @@ int
 main(int argc, char** argv)
 {
   if(argc < 2) { printUsage(); }
+  Verbosity::set(Verbosity::FULL);
 
   int c = 0;
   bool print_metadata = true, need_metadata = false;

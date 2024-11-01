@@ -120,6 +120,7 @@ size_type insertTextFile(DynamicGBWT& index, const std::string& filename, const 
 int
 main(int argc, char** argv)
 {
+  Verbosity::set(Verbosity::FULL);
   Config config(argc, argv);
   if(!(config.validate())) { std::exit(EXIT_FAILURE); }
   std::string gbwt_name = config.output_base + DynamicGBWT::EXTENSION;
