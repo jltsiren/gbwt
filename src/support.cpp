@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019, 2020, 2021 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -1774,7 +1774,7 @@ StringArray::simple_sds_serialize(std::ostream& out) const
 void
 StringArray::simple_sds_load(std::istream& in)
 {
-  // Load the index. We cannot compress it yet because we do not know the width of the sentinel
+  // Load the index. We cannot decompress it yet because we do not know the width of the sentinel
   // value `strings.size()`.
   sdsl::sd_vector<> v; v.simple_sds_load(in);
 
@@ -1796,6 +1796,41 @@ StringArray::simple_sds_load(std::istream& in)
   this->index[this->size()] = this->strings.size();
 
   this->sanityChecks();
+}
+
+void
+StringArray::simple_sds_load_duplicate(std::istream& in, const std::function<void(std::string&)>& transform)
+{
+  // Load the data.
+  sdsl::sd_vector<> v; v.simple_sds_load(in);
+  sdsl::int_vector<8> comp_to_char; comp_to_char.simple_sds_load(in);
+  sdsl::int_vector<> compressed; compressed.simple_sds_load(in);
+
+  // Initialize the members.
+  this->strings = std::vector<char>(); this->strings.reserve(2 * compressed.size());
+  this->index = sdsl::int_vector<>(2 * v.ones() + 1, 0, sdsl::bits::length(2 * compressed.size()));
+
+  // Decompress the data.
+  this->index[0] = 0;
+  auto iter = v.one_begin();
+  size_type i = 1;
+  while(iter != v.one_end())
+  {
+    size_type curr = iter->second;
+    ++iter;
+    size_type length = (iter == v.one_end() ? compressed.size() : iter->second) - curr;
+
+    // First copy.
+    this->index[i] = this->index[i - 1] + length; i++;
+    std::string str;
+    for(size_type j = 0; j < length; j++) { str.push_back(comp_to_char[compressed[curr + j]]); }
+    this->strings.insert(this->strings.end(), str.begin(), str.end());
+
+    // Transformed copy.
+    this->index[i] = this->index[i - 1] + length; i++;
+    transform(str);
+    this->strings.insert(this->strings.end(), str.begin(), str.end());
+  }
 }
 
 size_t

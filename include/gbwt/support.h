@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019, 2020, 2021 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -508,6 +508,10 @@ public:
   void simple_sds_serialize(std::ostream& out) const;
   void simple_sds_load(std::istream& in);
   size_t simple_sds_size() const;
+
+  // This version loads each string twice and transforms the second copy.
+  // The transform function should not change the length of the string.
+  void simple_sds_load_duplicate(std::istream& in, const std::function<void(std::string&)>& transform);
 
   bool operator==(const StringArray& another) const;
   bool operator!=(const StringArray& another) const;

@@ -193,6 +193,46 @@ TEST_F(StringArrayTest, CompressEmpty)
   TempFile::remove(filename);
 }
 
+void
+reverse_string(std::string& s)
+{
+  std::reverse(s.begin(), s.end());
+}
+
+StringArray
+duplicate_array(const std::vector<std::string>& source)
+{
+  return StringArray(2 * source.size(),
+  [&](size_type i) -> size_type
+  {
+    return source[i / 2].length();
+  },
+  [&](size_type i) -> std::string
+  {
+    std::string value = source[i / 2];
+    if(i & 1) { reverse_string(value); }
+    return value;
+  });
+}
+
+TEST_F(StringArrayTest, DuplicateEmpty)
+{
+  std::vector<std::string> source;
+  StringArray original(source);
+  StringArray truth = duplicate_array(source);
+
+  std::string filename = TempFile::getName("string-array");
+  sdsl::simple_sds::serialize_to(original, filename);
+
+  StringArray copy;
+  std::ifstream in(filename, std::ios_base::binary);
+  copy.simple_sds_load_duplicate(in, reverse_string);
+  in.close();
+  ASSERT_EQ(copy, truth) << "Compression changed the empty array";
+
+  TempFile::remove(filename);
+}
+
 TEST_F(StringArrayTest, SerializeNonEmpty)
 {
   std::vector<std::string> truth
@@ -237,6 +277,30 @@ TEST_F(StringArrayTest, CompressNonEmpty)
   TempFile::remove(filename);
 }
 
+TEST_F(StringArrayTest, DuplicateNonEmpty)
+{
+  std::vector<std::string> source
+  {
+    "first",
+    "second",
+    "third",
+    "fourth"
+  };
+  StringArray original(source);
+  StringArray truth = duplicate_array(source);
+
+  std::string filename = TempFile::getName("string-array");
+  sdsl::simple_sds::serialize_to(original, filename);
+
+  StringArray copy;
+  std::ifstream in(filename, std::ios_base::binary);
+  copy.simple_sds_load_duplicate(in, reverse_string);
+  in.close();
+  ASSERT_EQ(copy, truth) << "Compression changed the non-empty array";
+
+  TempFile::remove(filename);
+}
+
 TEST_F(StringArrayTest, CompressWithEmptyStrings)
 {
   // Here we test that the compression still works when there is an empty
@@ -262,6 +326,31 @@ TEST_F(StringArrayTest, CompressWithEmptyStrings)
   copy.simple_sds_load(in);
   in.close();
   ASSERT_EQ(copy, original) << "Compression changed the array with empty strings";
+
+  TempFile::remove(filename);
+}
+
+TEST_F(StringArrayTest, DuplicateWithEmptyStrings)
+{
+  std::vector<std::string> source
+  {
+    "first",
+    "second",
+    "",
+    "fourth",
+    ""
+  };
+  StringArray original(source);
+  StringArray truth = duplicate_array(source);
+
+  std::string filename = TempFile::getName("string-array");
+  sdsl::simple_sds::serialize_to(original, filename);
+
+  StringArray copy;
+  std::ifstream in(filename, std::ios_base::binary);
+  copy.simple_sds_load_duplicate(in, reverse_string);
+  in.close();
+  ASSERT_EQ(copy, truth) << "Compression changed the array with empty strings";
 
   TempFile::remove(filename);
 }
