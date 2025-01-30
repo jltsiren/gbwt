@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2020, 2021, 2024 Jouni Siren
+  Copyright (c) 2019, 2020, 2021, 2024, 2025 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -26,6 +26,7 @@
 #include <gbwt/metadata.h>
 
 #include <set>
+#include <unordered_set>
 
 namespace gbwt
 {
@@ -429,7 +430,7 @@ Metadata::removeSample(size_type sample_id)
   size_type haplotypes_to_remove = 0;
   if(this->hasPathNames())
   {
-    std::set<size_type> phases;
+    std::unordered_set<size_type> phases;
     result = gbwt::removePaths(*this, [sample_id, &phases, &result](PathName& path) -> bool {
       if(path.sample == sample_id)
       {
@@ -603,7 +604,7 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
     // Determine the new haplotype count.
     if(merge_sample_names)
     {
-      std::set<std::pair<size_type, size_type>> found_haplotypes;
+      std::set<std::pair<PathName::path_name_type, PathName::path_name_type>> found_haplotypes;
       for(const PathName& path : this->path_names)
       {
         found_haplotypes.emplace(path.sample, path.phase);
@@ -646,6 +647,86 @@ std::ostream& operator<<(std::ostream& stream, const Metadata& metadata)
   if(metadata.hasContigNames()) { stream << " with names"; }
 
   return stream;
+}
+
+//------------------------------------------------------------------------------
+
+FragmentMap::FragmentMap(const Metadata& metadata) :
+  chains(0)
+{
+  std::vector<std::pair<PathName, size_type>> sorted_paths;
+  for(size_type i = 0; i < metadata.paths(); i++)
+  {
+    sorted_paths.emplace_back(metadata.path(i), i);
+  }
+  sequentialSort(sorted_paths.begin(), sorted_paths.end());
+
+  auto same_sequence = [&sorted_paths](size_type i, size_type j) -> bool
+  {
+    const PathName& a = sorted_paths[i].first;
+    const PathName& b = sorted_paths[j].first;
+    return (a.sample == b.sample && a.contig == b.contig && a.phase == b.phase);
+  };
+
+  for(size_type i = 0; i < sorted_paths.size(); i++)
+  {
+    if(i == 0 || !same_sequence(i, i - 1))
+    {
+      this->chains++;
+    }
+    Fragment curr { sorted_paths[i].second, this->chains - 1, invalid_sequence(), invalid_sequence() };
+    if(i > 0 && same_sequence(i, i - 1))
+    {
+      curr.prev = sorted_paths[i - 1].second;
+    }
+    if(i + 1 < sorted_paths.size() && same_sequence(i, i + 1))
+    {
+      curr.next = sorted_paths[i + 1].second;
+    }
+    this->fragments[sorted_paths[i].second] = curr;
+  }
+}
+
+size_type
+FragmentMap::next(size_type path_id, bool is_reverse) const
+{
+  auto iter = this->fragments.find(path_id);
+  if(iter == this->fragments.end()) { return invalid_sequence(); }
+  return (is_reverse ? iter->second.prev : iter->second.next);
+}
+
+size_type
+FragmentMap::oriented_next(size_type gbwt_sequence_id) const
+{
+  size_type path_id = Path::id(gbwt_sequence_id);
+  bool is_reverse = Path::is_reverse(gbwt_sequence_id);
+  size_type result = this->next(path_id, is_reverse);
+  return (result == invalid_sequence() ? invalid_sequence() : Path::encode(result, is_reverse));
+}
+
+size_type
+FragmentMap::prev(size_type path_id, bool is_reverse) const
+{
+  auto iter = this->fragments.find(path_id);
+  if(iter == this->fragments.end()) { return invalid_sequence(); }
+  return (is_reverse ? iter->second.next : iter->second.prev);
+}
+
+size_type
+FragmentMap::oriented_prev(size_type gbwt_sequence_id) const
+{
+  size_type path_id = Path::id(gbwt_sequence_id);
+  bool is_reverse = Path::is_reverse(gbwt_sequence_id);
+  size_type result = this->prev(path_id, is_reverse);
+  return (result == invalid_sequence() ? invalid_sequence() : Path::encode(result, is_reverse));
+}
+
+size_type
+FragmentMap::chain(size_type path_id) const
+{
+  auto iter = this->fragments.find(path_id);
+  if(iter == this->fragments.end()) { return invalid_sequence(); }
+  return iter->second.chain;
 }
 
 //------------------------------------------------------------------------------

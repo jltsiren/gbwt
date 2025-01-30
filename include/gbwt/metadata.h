@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2020, 2021, 2024 Jouni Siren
+  Copyright (c) 2019, 2020, 2021, 2024, 2025 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -27,6 +27,8 @@
 
 #include <gbwt/files.h>
 #include <gbwt/support.h>
+
+#include <unordered_map>
 
 namespace gbwt
 {
@@ -174,6 +176,63 @@ private:
 };
 
 std::ostream& operator<<(std::ostream& stream, const Metadata& metadata);
+
+//------------------------------------------------------------------------------
+
+// Helper data structure for fragmented haplotype sequences.
+// The basic unit is a chain of paths. Each chain corresponds to a distinct
+// (sample, contig, phase) combination, with the paths ordered by the count field.
+struct FragmentMap
+{
+  struct Fragment
+  {
+    size_type path; // Path identifier for the fragment.
+    size_type chain; // Running identifier for the chain.
+    size_type prev, next; // Path identifiers for the previous and next fragment in the chain.
+  };
+
+  // Maps a path identifier to fragment information.
+  std::unordered_map<size_type, Fragment> fragments;
+
+  // Number chains in the metadata.
+  // Chain identifiers are in the range [0, chains).
+  size_type chains;
+
+  // Builds a FragmentMap from the path names in the metadata.
+  FragmentMap(const Metadata& metadata);
+
+  FragmentMap() = default;
+  FragmentMap(const FragmentMap&) = default;
+  FragmentMap(FragmentMap&&) = default;
+  FragmentMap& operator=(const FragmentMap&) = default;
+  FragmentMap& operator=(FragmentMap&&) = default;
+
+  // Returns the number of chains.
+  size_type size() const { return this->chains; }
+
+  // Returns true if the map is empty.
+  bool empty() const { return (this->chains == 0); }
+
+  // Returns the path identifier for the next fragment in the given orientation.
+  // Returns invalid_sequence() if there is no next fragment.
+  size_type next(size_type path_id, bool is_reverse = false) const;
+
+  // Returns the sequence identifier for the next fragment.
+  // Returns invalid_sequence() if there is no next fragment.
+  size_type oriented_next(size_type sequence_id) const;
+
+  // Returns the path identifier for the previous fragment in the given orientation.
+  // Returns invalid_sequence() if there is no previous fragment.
+  size_type prev(size_type path_id, bool is_reverse = false) const;
+
+  // Returns the sequence identifier for the previous fragment.
+  // Returns invalid_sequence() if there is no previous fragment.
+  size_type oriented_prev(size_type sequence_id) const;
+
+  // Returns the chain identifier for the fragment.
+  // Returns invalid_sequence() if the fragment is not in the map.
+  size_type chain(size_type path_id) const;
+};
 
 //------------------------------------------------------------------------------
 

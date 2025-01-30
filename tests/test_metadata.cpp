@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2021, 2024 Jouni Siren
+  Copyright (c) 2019, 2021, 2024, 2025 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -24,6 +24,7 @@
 
 #include <gtest/gtest.h>
 
+#include <random>
 #include <sstream>
 
 #include <gbwt/metadata.h>
@@ -809,6 +810,138 @@ TEST_F(PathNameTest, FindFragment)
     FullPathName after { "sample3", "contig1", 0, 501 };
     this->findFragment(after, old_paths + 1);
   }
+}
+
+//------------------------------------------------------------------------------
+
+class FragmentMapTest : public ::testing::Test
+{
+public:
+  Metadata metadata;
+  std::vector<PathName> paths;
+  std::vector<std::vector<FragmentMap::Fragment>> chains;
+
+  void SetUp() override
+  {
+    this->addChain(0, 0, 0, 2);
+    this->addChain(0, 0, 1, 1);
+    this->addChain(0, 1, 0, 3);
+    this->addChain(0, 1, 1, 2);
+    this->addChain(1, 0, 0, 3);
+    this->addChain(1, 0, 1, 3);
+    this->addChain(1, 1, 0, 1);
+    this->addChain(1, 1, 1, 4);
+  }
+
+  void addChain(size_type sample, size_type contig, size_type haplotype, size_type n)
+  {
+    std::vector<FragmentMap::Fragment> chain;
+    for(size_type i = 0; i < n; i++)
+    {
+      this->paths.push_back(PathName(sample, contig, haplotype, i));
+      size_type path = this->paths.size() - 1;
+      size_type sequence = this->chains.size();
+      size_type prev = (i == 0 ? invalid_sequence() : this->paths.size() - 2);
+      size_type next = (i == n - 1 ? invalid_sequence() : this->paths.size());
+      chain.push_back({ path, sequence, prev, next });
+    }
+    this->chains.push_back(chain);
+  }
+
+  void shufflePaths(std::uint64_t seed)
+  {
+    // Shuffle the paths.
+    std::vector<std::pair<PathName, size_type>> pairs;
+    for(size_type i = 0; i < this->paths.size(); i++) { pairs.push_back({ this->paths[i], i }); }
+    std::shuffle(pairs.begin(), pairs.end(), std::mt19937_64(seed));
+
+    // Determine path id mapping and update the paths.
+    std::vector<size_type> old_to_new_path_id(this->paths.size());
+    for(size_type i = 0; i < pairs.size(); i++)
+    {
+      this->paths[i] = pairs[i].first;
+      old_to_new_path_id[pairs[i].second] = i;
+    }
+
+    // Update path ids in the chains.
+    for(size_type i = 0; i < this->chains.size(); i++)
+    {
+      for(FragmentMap::Fragment& fragment : this->chains[i])
+      {
+        fragment.path = old_to_new_path_id[fragment.path];
+        fragment.prev = (fragment.prev == invalid_sequence() ? invalid_sequence() : old_to_new_path_id[fragment.prev]);
+        fragment.next = (fragment.next == invalid_sequence() ? invalid_sequence() : old_to_new_path_id[fragment.next]);
+      }
+    }
+  }
+
+  void initMetadata()
+  {
+    for(const PathName& path : this->paths) { this->metadata.addPath(path); }
+  }
+
+  void checkChains(const FragmentMap& fragments) const
+  {
+    ASSERT_EQ(fragments.size(), this->chains.size()) << "FragmentMap size is incorrect";
+    for(size_type i = 0; i < this->chains.size(); i++)
+    {
+      const std::vector<FragmentMap::Fragment>& chain = this->chains[i];
+      for(size_type j = 0; j < chain.size(); j++)
+      {
+        const FragmentMap::Fragment& fragment = chain[j];
+        size_type forward = Path::encode(fragment.path, false);
+        size_type next_fw = (fragment.next == invalid_sequence() ? invalid_sequence() : Path::encode(fragment.next, false));
+        size_type prev_fw = (fragment.prev == invalid_sequence() ? invalid_sequence() : Path::encode(fragment.prev, false));
+        size_type reverse = Path::encode(fragment.path, true);
+        size_type next_rv = (fragment.prev == invalid_sequence() ? invalid_sequence() : Path::encode(fragment.prev, true));
+        size_type prev_rv = (fragment.next == invalid_sequence() ? invalid_sequence() : Path::encode(fragment.next, true));
+        ASSERT_EQ(fragments.next(fragment.path, false), fragment.next) << "Wrong next fragment id for path " << fragment.path << " (forward)";
+        ASSERT_EQ(fragments.oriented_next(forward), next_fw) << "Wrong oriented next fragment id for path " << fragment.path << " (forward)";
+        ASSERT_EQ(fragments.next(fragment.path, true), fragment.prev) << "Wrong next fragment id for path " << fragment.path << " (reverse)";
+        ASSERT_EQ(fragments.oriented_next(reverse), next_rv) << "Wrong oriented next fragment id for path " << fragment.path << " (reverse)";
+        ASSERT_EQ(fragments.prev(fragment.path, false), fragment.prev) << "Wrong previous fragment id for path " << fragment.path << " (forward)";
+        ASSERT_EQ(fragments.oriented_prev(forward), prev_fw) << "Wrong oriented previous fragment id for path " << fragment.path << " (forward)";
+        ASSERT_EQ(fragments.prev(fragment.path, true), fragment.next) << "Wrong previous fragment id for path " << fragment.path << " (reverse)";
+        ASSERT_EQ(fragments.oriented_prev(reverse), prev_rv) << "Wrong oriented previous fragment id for path " << fragment.path << " (reverse)";
+        ASSERT_EQ(fragments.chain(fragment.path), fragment.chain) << "Wrong chain id for path " << fragment.path;
+      }
+    }
+  }
+
+  void queryWithInvalidId(const FragmentMap& fragments) const
+  {
+    size_type invalid_path = this->metadata.paths();
+    size_type invalid_gbwt_sequence = Path::encode(invalid_path, false);
+    ASSERT_EQ(fragments.next(invalid_path), invalid_sequence()) << "Found a next fragment with an invalid path id";
+    ASSERT_EQ(fragments.oriented_next(invalid_gbwt_sequence), invalid_sequence()) << "Found an oriented next fragment with an invalid path id";
+    ASSERT_EQ(fragments.prev(invalid_path), invalid_sequence()) << "Found a previous fragment with an invalid path id";
+    ASSERT_EQ(fragments.oriented_prev(invalid_gbwt_sequence), invalid_sequence()) << "Found an oriented previous fragment with an invalid path id";
+    ASSERT_EQ(fragments.chain(invalid_path), invalid_sequence()) << "Found a chain id with an invalid path id";
+  }
+};
+
+TEST_F(FragmentMapTest, Empty)
+{
+  FragmentMap fragments(this->metadata);
+  ASSERT_TRUE(fragments.empty()) << "Empty FragmentMap is not empty";
+  this->queryWithInvalidId(fragments);
+}
+
+TEST_F(FragmentMapTest, Ordered)
+{
+  this->initMetadata();
+  FragmentMap fragments(this->metadata);
+  this->checkChains(fragments);
+  this->queryWithInvalidId(fragments);
+}
+
+TEST_F(FragmentMapTest, Shuffled)
+{
+  this->shufflePaths(0x0123456789ABCDEF);
+  this->initMetadata();
+  FragmentMap fragments(this->metadata);
+  this->checkChains(fragments);
+  this->queryWithInvalidId(fragments);
 }
 
 //------------------------------------------------------------------------------
