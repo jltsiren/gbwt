@@ -696,10 +696,10 @@ FragmentMap::next(size_type path_id, bool is_reverse) const
 }
 
 size_type
-FragmentMap::oriented_next(size_type gbwt_sequence_id) const
+FragmentMap::oriented_next(size_type sequence_id) const
 {
-  size_type path_id = Path::id(gbwt_sequence_id);
-  bool is_reverse = Path::is_reverse(gbwt_sequence_id);
+  size_type path_id = Path::id(sequence_id);
+  bool is_reverse = Path::is_reverse(sequence_id);
   size_type result = this->next(path_id, is_reverse);
   return (result == invalid_sequence() ? invalid_sequence() : Path::encode(result, is_reverse));
 }
@@ -713,10 +713,10 @@ FragmentMap::prev(size_type path_id, bool is_reverse) const
 }
 
 size_type
-FragmentMap::oriented_prev(size_type gbwt_sequence_id) const
+FragmentMap::oriented_prev(size_type sequence_id) const
 {
-  size_type path_id = Path::id(gbwt_sequence_id);
-  bool is_reverse = Path::is_reverse(gbwt_sequence_id);
+  size_type path_id = Path::id(sequence_id);
+  bool is_reverse = Path::is_reverse(sequence_id);
   size_type result = this->prev(path_id, is_reverse);
   return (result == invalid_sequence() ? invalid_sequence() : Path::encode(result, is_reverse));
 }
