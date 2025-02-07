@@ -651,7 +651,7 @@ std::ostream& operator<<(std::ostream& stream, const Metadata& metadata)
 
 //------------------------------------------------------------------------------
 
-FragmentMap::FragmentMap(const Metadata& metadata) :
+FragmentMap::FragmentMap(const Metadata& metadata, bool verbose) :
   chains(0)
 {
   std::vector<std::pair<PathName, size_type>> sorted_paths;
@@ -684,6 +684,21 @@ FragmentMap::FragmentMap(const Metadata& metadata) :
       curr.next = sorted_paths[i + 1].second;
     }
     this->fragments[sorted_paths[i].second] = curr;
+  }
+
+  if(verbose)
+  {
+    size_type head = 0, tail = 1;
+    while(head < sorted_paths.size())
+    {
+      while(tail < sorted_paths.size() && same_sequence(head, tail)) { tail++; }
+      if(tail - head > 1)
+      {
+        const FullPathName name = metadata.fullPath(sorted_paths[head].second);
+        std::cerr << name.sample_name << "#" << name.haplotype << "#" << name.contig_name << ": " << (tail - head) << " fragments" << std::endl;
+      }
+      head = tail; tail = head + 1;
+    }
   }
 }
 

@@ -199,7 +199,7 @@ struct FragmentMap
   size_type chains;
 
   // Builds a FragmentMap from the path names in the metadata.
-  FragmentMap(const Metadata& metadata);
+  explicit FragmentMap(const Metadata& metadata, bool verbose);
 
   FragmentMap() = default;
   FragmentMap(const FragmentMap&) = default;

@@ -922,7 +922,7 @@ public:
 
 TEST_F(FragmentMapTest, Empty)
 {
-  FragmentMap fragments(this->metadata);
+  FragmentMap fragments(this->metadata, false);
   ASSERT_TRUE(fragments.empty()) << "Empty FragmentMap is not empty";
   this->queryWithInvalidId(fragments);
 }
@@ -930,7 +930,7 @@ TEST_F(FragmentMapTest, Empty)
 TEST_F(FragmentMapTest, Ordered)
 {
   this->initMetadata();
-  FragmentMap fragments(this->metadata);
+  FragmentMap fragments(this->metadata, false);
   this->checkChains(fragments);
   this->queryWithInvalidId(fragments);
 }
@@ -939,7 +939,7 @@ TEST_F(FragmentMapTest, Shuffled)
 {
   this->shufflePaths(0x0123456789ABCDEF);
   this->initMetadata();
-  FragmentMap fragments(this->metadata);
+  FragmentMap fragments(this->metadata, false);
   this->checkChains(fragments);
   this->queryWithInvalidId(fragments);
 }
