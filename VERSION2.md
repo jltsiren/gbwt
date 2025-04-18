@@ -29,8 +29,9 @@ A path name consists of four integer components: sample, contig, haplotype / pha
 Path names are optional in the metadata, and sample / contig identifiers may be associated with string names.
 
 Version 2 will make path, sample, and contig names mandatory if metadata is present.
-Fragment field will always store the starting offset of the path fragment, rather than its rank.
-This behavior is consistent with [GFA](https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md) W-lines, and it is already expected in GBZ files.
+There will also be higher-level metadata for fragmented sequences consisting of multiple paths.
+That metadata will, for example, tell whether the fragment field stores the rank of the path fragment or its starting offset in the full sequence.
+Ideally there will be corresponding changes to the [GFA specification](https://github.com/GFA-spec/GFA-spec/blob/master/GFA1.md).
 
 We will also need data structures that support finding paths by metadata.
 The current approach of scanning the path metadata does not work well with frequency-filtered graphs that may have tens of millions of paths.
