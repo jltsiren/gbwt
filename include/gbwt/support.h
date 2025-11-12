@@ -625,6 +625,7 @@ private:
 
 //------------------------------------------------------------------------------
 
+// A key-value store for string tags, with the keys normalized to lowercase.
 class Tags
 {
 public:
@@ -632,14 +633,14 @@ public:
 
   std::map<std::string, std::string> tags;
 
-  Tags();
-  Tags(const Tags& source);
-  Tags(Tags&& source);
-  ~Tags();
+  Tags() = default;
+  Tags(const Tags& source) = default;
+  Tags(Tags&& source) = default;
+  ~Tags() = default;
 
   void swap(Tags& another);
-  Tags& operator=(const Tags& source);
-  Tags& operator=(Tags&& source);
+  Tags& operator=(const Tags& source) = default;
+  Tags& operator=(Tags&& source) = default;
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
@@ -652,6 +653,7 @@ public:
   bool operator!=(const Tags& another) const { return !(this->operator==(another)); }
 
   void set(const std::string& key, const std::string& value);
+  void unset(const std::string& key);
 
   // Returns an empty string if the key does not exist.
   std::string get(const std::string& key) const;
@@ -664,7 +666,6 @@ public:
   bool empty() const { return (this->size() == 0); }
 
 private:
-  void copy(const Tags& source);
   void build(const StringArray& source);
   static std::string normalize(const std::string& key);
 };

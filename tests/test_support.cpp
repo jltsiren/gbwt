@@ -559,6 +559,25 @@ TEST_F(TagsTest, MissingKeys)
   ASSERT_TRUE(tags.get("key").empty()) << "Non-empty value for an invalid key";
 }
 
+TEST_F(TagsTest, RemoveKey)
+{
+  std::map<std::string, std::string> truth
+  {
+    { "first-key", "first-value" },
+    { "second-key", "second-value" },
+    { "third-key", "third-value" },
+  };
+  Tags tags;
+  for(auto iter = truth.begin(); iter != truth.end(); ++iter) { tags.set(iter->first, iter->second); }
+
+  tags.unset("second-key");
+  truth.erase("second-key");
+  this->check_tags(tags, truth);
+
+  ASSERT_FALSE(tags.contains("second-key")) << "Tags still contains the removed key";
+  ASSERT_TRUE(tags.get("second-key").empty()) << "Non-empty value for the removed key";
+}
+
 TEST_F(TagsTest, NormalizedKeys)
 {
   std::map<std::string, std::string> source

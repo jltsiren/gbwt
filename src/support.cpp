@@ -2200,24 +2200,6 @@ Dictionary::smaller_by_id(view_type a, size_type b) const
 
 //------------------------------------------------------------------------------
 
-Tags::Tags()
-{
-}
-
-Tags::Tags(const Tags& source)
-{
-  this->copy(source);
-}
-
-Tags::Tags(Tags&& source)
-{
-  *this = std::move(source);
-}
-
-Tags::~Tags()
-{
-}
-
 void
 Tags::swap(Tags& another)
 {
@@ -2225,23 +2207,6 @@ Tags::swap(Tags& another)
   {
     this->tags.swap(another.tags);
   }
-}
-
-Tags&
-Tags::operator=(const Tags& source)
-{
-  if(this != &source) { this->copy(source); }
-  return *this;
-}
-
-Tags&
-Tags::operator=(Tags&& source)
-{
-  if(this != &source)
-  {
-    this->tags = std::move(source.tags);
-  }
-  return *this;
 }
 
 size_type
@@ -2288,12 +2253,6 @@ Tags::simple_sds_size() const
 }
 
 void
-Tags::copy(const Tags& source)
-{
-  this->tags = source.tags;
-}
-
-void
 Tags::build(const StringArray& source)
 {
   if(source.size() % 2 != 0)
@@ -2325,6 +2284,12 @@ void
 Tags::set(const std::string& key, const std::string& value)
 {
   this->tags[normalize(key)] = value;
+}
+
+void
+Tags::unset(const std::string& key)
+{
+  this->tags.erase(normalize(key));
 }
 
 std::string
