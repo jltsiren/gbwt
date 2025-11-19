@@ -593,7 +593,7 @@ public:
   }
 
   // Returns size() if not found.
-  size_type find(const std::string& s) const { return this->find(str_to_view(s)); }
+  size_type find(const std::string& s) const { return this->find(view_type(s)); }
   size_type find(view_type view) const;
 
   // Removes key i.

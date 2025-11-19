@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2021 Jouni Siren
+  Copyright (c) 2019, 2021, 2025 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -136,7 +136,7 @@ TEST_F(StringArrayTest, Choose)
     return original[i].length();
   }, [&original](size_type i) -> view_type
   {
-    return str_to_view(original[i]);
+    return view_type(original[i]);
   });
   this->check_array(array, truth);
 }

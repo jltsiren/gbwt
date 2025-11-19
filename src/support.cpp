@@ -1629,7 +1629,7 @@ StringArray::StringArray(const std::vector<std::string>& source)
   },
   [&source](size_type i) -> view_type
   {
-    return str_to_view(source[i]);
+    return view_type(source[i]);
   });
 }
 
@@ -2144,36 +2144,25 @@ Dictionary::hasDuplicates() const
 }
 
 bool
-stringCompare(const char* a_pos, const char* a_lim, const char* b_pos, const char* b_lim)
-{
-  while(a_pos != a_lim && b_pos != b_lim)
-  {
-    if(*a_pos != *b_pos) { return (*a_pos < *b_pos); }
-    ++a_pos; ++b_pos;
-  }
-  return (a_pos == a_lim && b_pos != b_lim);
-}
-
-bool
 Dictionary::smaller_by_order(size_type a, size_type b) const
 {
   view_type first = this->strings.view(this->sorted_ids[a]);
   view_type second = this->strings.view(this->sorted_ids[b]);
-  return stringCompare(first.first, first.first + first.second, second.first, second.first + second.second);
+  return (first < second);
 }
 
 bool
 Dictionary::smaller_by_order(size_type a, view_type b) const
 {
   view_type first = this->strings.view(this->sorted_ids[a]);
-  return stringCompare(first.first, first.first + first.second, b.first, b.first + b.second);
+  return (first < b);
 }
 
 bool
 Dictionary::smaller_by_order(view_type a, size_type b) const
 {
   view_type second = this->strings.view(this->sorted_ids[b]);
-  return stringCompare(a.first, a.first + a.second, second.first, second.first + second.second);
+  return (a < second);
 }
 
 bool
@@ -2181,21 +2170,21 @@ Dictionary::smaller_by_id(size_type a, size_type b) const
 {
   view_type first = this->strings.view(a);
   view_type second = this->strings.view(b);
-  return stringCompare(first.first, first.first + first.second, second.first, second.first + second.second);
+  return (first < second);
 }
 
 bool
 Dictionary::smaller_by_id(size_type a, view_type b) const
 {
   view_type first = this->strings.view(a);
-  return stringCompare(first.first, first.first + first.second, b.first, b.first + b.second);
+  return (first < b);
 }
 
 bool
 Dictionary::smaller_by_id(view_type a, size_type b) const
 {
   view_type second = this->strings.view(b);
-  return stringCompare(a.first, a.first + a.second, second.first, second.first + second.second);
+  return (a < second);
 }
 
 //------------------------------------------------------------------------------
