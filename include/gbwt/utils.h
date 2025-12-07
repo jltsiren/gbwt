@@ -283,6 +283,7 @@ struct Version
 
   const static std::string SOURCE_KEY; // source
   const static std::string SOURCE_VALUE; // jltsiren/gbwt
+  const static std::string SOURCE_GBWT_RS; // jltsiren/gbwt-rs
 };
 
 //------------------------------------------------------------------------------

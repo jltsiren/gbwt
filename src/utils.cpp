@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019, 2020, 2021 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025 Jouni Siren
   Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -61,6 +61,7 @@ constexpr size_type Version::R_INDEX_VERSION;
 
 const std::string Version::SOURCE_KEY = "source";
 const std::string Version::SOURCE_VALUE = "jltsiren/gbwt";
+const std::string Version::SOURCE_GBWT_RS = "jltsiren/gbwt-rs";
 
 //------------------------------------------------------------------------------
 

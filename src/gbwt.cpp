@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2019, 2020, 2021 Jouni Siren
+  Copyright (c) 2017, 2019, 2020, 2021, 2025 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -161,12 +161,13 @@ GBWT::load(std::istream& in)
   this->header = h;
 
   // Read the tags and set the source to Version::SOURCE_VALUE.
-  bool source_is_self = false; // We know how to read DASamples.
+  bool source_is_familiar = false; // We know how to read DASamples.
   if(has_tags)
   {
     if(simple_sds) { this->tags.simple_sds_load(in); }
     else { this->tags.load(in); }
-    if(this->tags.get(Version::SOURCE_KEY) == Version::SOURCE_VALUE) { source_is_self = true; }
+    std::string source = this->tags.get(Version::SOURCE_KEY);
+    if(source == Version::SOURCE_VALUE || source == Version::SOURCE_GBWT_RS) { source_is_familiar = true; }
     this->addSource();
   }
   else { this->resetTags(); }
@@ -187,7 +188,7 @@ GBWT::load(std::istream& in)
   {
     // The samples may be absent or from an unknown source.
     bool found_samples = false;
-    if(source_is_self) { found_samples = sdsl::simple_sds::load_option(this->da_samples, in); }
+    if(source_is_familiar) { found_samples = sdsl::simple_sds::load_option(this->da_samples, in); }
     else { sdsl::simple_sds::skip_option(in); }
     if(!found_samples) { this->resample(DynamicGBWT::SAMPLE_INTERVAL); }
   }
