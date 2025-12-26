@@ -109,7 +109,7 @@ GBWTHeader::check() const
 
   if(this->version > VERSION || this->version < OLD_VERSION)
   {
-    std::string msg = "GBWTHeader: Expected v" + std::to_string(OLD_VERSION) + " to v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
+    std::string msg = "GBWTHeader: Expected version " + std::to_string(OLD_VERSION) + " to version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
     throw sdsl::simple_sds::InvalidData(msg);
   }
 
@@ -214,7 +214,7 @@ MetadataHeader::check() const
 
   if(this->version > VERSION || this->version < INITIAL_VERSION)
   {
-    std::string msg = "MetadataHeader: Expected v" + std::to_string(INITIAL_VERSION) + " to v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
+    std::string msg = "MetadataHeader: Expected version " + std::to_string(INITIAL_VERSION) + " to version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
     throw sdsl::simple_sds::InvalidData(msg);
   }
 
@@ -244,7 +244,7 @@ MetadataHeader::check_simple_sds() const
 
   if(this->version != VERSION)
   {
-    std::string msg = "MetadataHeader: Expected v" + std::to_string(VERSION) + ", got v" + std::to_string(this->version);
+    std::string msg = "MetadataHeader: Expected version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
     throw sdsl::simple_sds::InvalidData(msg);
   }
 
