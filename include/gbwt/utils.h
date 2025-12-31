@@ -142,6 +142,10 @@ struct view_type
   view_type& operator=(const view_type& other) = default;
   view_type& operator=(view_type&& other) = default;
 
+  size_t size() const { return this->second; }
+  size_t length() const { return this->second; }
+  bool empty() const { return this->second == 0; }
+
   std::string to_string() const
   {
     return std::string(this->first, this->second);
