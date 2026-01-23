@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025, 2026 Jouni Siren
   Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -122,59 +122,6 @@ typedef std::vector<short_type>    vector_type;
 #else
 typedef std::vector<node_type>     vector_type;
 #endif
-
-//------------------------------------------------------------------------------
-
-// In-place view of the sequence. Field names are compatible with std::pair.
-// This is a quick replacement for std::string_view from C++17.
-struct view_type
-{
-  const char* first; // Pointer to the start of the sequence.
-  size_t second;     // Length of the sequence.
-
-  view_type() : first(nullptr), second(0) {}
-  view_type(const char* data, size_t length) : first(data), second(length) {}
-
-  explicit view_type(const std::string& str) : first(str.data()), second(str.length()) {}
-
-  view_type(const view_type& other) = default;
-  view_type(view_type&& other) = default;
-  view_type& operator=(const view_type& other) = default;
-  view_type& operator=(view_type&& other) = default;
-
-  size_t size() const { return this->second; }
-  size_t length() const { return this->second; }
-  bool empty() const { return this->second == 0; }
-
-  std::string to_string() const
-  {
-    return std::string(this->first, this->second);
-  }
-
-  bool operator==(const view_type& other) const
-  {
-    if(this->second != other.second) { return false; }
-    return (std::memcmp(this->first, other.first, this->second) == 0);
-  }
-
-  bool operator==(const std::string& str) const
-  {
-    return (*this == view_type(str));
-  }
-
-  bool operator!=(const view_type& other) const
-  {
-    return !(*this == other);
-  }
-
-  bool operator<(const view_type& other) const
-  {
-    size_t min_length = (this->second < other.second ? this->second : other.second);
-    int cmp = std::memcmp(this->first, other.first, min_length);
-    if(cmp != 0) { return (cmp < 0); }
-    return (this->second < other.second);
-  }
-};
 
 //------------------------------------------------------------------------------
 

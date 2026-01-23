@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025, 2026 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -1619,44 +1619,59 @@ MergeParameters::setMergeJobs(size_type n)
 
 StringArray::StringArray(const std::vector<std::string>& source)
 {
-  *this = StringArray(source.size(), [](size_type) -> bool
+  *this = StringArray(source.size(), [&source](size_type i) -> std::string_view
+  {
+    return std::string_view(source[i]);
+  },
+  [](size_type) -> bool
   {
     return true;
-  },
-  [&source](size_type i) -> size_type
-  {
-    return source[i].length();
-  },
-  [&source](size_type i) -> view_type
-  {
-    return view_type(source[i]);
   });
 }
 
 StringArray::StringArray(const std::map<std::string, std::string>& source)
 {
-  std::vector<std::string> linearized;
+  size_type total_length = 0;
   for(auto iter = source.begin(); iter != source.end(); ++iter)
   {
-    linearized.push_back(iter->first); linearized.push_back(iter->second);
+    total_length += iter->first.size();
+    total_length += iter->second.size();
   }
-  *this = StringArray(linearized);
+  size_type n = source.size() * 2;
+  this->index = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
+  this->strings.reserve(total_length);
+
+  size_type offset = 0, total = 0;
+  for(auto iter = source.begin(); iter != source.end(); ++iter)
+  {
+    this->index[offset] = total;
+    this->strings.insert(this->strings.end(), iter->first.begin(), iter->first.end());
+    total += iter->first.size();
+    offset++;
+
+    this->index[offset] = total;
+    this->strings.insert(this->strings.end(), iter->second.begin(), iter->second.end());
+    total += iter->second.size();
+    offset++;
+  }
+  this->index[n] = total;
 }
 
-StringArray::StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<view_type(size_type)>& sequence)
+StringArray::StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence)
 {
-  *this = StringArray(n, [](size_type) -> bool
+  *this = StringArray(n, sequence,
+  [](size_type) -> bool
   {
     return true;
-  }, length, sequence);
+  });
 }
 
-StringArray::StringArray(size_type n, const std::function<bool(size_type)>& choose, const std::function<size_type(size_type)>& length, const std::function<view_type(size_type)>& sequence)
+StringArray::StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence, const std::function<bool(size_type)>& choose)
 {
   size_type chosen = 0, total_length = 0;
   for(size_type i = 0; i < n; i++)
   {
-    if(choose(i)) { chosen++; total_length += length(i); }
+    if(choose(i)) { chosen++; total_length += sequence(i).size(); }
   }
   this->index = sdsl::int_vector<0>(chosen + 1, 0, sdsl::bits::length(total_length));
   this->strings.reserve(total_length);
@@ -1665,15 +1680,14 @@ StringArray::StringArray(size_type n, const std::function<bool(size_type)>& choo
   for(size_type i = 0; i < n; i++)
   {
     if(!choose(i)) { continue; }
-    view_type view = sequence(i);
+    std::string_view view = sequence(i);
     this->index[curr] = total; curr++;
-    this->strings.insert(this->strings.end(), view.first, view.first + view.second);
-    total += view.second;
+    this->strings.insert(this->strings.end(), view.data(), view.data() + view.size());
+    total += view.size();
   }
   this->index[chosen] = total;
 }
 
-// This has a separate implementation, because we cannot take a view of a temporary string.
 StringArray::StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence)
 {
   size_type total_length = 0;
@@ -1687,7 +1701,7 @@ StringArray::StringArray(size_type n, const std::function<size_type(size_type)>&
     std::string str = sequence(i);
     this->index[i] = total;
     this->strings.insert(this->strings.end(), str.begin(), str.end());
-    total += str.length();
+    total += str.size();
   }
   this->index[n] = total;
 }
@@ -1945,15 +1959,14 @@ Dictionary::Dictionary(const Dictionary& first, const Dictionary& second)
   }
 
   // Add all strings from the first and missing strings from the second.
-  this->strings = StringArray(first.size() + second.size(), [&](size_type i) -> bool
-  {
-    return (i < first.size() || first.find(second.strings.view(i - first.size())) >= first.size());
-  }, [&](size_type i) -> size_type
-  {
-    return (i < first.size() ? first.strings.length(i) : second.strings.length(i - first.size()));
-  }, [&](size_type i) -> view_type
+  this->strings = StringArray(first.size() + second.size(),
+  [&](size_type i) -> std::string_view
   {
     return (i < first.size() ? first.strings.view(i) : second.strings.view(i - first.size()));
+  },
+  [&](size_type i) -> bool
+  {
+    return (i < first.size() || first.find(second.strings.view(i - first.size())) >= first.size());
   });
 
   // Build sorted_ids and check for duplicates.
@@ -2019,12 +2032,10 @@ Dictionary::load_v1(std::istream& in)
   sdsl::int_vector<0> offsets; offsets.load(in);
   this->sorted_ids.load(in);
   std::vector<char> data; loadVector(data, in);
-  this->strings = StringArray(offsets.size() - 1, [&](size_type i) -> size_type
+  this->strings = StringArray(offsets.size() - 1,
+  [&](size_type i) -> std::string_view
   {
-    return offsets[i + 1] - offsets[i];
-  }, [&](size_type i) -> view_type
-  {
-    return view_type(data.data() + offsets[i], offsets[i + 1] - offsets[i]);
+    return std::string_view(data.data() + offsets[i], offsets[i + 1] - offsets[i]);
   });
   this->sanityChecks();
 }
@@ -2095,7 +2106,7 @@ Dictionary::clear()
 }
 
 size_type
-Dictionary::find(view_type view) const
+Dictionary::find(std::string_view view) const
 {
   size_type low = 0, high = this->size();
   while(low < high)
@@ -2146,44 +2157,44 @@ Dictionary::hasDuplicates() const
 bool
 Dictionary::smaller_by_order(size_type a, size_type b) const
 {
-  view_type first = this->strings.view(this->sorted_ids[a]);
-  view_type second = this->strings.view(this->sorted_ids[b]);
+  std::string_view first = this->strings.view(this->sorted_ids[a]);
+  std::string_view second = this->strings.view(this->sorted_ids[b]);
   return (first < second);
 }
 
 bool
-Dictionary::smaller_by_order(size_type a, view_type b) const
+Dictionary::smaller_by_order(size_type a, std::string_view b) const
 {
-  view_type first = this->strings.view(this->sorted_ids[a]);
+  std::string_view first = this->strings.view(this->sorted_ids[a]);
   return (first < b);
 }
 
 bool
-Dictionary::smaller_by_order(view_type a, size_type b) const
+Dictionary::smaller_by_order(std::string_view a, size_type b) const
 {
-  view_type second = this->strings.view(this->sorted_ids[b]);
+  std::string_view second = this->strings.view(this->sorted_ids[b]);
   return (a < second);
 }
 
 bool
 Dictionary::smaller_by_id(size_type a, size_type b) const
 {
-  view_type first = this->strings.view(a);
-  view_type second = this->strings.view(b);
+  std::string_view first = this->strings.view(a);
+  std::string_view second = this->strings.view(b);
   return (first < second);
 }
 
 bool
-Dictionary::smaller_by_id(size_type a, view_type b) const
+Dictionary::smaller_by_id(size_type a, std::string_view b) const
 {
-  view_type first = this->strings.view(a);
+  std::string_view first = this->strings.view(a);
   return (first < b);
 }
 
 bool
-Dictionary::smaller_by_id(view_type a, size_type b) const
+Dictionary::smaller_by_id(std::string_view a, size_type b) const
 {
-  view_type second = this->strings.view(b);
+  std::string_view second = this->strings.view(b);
   return (a < second);
 }
 

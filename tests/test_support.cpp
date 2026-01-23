@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2019, 2021, 2025 Jouni Siren
+  Copyright (c) 2019, 2021, 2025, 2026 Jouni Siren
 
   Author: Jouni Siren <jouni.siren@iki.fi>
 
@@ -51,8 +51,8 @@ public:
       std::string correct = truth[i];
       ASSERT_EQ(array.str(i), correct) << "Incorrect string " << i;
       EXPECT_EQ(array.length(i), correct.length()) << "Incorrect length for string " << i;
-      view_type view = array.view(i);
-      std::string from_view(view.first, view.second);
+      std::string_view view = array.view(i);
+      std::string from_view(view.data(), view.size());
       EXPECT_EQ(from_view, correct) << "Incorrect view of string " << i;
     }
   }
@@ -128,15 +128,14 @@ TEST_F(StringArrayTest, Choose)
   };
 
   // Choose odd positions (that contain even numbers).
-  StringArray array(original.size(), [](size_type i) -> bool
+  StringArray array(original.size(),
+  [&original](size_type i) -> std::string_view
+  {
+    return std::string_view(original[i]);
+  },
+  [](size_type i) -> bool
   {
     return ((i & 1) != 0);
-  }, [&original](size_type i) -> size_type
-  {
-    return original[i].length();
-  }, [&original](size_type i) -> view_type
-  {
-    return view_type(original[i]);
   });
   this->check_array(array, truth);
 }

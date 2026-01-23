@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025, 2026 Jouni Siren
   Copyright (c) 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -30,6 +30,7 @@
 
 #include <functional>
 #include <map>
+#include <string_view>
 
 namespace gbwt
 {
@@ -495,9 +496,23 @@ public:
 
   StringArray() : index(1, 0, 1) {}
   StringArray(const std::vector<std::string>& source);
+
+  // Create an array of `2 * source.size()` strings from the given map,
+  // alternating between keys and values in iteration order.
   StringArray(const std::map<std::string, std::string>& source);
-  StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<view_type(size_type)>& sequence);
-  StringArray(size_type n, const std::function<bool(size_type)>& choose, const std::function<size_type(size_type)>& length, const std::function<view_type(size_type)>& sequence);
+
+  // Create an array of n strings using the given function to get the sequence.
+  // This version can be used when the sequences are already stored somewhere else.
+  StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence);
+
+  // Create an array of up to n strings using the given functions to get the sequence
+  // and for choosing which strings to include.
+  // This version can be used when the sequences are already stored somewhere else.
+  StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence, const std::function<bool(size_type)>& choose);
+
+  // Create an array of n strings using the given functions to get the length and the sequence.
+  // This version is appropriate when the sequences are created on the fly but their
+  // lengths are known in advance.
   StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence);
 
   void swap(StringArray& another);
@@ -527,9 +542,9 @@ public:
     return std::string(this->strings.data() + this->index[i], this->strings.data() + this->index[i + 1]);
   }
 
-  view_type view(size_type i) const
+   std::string_view view(size_type i) const
   {
-    return view_type(this->strings.data() + this->index[i], this->length(i));
+    return std::string_view(this->strings.data() + this->index[i], this->length(i));
   }
 
   void remove(size_type i);
@@ -593,8 +608,7 @@ public:
   }
 
   // Returns size() if not found.
-  size_type find(const std::string& s) const { return this->find(view_type(s)); }
-  size_type find(view_type view) const;
+  size_type find(std::string_view view) const;
 
   // Removes key i.
   void remove(size_type i);
@@ -614,13 +628,13 @@ private:
 
   // Indexes in sorted_ids.
   bool smaller_by_order(size_type left, size_type right) const;
-  bool smaller_by_order(size_type left, view_type right) const;
-  bool smaller_by_order(view_type left, size_type right) const;
+  bool smaller_by_order(size_type left, std::string_view right) const;
+  bool smaller_by_order(std::string_view left, size_type right) const;
 
   // Indexes in offsets.
   bool smaller_by_id(size_type left, size_type right) const;
-  bool smaller_by_id(size_type left, view_type right) const;
-  bool smaller_by_id(view_type left, size_type right) const;
+  bool smaller_by_id(size_type left, std::string_view right) const;
+  bool smaller_by_id(std::string_view left, size_type right) const;
 };
 
 //------------------------------------------------------------------------------
