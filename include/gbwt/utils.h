@@ -38,6 +38,7 @@
 #include <sdsl/simple_sds.hpp>
 
 #include <omp.h>
+#include <zstd.h>
 
 // Parallel sorting is only available with libstdc++ parallel mode.
 #ifdef __GLIBCXX__
@@ -426,6 +427,82 @@ removeDuplicates(std::vector<Element>& vec, bool parallel)
   else         { sequentialSort(vec.begin(), vec.end()); }
   vec.resize(std::unique(vec.begin(), vec.end()) - vec.begin());
 }
+
+//------------------------------------------------------------------------------
+
+// FIXME: tests
+// Zstandard wrapper that stores the compressed output in a vector.
+// Throws `std::runtime_error` on failure.
+class ZSTDCompressor
+{
+public:
+  constexpr static int DEFAULT_COMPRESSION_LEVEL = 3;
+
+  explicit ZSTDCompressor(int compression_level = DEFAULT_COMPRESSION_LEVEL);
+  ~ZSTDCompressor();
+  ZSTDCompressor(const ZSTDCompressor&) = delete;
+  ZSTDCompressor& operator=(const ZSTDCompressor&) = delete;
+
+  // Compresses the given data, buffering it internally.
+  void compress(const char* data, size_t size);
+
+  // Compresses the given data directly.
+  // Flushes the internal input buffer if necessary.
+  void compressDirect(const char* data, size_t size);
+
+  // Finalizes the compression.
+  // The compressor cannot be used after this call.
+  void finish();
+
+  // Returns the compressed data, calling finish() if necessary.
+  const std::vector<char>& outputData() const { return this->output; }
+
+private:
+  // Compresses and clears the internal input buffer.
+  void flushInput();
+
+  // Compresses the given input buffer.
+  void compress(ZSTD_inBuffer& buffer);
+
+  // Flushes the internal output buffer to the output vector.
+  void flushOutput();
+
+  ZSTD_CCtx* context;
+
+  std::vector<char> input_buffer;
+  size_t input_buffer_capacity;
+  std::vector<char> output_buffer;
+  ZSTD_outBuffer out_buffer;
+
+  std::vector<char> output;
+};
+
+// FIXME: tests
+// Zstandard decompression wrapper that decompresses data from an internal vector.
+// Throws `sdsl::simple_sds::InvalidData` on failure.
+class ZSTDDecompressor
+{
+public:
+  ZSTDDecompressor(std::vector<char>&& input);
+  ~ZSTDDecompressor();
+  ZSTDDecompressor(const ZSTDDecompressor&) = delete;
+  ZSTDDecompressor& operator=(const ZSTDDecompressor&) = delete;
+
+  // Decompresses the given number of bytes and appends them to the output vector.
+  void decompress(size_t bytes, std::vector<char>& output);
+
+  // Returns `true` if all input data has been consumed.
+  bool finished();
+
+private:
+  ZSTD_DCtx* context;
+
+  std::vector<char> input;
+  ZSTD_inBuffer in_buffer;
+  std::vector<char> output_buffer;
+  ZSTD_outBuffer out_buffer;
+  size_t cursor; // Next unread byte in `out_buffer`.
+};
 
 //------------------------------------------------------------------------------
 

@@ -50,6 +50,8 @@ constexpr size_type MergeParameters::MAX_BUFFER_SIZE;
 constexpr size_type MergeParameters::MAX_MERGE_BUFFERS;
 constexpr size_type MergeParameters::MAX_MERGE_JOBS;
 
+constexpr int StringArray::DEFAULT_COMPRESSION_LEVEL;
+
 //------------------------------------------------------------------------------
 
 void
@@ -1812,8 +1814,30 @@ StringArray::simple_sds_load(std::istream& in)
   this->sanityChecks();
 }
 
+size_t
+StringArray::simple_sds_size() const
+{
+  size_t result = 0;
+
+  // Compress the index without the past-the-end sentinel.
+  size_t universe = (this->empty() ? 0 : this->index[this->size() - 1] + 1);
+  result += sdsl::sd_vector<>::simple_sds_size(universe, this->size());
+
+  // Determine the alphabet.
+  std::vector<std::uint8_t> char_to_comp;
+  sdsl::int_vector<8> comp_to_char;
+  size_type width = 0;
+  determine_alphabet(this->strings, char_to_comp, comp_to_char, width);
+  result += comp_to_char.simple_sds_size();
+
+  // Compress the strings.
+  result += sdsl::int_vector<>::simple_sds_size(this->strings.size(), width);
+
+  return result;
+}
+
 void
-StringArray::simple_sds_load_duplicate(std::istream& in, const std::function<void(std::string&)>& transform)
+StringArray::simple_sds_load_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform)
 {
   // Load the data.
   sdsl::sd_vector<> v; v.simple_sds_load(in);
@@ -1836,37 +1860,154 @@ StringArray::simple_sds_load_duplicate(std::istream& in, const std::function<voi
 
     // First copy.
     this->index[i] = this->index[i - 1] + length; i++;
-    std::string str;
-    for(size_type j = 0; j < length; j++) { str.push_back(comp_to_char[compressed[curr + j]]); }
-    this->strings.insert(this->strings.end(), str.begin(), str.end());
+    size_t start = this->strings.size();
+    for(size_type j = 0; j < length; j++) { this->strings.push_back(comp_to_char[compressed[curr + j]]); }
+    std::string_view view(this->strings.data() + start, length);
 
     // Transformed copy.
     this->index[i] = this->index[i - 1] + length; i++;
-    transform(str);
-    this->strings.insert(this->strings.end(), str.begin(), str.end());
+    std::string transformed_str = transform(view);
+    this->strings.insert(this->strings.end(), transformed_str.begin(), transformed_str.end());
+  }
+
+  this->sanityChecks();
+}
+
+void
+StringArray::simple_sds_compress(std::ostream& out, int compression_level) const
+{
+  // Compress the index without the past-the-end sentinel.
+  {
+    sdsl::sd_vector<> v(this->index.begin(), this->index.end() - 1);
+    v.simple_sds_serialize(out);
+  }
+
+  // We store the length of the underlying strings vector for decompression.
+  sdsl::simple_sds::serialize_value(this->strings.size(), out);
+
+  // TODO: This could be a bit more efficient if we write directly to the output stream.
+  // But we need to know the compressed size first.
+  {
+    ZSTDCompressor compressor(compression_level);
+    compressor.compressDirect(this->strings.data(), this->strings.size());
+    compressor.finish();
+    sdsl::simple_sds::serialize_vector(compressor.outputData(), out);
   }
 }
 
-size_t
-StringArray::simple_sds_size() const
+void
+StringArray::simple_sds_compress_even(std::ostream& out, int compression_level) const
 {
-  size_t result = 0;
+  size_t string_size = 0;
+  for(size_t i = 0; i < this->size(); i += 2) { string_size += this->length(i); }
 
-  // Compress the index without the past-the-end sentinel.
-  size_t universe = (this->empty() ? 0 : this->index[this->size() - 1] + 1);
-  result += sdsl::sd_vector<>::simple_sds_size(universe, this->size());
+  // Build and compress the index and store the total length of the strings to be compressed.
+  {
+    sdsl::sd_vector_builder v_builder(string_size, (this->size() + 1) / 2);
+    size_t offset = 0;
+    for(size_t i = 0; i < this->size(); i += 2)
+    {
+      v_builder.set_unsafe(offset);
+      offset += this->length(i);
+    }
+    sdsl::sd_vector<> v(v_builder);
+    v.simple_sds_serialize(out);
+    sdsl::simple_sds::serialize_value(string_size, out);
+  }
 
-  // Determine the alphabet.
-  std::vector<std::uint8_t> char_to_comp;
-  sdsl::int_vector<8> comp_to_char;
-  size_type width = 0;
-  determine_alphabet(this->strings, char_to_comp, comp_to_char, width);
-  result += comp_to_char.simple_sds_size();
+  {
+    ZSTDCompressor compressor(compression_level);
+    for(size_t i = 0; i < this->size(); i += 2)
+    {
+      std::string_view view = this->view(i);
+      compressor.compress(view.data(), view.size());
+    }
+    compressor.finish();
+    sdsl::simple_sds::serialize_vector(compressor.outputData(), out);
+  }
+}
 
-  // Compress the strings.
-  result += sdsl::int_vector<>::simple_sds_size(this->strings.size(), width);
+void
+StringArray::simple_sds_decompress(std::istream& in)
+{
+  // Load the index.
+  size_t string_size = 0;
+  {
+    sdsl::sd_vector<> v; v.simple_sds_load(in);
+    string_size = sdsl::simple_sds::load_value<size_t>(in);
+    this->index = sdsl::int_vector<>(v.ones() + 1, 0, sdsl::bits::length(string_size));
+    size_t i = 0;
+    for(auto iter = v.one_begin(); iter != v.one_end(); ++iter, i++) { this->index[i] = iter->second; }
+    this->index[this->size()] = string_size;
+  }
 
-  return result;
+  // TODO: This would also be a bit more efficient if we could read directly from the input stream.
+  {
+    std::vector<char> compressed = sdsl::simple_sds::load_vector<char>(in);
+    ZSTDDecompressor decompressor(std::move(compressed));
+    this->strings = std::vector<char>();
+    this->strings.reserve(string_size);
+    decompressor.decompress(string_size, this->strings);
+
+    // Check that there are no trailing bytes.
+    if(!decompressor.finished())
+    {
+      std::string msg = "StringArray: Trailing bytes after decompression";
+      throw sdsl::simple_sds::InvalidData(msg);
+    }
+  }
+
+  this->sanityChecks();
+}
+
+void
+StringArray::simple_sds_decompress_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform)
+{
+  // Load the index and allocate space for the members.
+  sdsl::sd_vector<> v;
+  size_t string_size = 0; // Total length of the original strings.
+  {
+    v.simple_sds_load(in);
+    string_size = sdsl::simple_sds::load_value<size_t>(in);
+    this->index = sdsl::int_vector<>(2 * v.ones() + 1, 0, sdsl::bits::length(2 * string_size));
+    this->strings = std::vector<char>(); this->strings.reserve(2 * string_size);
+  }
+
+  // Decompress the data.
+  {
+    std::vector<char> compressed = sdsl::simple_sds::load_vector<char>(in);
+    ZSTDDecompressor decompressor(std::move(compressed));
+
+    this->index[0] = 0;
+    auto iter = v.one_begin();
+    size_type i = 1;
+    while(iter != v.one_end())
+    {
+      size_type curr = iter->second;
+      ++iter;
+      size_type length = (iter == v.one_end() ? string_size : iter->second) - curr;
+
+      // First copy.
+      this->index[i] = this->index[i - 1] + length; i++;
+      size_t start = this->strings.size();
+      decompressor.decompress(length, this->strings);
+      std::string_view view(this->strings.data() + start, length);
+
+      // Transformed copy.
+      this->index[i] = this->index[i - 1] + length; i++;
+      std::string transformed_str = transform(view);
+      this->strings.insert(this->strings.end(), transformed_str.begin(), transformed_str.end());
+    }
+
+    // Check that there are no trailing bytes.
+    if(!decompressor.finished())
+    {
+      std::string msg = "StringArray: Trailing bytes after decompression";
+      throw sdsl::simple_sds::InvalidData(msg);
+    }
+  }
+
+  this->sanityChecks();
 }
 
 void

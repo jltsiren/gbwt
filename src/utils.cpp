@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025 Jouni Siren
+  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025, 2026 Jouni Siren
   Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
 
   Author: Jouni Siren <jouni.siren@iki.fi>
@@ -54,6 +54,8 @@ constexpr size_type Version::GBWT_VERSION;
 constexpr size_type Version::METADATA_VERSION;
 constexpr size_type Version::VARIANT_VERSION;
 constexpr size_type Version::R_INDEX_VERSION;
+
+constexpr int ZSTDCompressor::DEFAULT_COMPRESSION_LEVEL;
 
 //------------------------------------------------------------------------------
 
@@ -315,6 +317,177 @@ fileSize(std::ofstream& file)
 
   file.seekp(curr, std::ios::beg);
   return size;
+}
+
+//------------------------------------------------------------------------------
+
+ZSTDCompressor::ZSTDCompressor(int compression_level)
+{
+  if(compression_level < ZSTD_minCLevel() || compression_level > ZSTD_maxCLevel())
+  {
+    std::cerr << "Warning: ZSTDCompressor: Invalid compression level "
+              << compression_level << ", using default level " << DEFAULT_COMPRESSION_LEVEL << std::endl;
+    compression_level = DEFAULT_COMPRESSION_LEVEL;
+  }
+  this->context = ZSTD_createCCtx();
+  ZSTD_CCtx_setParameter(this->context, ZSTD_c_compressionLevel, compression_level);
+
+  this->input_buffer_capacity = ZSTD_CStreamInSize();
+  this->input_buffer.reserve(this->input_buffer_capacity);
+
+  this->output_buffer.resize(ZSTD_CStreamOutSize());
+  this->out_buffer.dst = this->output_buffer.data();
+  this->out_buffer.size = this->output_buffer.size();
+  this->out_buffer.pos = 0;
+}
+
+ZSTDCompressor::~ZSTDCompressor()
+{
+  ZSTD_freeCCtx(this->context); this->context = nullptr;
+}
+
+void
+ZSTDCompressor::compress(const char* data, size_t size)
+{
+  if(this->context == nullptr)
+  {
+    throw std::runtime_error("ZSTDCompressor: compress() called after finish()");
+  }
+
+  size_t processed = 0;
+  while(processed < size)
+  {
+    if(this->input_buffer.size() >= this->input_buffer_capacity) { this->flushInput(); }
+    size_t bytes = std::min(size - processed, this->input_buffer_capacity - this->input_buffer.size());
+    this->input_buffer.insert(this->input_buffer.end(), data + processed, data + processed + bytes);
+    processed += bytes;
+  }
+}
+
+void
+ZSTDCompressor::compressDirect(const char* data, size_t size)
+{
+  if(this->context == nullptr)
+  {
+    throw std::runtime_error("ZSTDCompressor: compressDirect() called after finish()");
+  }
+
+  this->flushInput();
+  ZSTD_inBuffer buffer = { data, size, 0 };
+  this->compress(buffer);
+}
+
+void
+ZSTDCompressor::finish()
+{
+  if(this->context == nullptr)
+  {
+    throw std::runtime_error("ZSTDCompressor: finish() called after finish()");
+  }
+
+  this->flushInput();
+  bool finished = false;
+  while(!finished)
+  {
+    size_t ret = ZSTD_endStream(this->context, &this->out_buffer);
+    if(ZSTD_isError(ret))
+    {
+      std::string msg = "ZSTDCompressor: ZSTD_endStream() failed: " + std::string(ZSTD_getErrorName(ret));
+      throw std::runtime_error(msg);
+    }
+    this->flushOutput();
+    finished = (ret == 0);
+  }
+
+  ZSTD_freeCCtx(this->context); this->context = nullptr;
+}
+
+void
+ZSTDCompressor::flushInput()
+{
+  ZSTD_inBuffer buffer = { this->input_buffer.data(), this->input_buffer.size(), 0 };
+  this->compress(buffer);
+  this->input_buffer.clear();
+}
+
+void
+ZSTDCompressor::compress(ZSTD_inBuffer& buffer)
+{
+  while(buffer.pos < buffer.size)
+  {
+    size_t ret = ZSTD_compressStream(this->context, &this->out_buffer, &buffer);
+    if(ZSTD_isError(ret))
+    {
+      std::string msg = "ZSTDCompressor: ZSTD_compressStream() failed: " + std::string(ZSTD_getErrorName(ret));
+      throw std::runtime_error(msg);
+    }
+    this->flushOutput();
+  }
+}
+
+void
+ZSTDCompressor::flushOutput()
+{
+  this->output.insert
+  (
+    this->output.end(),
+    static_cast<char*>(this->out_buffer.dst),
+    static_cast<char*>(this->out_buffer.dst) + this->out_buffer.pos
+  );
+  this->out_buffer.pos = 0;
+}
+
+ZSTDDecompressor::ZSTDDecompressor(std::vector<char>&& input) :
+  context(ZSTD_createDCtx()),
+  input(input),
+  in_buffer({ this->input.data(), this->input.size(), 0 }),
+  output_buffer(ZSTD_DStreamOutSize()),
+  out_buffer({ this->output_buffer.data(), this->output_buffer.size(), 0 }),
+  cursor(0)
+{
+}
+
+ZSTDDecompressor::~ZSTDDecompressor()
+{
+  ZSTD_freeDCtx(this->context); this->context = nullptr;
+}
+
+void
+ZSTDDecompressor::decompress(size_t bytes, std::vector<char>& output)
+{
+  size_t decompressed = 0;
+  while(decompressed < bytes)
+  {
+    if(this->cursor < this->out_buffer.pos)
+    {
+      size_t to_copy = std::min(bytes - decompressed, this->out_buffer.pos - this->cursor);
+      const char* start_ptr = static_cast<char*>(this->out_buffer.dst) + this->cursor;
+      output.insert(output.end(), start_ptr, start_ptr + to_copy);
+      this->cursor += to_copy;
+      decompressed += to_copy;
+    }
+    else
+    {
+      this->cursor = 0; this->out_buffer.pos = 0;
+      size_t ret = ZSTD_decompressStream(this->context, &this->out_buffer, &this->in_buffer);
+      if(ZSTD_isError(ret))
+      {
+        std::string msg = "ZSTDDecompressor: ZSTD_decompressStream() failed: " + std::string(ZSTD_getErrorName(ret));
+        throw sdsl::simple_sds::InvalidData(msg);
+      }
+      if(this->out_buffer.pos == 0 && this->in_buffer.pos < this->in_buffer.size)
+      {
+        std::string msg = "ZSTDDecompressor: Unexpected end of compressed data";
+        throw sdsl::simple_sds::InvalidData(msg);
+      }
+    }
+  }
+}
+
+bool
+ZSTDDecompressor::finished()
+{
+  return (this->in_buffer.pos >= this->in_buffer.size && this->cursor >= this->out_buffer.pos);
 }
 
 //------------------------------------------------------------------------------
