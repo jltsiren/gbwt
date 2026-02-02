@@ -30,6 +30,7 @@
 #include <mutex>
 #include <set>
 #include <string>
+#include <stdexcept>
 
 #include <sys/resource.h>
 #include <unistd.h>
@@ -55,7 +56,7 @@ constexpr size_type Version::METADATA_VERSION;
 constexpr size_type Version::VARIANT_VERSION;
 constexpr size_type Version::R_INDEX_VERSION;
 
-constexpr int ZSTDCompressor::DEFAULT_COMPRESSION_LEVEL;
+constexpr int ZstdCompressor::DEFAULT_COMPRESSION_LEVEL;
 
 //------------------------------------------------------------------------------
 
@@ -321,11 +322,11 @@ fileSize(std::ofstream& file)
 
 //------------------------------------------------------------------------------
 
-ZSTDCompressor::ZSTDCompressor(int compression_level)
+ZstdCompressor::ZstdCompressor(int compression_level)
 {
   if(compression_level < ZSTD_minCLevel() || compression_level > ZSTD_maxCLevel())
   {
-    std::cerr << "Warning: ZSTDCompressor: Invalid compression level "
+    std::cerr << "Warning: ZstdCompressor: Invalid compression level "
               << compression_level << ", using default level " << DEFAULT_COMPRESSION_LEVEL << std::endl;
     compression_level = DEFAULT_COMPRESSION_LEVEL;
   }
@@ -341,48 +342,47 @@ ZSTDCompressor::ZSTDCompressor(int compression_level)
   this->out_buffer.pos = 0;
 }
 
-ZSTDCompressor::~ZSTDCompressor()
+ZstdCompressor::~ZstdCompressor()
 {
   ZSTD_freeCCtx(this->context); this->context = nullptr;
 }
 
 void
-ZSTDCompressor::compress(const char* data, size_t size)
+ZstdCompressor::compress(std::string_view data)
 {
   if(this->context == nullptr)
   {
-    throw std::runtime_error("ZSTDCompressor: compress() called after finish()");
+    throw std::runtime_error("ZstdCompressor: compress() called after finish()");
   }
 
-  size_t processed = 0;
-  while(processed < size)
+  while(!data.empty())
   {
     if(this->input_buffer.size() >= this->input_buffer_capacity) { this->flushInput(); }
-    size_t bytes = std::min(size - processed, this->input_buffer_capacity - this->input_buffer.size());
-    this->input_buffer.insert(this->input_buffer.end(), data + processed, data + processed + bytes);
-    processed += bytes;
+    size_t bytes = std::min(data.size(), this->input_buffer_capacity - this->input_buffer.size());
+    this->input_buffer.insert(this->input_buffer.end(), data.data(), data.data() + bytes);
+    data.remove_prefix(bytes);
   }
 }
 
 void
-ZSTDCompressor::compressDirect(const char* data, size_t size)
+ZstdCompressor::compressDirect(std::string_view data)
 {
   if(this->context == nullptr)
   {
-    throw std::runtime_error("ZSTDCompressor: compressDirect() called after finish()");
+    throw std::runtime_error("ZstdCompressor: compressDirect() called after finish()");
   }
 
   this->flushInput();
-  ZSTD_inBuffer buffer = { data, size, 0 };
+  ZSTD_inBuffer buffer = { data.data(), data.size(), 0 };
   this->compress(buffer);
 }
 
 void
-ZSTDCompressor::finish()
+ZstdCompressor::finish()
 {
   if(this->context == nullptr)
   {
-    throw std::runtime_error("ZSTDCompressor: finish() called after finish()");
+    throw std::runtime_error("ZstdCompressor: finish() called after finish()");
   }
 
   this->flushInput();
@@ -392,7 +392,7 @@ ZSTDCompressor::finish()
     size_t ret = ZSTD_endStream(this->context, &this->out_buffer);
     if(ZSTD_isError(ret))
     {
-      std::string msg = "ZSTDCompressor: ZSTD_endStream() failed: " + std::string(ZSTD_getErrorName(ret));
+      std::string msg = "ZstdCompressor: ZSTD_endStream() failed: " + std::string(ZSTD_getErrorName(ret));
       throw std::runtime_error(msg);
     }
     this->flushOutput();
@@ -403,7 +403,7 @@ ZSTDCompressor::finish()
 }
 
 void
-ZSTDCompressor::flushInput()
+ZstdCompressor::flushInput()
 {
   ZSTD_inBuffer buffer = { this->input_buffer.data(), this->input_buffer.size(), 0 };
   this->compress(buffer);
@@ -411,14 +411,14 @@ ZSTDCompressor::flushInput()
 }
 
 void
-ZSTDCompressor::compress(ZSTD_inBuffer& buffer)
+ZstdCompressor::compress(ZSTD_inBuffer& buffer)
 {
   while(buffer.pos < buffer.size)
   {
     size_t ret = ZSTD_compressStream(this->context, &this->out_buffer, &buffer);
     if(ZSTD_isError(ret))
     {
-      std::string msg = "ZSTDCompressor: ZSTD_compressStream() failed: " + std::string(ZSTD_getErrorName(ret));
+      std::string msg = "ZstdCompressor: ZSTD_compressStream() failed: " + std::string(ZSTD_getErrorName(ret));
       throw std::runtime_error(msg);
     }
     this->flushOutput();
@@ -426,7 +426,7 @@ ZSTDCompressor::compress(ZSTD_inBuffer& buffer)
 }
 
 void
-ZSTDCompressor::flushOutput()
+ZstdCompressor::flushOutput()
 {
   this->output.insert
   (
@@ -437,7 +437,7 @@ ZSTDCompressor::flushOutput()
   this->out_buffer.pos = 0;
 }
 
-ZSTDDecompressor::ZSTDDecompressor(std::vector<char>&& input) :
+ZstdDecompressor::ZstdDecompressor(std::vector<char>&& input) :
   context(ZSTD_createDCtx()),
   input(input),
   in_buffer({ this->input.data(), this->input.size(), 0 }),
@@ -447,17 +447,18 @@ ZSTDDecompressor::ZSTDDecompressor(std::vector<char>&& input) :
 {
 }
 
-ZSTDDecompressor::~ZSTDDecompressor()
+ZstdDecompressor::~ZstdDecompressor()
 {
   ZSTD_freeDCtx(this->context); this->context = nullptr;
 }
 
 void
-ZSTDDecompressor::decompress(size_t bytes, std::vector<char>& output)
+ZstdDecompressor::decompress(size_t bytes, std::vector<char>& output)
 {
   size_t decompressed = 0;
-  while(decompressed < bytes)
+  do
   {
+    // Iterate at least once in case we have compressed an empty input.
     if(this->cursor < this->out_buffer.pos)
     {
       size_t to_copy = std::min(bytes - decompressed, this->out_buffer.pos - this->cursor);
@@ -466,26 +467,27 @@ ZSTDDecompressor::decompress(size_t bytes, std::vector<char>& output)
       this->cursor += to_copy;
       decompressed += to_copy;
     }
-    else
+    else if(this->in_buffer.pos < this->in_buffer.size)
     {
       this->cursor = 0; this->out_buffer.pos = 0;
       size_t ret = ZSTD_decompressStream(this->context, &this->out_buffer, &this->in_buffer);
       if(ZSTD_isError(ret))
       {
-        std::string msg = "ZSTDDecompressor: ZSTD_decompressStream() failed: " + std::string(ZSTD_getErrorName(ret));
-        throw sdsl::simple_sds::InvalidData(msg);
-      }
-      if(this->out_buffer.pos == 0 && this->in_buffer.pos < this->in_buffer.size)
-      {
-        std::string msg = "ZSTDDecompressor: Unexpected end of compressed data";
+        std::string msg = "ZstdDecompressor: ZSTD_decompressStream() failed: " + std::string(ZSTD_getErrorName(ret));
         throw sdsl::simple_sds::InvalidData(msg);
       }
     }
+    else
+    {
+      std::string msg = "ZstdDecompressor: Unexpected end of input data";
+      throw sdsl::simple_sds::InvalidData(msg);
+    }
   }
+  while(decompressed < bytes);
 }
 
 bool
-ZSTDDecompressor::finished()
+ZstdDecompressor::finished()
 {
   return (this->in_buffer.pos >= this->in_buffer.size && this->cursor >= this->out_buffer.pos);
 }

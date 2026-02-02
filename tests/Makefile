@@ -62,7 +62,7 @@ endif
 CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) $(INCLUDES)
 
 HEADERS=$(wildcard $(MAIN_DIR)/include/gbwt/*.h)
-PROGRAMS=test_bwtmerge test_metadata test_queries test_support test_variants
+PROGRAMS=test_utils test_support test_bwtmerge test_metadata test_queries test_variants
 
 .PHONY: all clean test
 all:$(PROGRAMS)

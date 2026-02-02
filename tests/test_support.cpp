@@ -192,10 +192,12 @@ TEST_F(StringArrayTest, CompressEmpty)
   TempFile::remove(filename);
 }
 
-void
-reverse_string(std::string& s)
+std::string
+reverse_string(std::string_view s)
 {
-  std::reverse(s.begin(), s.end());
+  std::string str(s);
+  std::reverse(str.begin(), str.end());
+  return str;
 }
 
 StringArray
@@ -209,7 +211,7 @@ duplicate_array(const std::vector<std::string>& source)
   [&](size_type i) -> std::string
   {
     std::string value = source[i / 2];
-    if(i & 1) { reverse_string(value); }
+    if(i & 1) { value = reverse_string(value); }
     return value;
   });
 }

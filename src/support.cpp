@@ -1888,8 +1888,8 @@ StringArray::simple_sds_compress(std::ostream& out, int compression_level) const
   // TODO: This could be a bit more efficient if we write directly to the output stream.
   // But we need to know the compressed size first.
   {
-    ZSTDCompressor compressor(compression_level);
-    compressor.compressDirect(this->strings.data(), this->strings.size());
+    ZstdCompressor compressor(compression_level);
+    compressor.compressDirect(std::string_view(this->strings.data(), this->strings.size()));
     compressor.finish();
     sdsl::simple_sds::serialize_vector(compressor.outputData(), out);
   }
@@ -1916,11 +1916,11 @@ StringArray::simple_sds_compress_even(std::ostream& out, int compression_level) 
   }
 
   {
-    ZSTDCompressor compressor(compression_level);
+    ZstdCompressor compressor(compression_level);
     for(size_t i = 0; i < this->size(); i += 2)
     {
       std::string_view view = this->view(i);
-      compressor.compress(view.data(), view.size());
+      compressor.compress(view);
     }
     compressor.finish();
     sdsl::simple_sds::serialize_vector(compressor.outputData(), out);
@@ -1944,7 +1944,7 @@ StringArray::simple_sds_decompress(std::istream& in)
   // TODO: This would also be a bit more efficient if we could read directly from the input stream.
   {
     std::vector<char> compressed = sdsl::simple_sds::load_vector<char>(in);
-    ZSTDDecompressor decompressor(std::move(compressed));
+    ZstdDecompressor decompressor(std::move(compressed));
     this->strings = std::vector<char>();
     this->strings.reserve(string_size);
     decompressor.decompress(string_size, this->strings);
@@ -1976,7 +1976,7 @@ StringArray::simple_sds_decompress_duplicate(std::istream& in, const std::functi
   // Decompress the data.
   {
     std::vector<char> compressed = sdsl::simple_sds::load_vector<char>(in);
-    ZSTDDecompressor decompressor(std::move(compressed));
+    ZstdDecompressor decompressor(std::move(compressed));
 
     this->index[0] = 0;
     auto iter = v.one_begin();

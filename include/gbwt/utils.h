@@ -31,6 +31,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <string_view>
 #include <vector>
 
 #include <sdsl/int_vector.hpp>
@@ -430,31 +431,31 @@ removeDuplicates(std::vector<Element>& vec, bool parallel)
 
 //------------------------------------------------------------------------------
 
-// FIXME: tests
 // Zstandard wrapper that stores the compressed output in a vector.
 // Throws `std::runtime_error` on failure.
-class ZSTDCompressor
+class ZstdCompressor
 {
 public:
   constexpr static int DEFAULT_COMPRESSION_LEVEL = 3;
 
-  explicit ZSTDCompressor(int compression_level = DEFAULT_COMPRESSION_LEVEL);
-  ~ZSTDCompressor();
-  ZSTDCompressor(const ZSTDCompressor&) = delete;
-  ZSTDCompressor& operator=(const ZSTDCompressor&) = delete;
+  explicit ZstdCompressor(int compression_level = DEFAULT_COMPRESSION_LEVEL);
+  ~ZstdCompressor();
+  ZstdCompressor(const ZstdCompressor&) = delete;
+  ZstdCompressor& operator=(const ZstdCompressor&) = delete;
 
   // Compresses the given data, buffering it internally.
-  void compress(const char* data, size_t size);
+  void compress(std::string_view data);
 
   // Compresses the given data directly.
   // Flushes the internal input buffer if necessary.
-  void compressDirect(const char* data, size_t size);
+  void compressDirect(std::string_view data);
 
   // Finalizes the compression.
   // The compressor cannot be used after this call.
   void finish();
 
-  // Returns the compressed data, calling finish() if necessary.
+  // Returns the compressed data.
+  // Valid after `finish()` has been called.
   const std::vector<char>& outputData() const { return this->output; }
 
 private:
@@ -477,16 +478,15 @@ private:
   std::vector<char> output;
 };
 
-// FIXME: tests
 // Zstandard decompression wrapper that decompresses data from an internal vector.
 // Throws `sdsl::simple_sds::InvalidData` on failure.
-class ZSTDDecompressor
+class ZstdDecompressor
 {
 public:
-  ZSTDDecompressor(std::vector<char>&& input);
-  ~ZSTDDecompressor();
-  ZSTDDecompressor(const ZSTDDecompressor&) = delete;
-  ZSTDDecompressor& operator=(const ZSTDDecompressor&) = delete;
+  explicit ZstdDecompressor(std::vector<char>&& input);
+  ~ZstdDecompressor();
+  ZstdDecompressor(const ZstdDecompressor&) = delete;
+  ZstdDecompressor& operator=(const ZstdDecompressor&) = delete;
 
   // Decompresses the given number of bytes and appends them to the output vector.
   void decompress(size_t bytes, std::vector<char>& output);
