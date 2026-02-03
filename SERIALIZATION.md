@@ -1,8 +1,8 @@
 # Simple-SDS serialization format
 
-GBWT version 5, Metadata version 2. Updated 2022-01-31.
+GBWT version 5, Metadata version 2. Updated 2026-01-29.
 
-Based on Simple-SDS version 0.2.0.
+Based on Simple-SDS version 0.4.0.
 
 ## Basics
 
@@ -38,6 +38,18 @@ The sequence of bytes from `bytes[index.select(i)]` (inclusive) to `bytes[index.
 
 **Note:** The length of `index` is not necessarily the same as the length of `strings`.
 In particular, if the last string is empty, the last value in `index` is the same as the length of `strings`.
+
+### Compressed string array
+
+A string array can be **compressed** using Zstandard.
+
+Serialization format for compressed string arrays:
+
+1. `index`: Starting offset of each string as a sparse vector.
+2. `length`: Length of the `bytes` vector.
+3. `data`: A byte vector storing zstd-compressed `bytes` vector.
+
+See above "String array" above for further details.
 
 ### Dictionary
 

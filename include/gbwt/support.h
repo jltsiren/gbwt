@@ -487,12 +487,19 @@ struct MergeParameters
 /*
   An array of strings stored in a single character vector, with starting offsets
   stored in an integer vector. This can be serialized and loaded much faster than
-  an array of actual strings.
+  an array of actual strings. In addition to standard SDSL and Simple-SDS
+  serialization, a `StringArray` can also be serialized in a Simple-SDS format
+  with zstd-compressed strings.
+
+  Serialization/deserialization failures throw `std::runtime_error` or its
+  subclasses. In particular, sanity checks throw `sdsl::simple_sds::InvalidData`.
 */
 class StringArray
 {
 public:
   typedef gbwt::size_type size_type;
+
+  constexpr static int DEFAULT_COMPRESSION_LEVEL = 3;
 
   StringArray() : index(1, 0, 1) {}
   StringArray(const std::vector<std::string>& source);
@@ -515,6 +522,11 @@ public:
   // lengths are known in advance.
   StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence);
 
+  StringArray(const StringArray& source) = default;
+  StringArray(StringArray&& source) = default;
+  StringArray& operator=(const StringArray& source) = default;
+  StringArray& operator=(StringArray&& source) = default;
+
   void swap(StringArray& another);
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
@@ -526,7 +538,22 @@ public:
 
   // This version loads each string twice and transforms the second copy.
   // The transform function should not change the length of the string.
-  void simple_sds_load_duplicate(std::istream& in, const std::function<void(std::string&)>& transform);
+  void simple_sds_load_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform);
+
+  // Simple-SDS serialization with zstd-compressed strings.
+  void simple_sds_compress(std::ostream& out, int compression_level = DEFAULT_COMPRESSION_LEVEL) const;
+
+  // Simple-SDS serialization with zstd-compressed strings.
+  // This version only serializes strings at even positions.
+  void simple_sds_compress_even(std::ostream& out, int compression_level = DEFAULT_COMPRESSION_LEVEL) const;
+
+  // Simple-SDS deserialization with zstd-compressed strings.
+  void simple_sds_decompress(std::istream& in);
+
+  // Simple-SDS deserialization with zstd-compressed strings.
+  // This version loads each string twice and transforms the second copy.
+  // The transform function should not change the length of the string.
+  void simple_sds_decompress_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform);
 
   bool operator==(const StringArray& another) const;
   bool operator!=(const StringArray& another) const;

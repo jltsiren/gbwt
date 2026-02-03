@@ -23,6 +23,22 @@ The GBWT uses three main construction algorithms:
 * A variant of [BWT-merge](https://github.com/jltsiren/bwt-merge) for merging multiple indexes.
 * An algorithm for quickly merging multiple indexes when the node identifiers do not overlap.
 
+## Dependencies
+
+All dependencies should be installed before compiling GBWT. By default, SDSL installs to the user's home directory. Dependencies not installed in system directories should use the same install prefix as SDSL.
+
+### System dependencies
+
+* [libzstd](https://github.com/facebook/zstd) for compressing serialized `StringArray`s.
+
+These dependencies are found using `pkg-config`. Update `PKG_CONFIG_PATH` as necessary.
+
+### GitHub repositories
+
+* [SDSL](https://github.com/vgteam/sdsl-lite) (vgteam fork) for low-level data structures.
+
+These dependencies should be installed separately (the latest master should always work). Because SDSL is a header-based library, having multiple versions in the same project may cause issues. Hence all submodules of the main project should use the same copy.
+
 ## Compiling GBWT
 
 This library is designed to take the compiler options from the [vgteam fork](https://github.com/vgteam/sdsl-lite) of the Succinct Data Structures Library 2.0 (SDSL). It currently requires a recent C++ compiler supporting C++17 and OpenMP. GCC is recommended, as the multithreaded `std::sort` from libstdc++ parallel mode speeds up some algorithms. On Apple systems, GBWT can be built with Apple Clang, but libomp must be installed via Macports or Homebrew.
@@ -32,10 +48,6 @@ The GBWT is frequently tested in the following environments:
 * Intel Linux (Ubuntu) with GCC.
 * Intel macOS with GCC and Apple Clang.
 * ARM macOS with Apple Clang.
-
-There is only one dependency:
-
-* [vgteam fork](https://github.com/vgteam/sdsl-lite) of the Succinct Data Structure Library 2.0 (SDSL). The latest `master` should always work.
 
 Before compiling, set `SDSL_DIR` in the Makefile to point to your SDSL directory. The default is `../sdsl-lite`, which is usually appropriate. The makefile reads `$SDSL_DIR/Make.helper` to determine compilers and compiler options.
 

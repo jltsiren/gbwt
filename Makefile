@@ -8,7 +8,19 @@ SOURCE_DIR=src
 
 # Multithreading with OpenMP.
 PARALLEL_FLAGS=-fopenmp -pthread
+
+# Directories for dependencies.
+INCLUDES=-Iinclude -I$(INC_DIR)
 LIBS=-L$(LIB_DIR) -lsdsl -ldivsufsort -ldivsufsort64
+
+# Use pkg-config to find system dependencies.
+ifeq ($(shell pkg-config --exists libzstd && echo 1), 1)
+    $(info Found libzstd.)
+    INCLUDES += $(shell pkg-config --cflags libzstd)
+    LIBS += $(shell pkg-config --libs libzstd)
+else
+    $(error Could not find libzstd. Please update PKG_CONFIG_PATH to include zstd development files)
+endif
 
 # Apple Clang does not support OpenMP directly, so we need special handling.
 ifeq ($(shell uname -s), Darwin)
@@ -17,23 +29,23 @@ ifeq ($(shell uname -s), Darwin)
         $(info The compiler is Apple Clang that needs libomp for OpenMP support.)
 
         # The compiler only needs to do the preprocessing.
-        PARALLEL_FLAGS = -Xpreprocessor -fopenmp -pthread
+        PARALLEL_FLAGS=-Xpreprocessor -fopenmp -pthread
 
         # Find libomp installed by Homebrew or MacPorts.
         ifeq ($(shell if [ -e $(HOMEBREW_PREFIX)/include/omp.h ]; then echo 1; else echo 0; fi), 1)
             $(info Found libomp installed by Homebrew and linked to $(HOMEBREW_PREFIX).)
-            PARALLEL_FLAGS += -I$(HOMEBREW_PREFIX)/include
+            INCLUDES += -I$(HOMEBREW_PREFIX)/include
             LIBS += -L$(HOMEBREW_PREFIX)/lib
         else ifeq ($(shell if [ -d $(HOMEBREW_PREFIX)/opt/libomp/include ]; then echo 1; else echo 0; fi), 1)
             $(info Found a keg-only libomp installed by Homebrew at $(HOMEBREW_PREFIX)/opt/libomp.)
-            PARALLEL_FLAGS += -I$(HOMEBREW_PREFIX)/opt/libomp/include
+            INCLUDES += -I$(HOMEBREW_PREFIX)/opt/libomp/include
             LIBS += -L$(HOMEBREW_PREFIX)/opt/libomp/lib
         else ifeq ($(shell if [ -d /opt/local/lib/libomp ]; then echo 1; else echo 0; fi), 1)
             $(info Found libomp installed by MacPorts at /opt/local.)
-            PARALLEL_FLAGS += -I/opt/local/include/libomp
+            INCLUDES += -I/opt/local/include/libomp
             LIBS += -L/opt/local/lib/libomp
         else
-            $(error Could not find libomp. Please install it using Homebrew or MacPorts.)
+            $(error Could not find libomp. Please install it using Homebrew or MacPorts)
         endif
 
         # We also need to link it.
@@ -41,7 +53,7 @@ ifeq ($(shell uname -s), Darwin)
     endif
 endif
 
-CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) -Iinclude -I$(INC_DIR)
+CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) $(INCLUDES)
 
 HEADERS=$(wildcard include/gbwt/*.h)
 LIBOBJS=$(addprefix $(BUILD_OBJ)/,algorithms.o bwtmerge.o cached_gbwt.o dynamic_gbwt.o fast_locate.o files.o gbwt.o internal.o metadata.o support.o test.o utils.o variants.o)
