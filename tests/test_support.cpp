@@ -74,6 +74,24 @@ public:
     size_type file_size = fileSize(in);
     ASSERT_EQ(expected_size, file_size) << "Incorrect file size";
   }
+
+  void zstd_compress_to(const StringArray& array, const std::string& filename) const
+  {
+    std::ofstream out(filename, std::ios_base::binary);
+    ASSERT_TRUE(out) << "Cannot open output file " << filename;
+    out.exceptions(std::ios::badbit | std::ios::failbit);
+    ASSERT_NO_THROW(array.simple_sds_compress(out)) << "simple_sds_compress() failed";
+    out.close();
+  }
+
+  void zstd_decompress_from(StringArray& array, const std::string& filename) const
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    ASSERT_TRUE(in) << "Cannot open input file " << filename;
+    in.exceptions(std::ios::badbit | std::ios::failbit);
+    ASSERT_NO_THROW(array.simple_sds_decompress(in)) << "simple_sds_decompress() failed";
+    in.close();
+  }
 };
 
 TEST_F(StringArrayTest, DefaultEmptyArray)
@@ -160,7 +178,7 @@ TEST_F(StringArrayTest, Remove)
   this->try_remove(one, 0);
 }
 
-TEST_F(StringArrayTest, SerializeEmpty)
+TEST_F(StringArrayTest, SDSLEmpty)
 {
   std::vector<std::string> truth;
   StringArray original(truth);
@@ -169,12 +187,12 @@ TEST_F(StringArrayTest, SerializeEmpty)
   sdsl::store_to_file(original, filename);
 
   StringArray copy; sdsl::load_from_file(copy, filename);
-  ASSERT_EQ(copy, original) << "Serialization changed the empty array";
+  ASSERT_EQ(copy, original) << "SDSL serialization changed the empty array";
 
   TempFile::remove(filename);
 }
 
-TEST_F(StringArrayTest, CompressEmpty)
+TEST_F(StringArrayTest, SimpleSDSEmpty)
 {
   std::vector<std::string> truth;
   StringArray original(truth);
@@ -187,7 +205,22 @@ TEST_F(StringArrayTest, CompressEmpty)
   this->check_file_size(original, in);
   copy.simple_sds_load(in);
   in.close();
-  ASSERT_EQ(copy, original) << "Compression changed the empty array";
+  ASSERT_EQ(copy, original) << "Simple-SDS serialization changed the empty array";
+
+  TempFile::remove(filename);
+}
+
+TEST_F(StringArrayTest, ZstdEmpty)
+{
+  std::vector<std::string> truth;
+  StringArray original(truth);
+
+  std::string filename = TempFile::getName("string-array");
+  this->zstd_compress_to(original, filename);
+
+  StringArray copy;
+  this->zstd_decompress_from(copy, filename);
+  ASSERT_EQ(copy, original) << "Zstd compression changed the empty array";
 
   TempFile::remove(filename);
 }
@@ -229,12 +262,12 @@ TEST_F(StringArrayTest, DuplicateEmpty)
   std::ifstream in(filename, std::ios_base::binary);
   copy.simple_sds_load_duplicate(in, reverse_string);
   in.close();
-  ASSERT_EQ(copy, truth) << "Compression changed the empty array";
+  ASSERT_EQ(copy, truth) << "Simple-SDS serialization changed the empty array";
 
   TempFile::remove(filename);
 }
 
-TEST_F(StringArrayTest, SerializeNonEmpty)
+TEST_F(StringArrayTest, SDSLNonEmpty)
 {
   std::vector<std::string> truth
   {
@@ -249,12 +282,12 @@ TEST_F(StringArrayTest, SerializeNonEmpty)
   sdsl::store_to_file(original, filename);
 
   StringArray copy; sdsl::load_from_file(copy, filename);
-  ASSERT_EQ(copy, original) << "Serialization changed the non-empty array";
+  ASSERT_EQ(copy, original) << "SDSL serialization changed the non-empty array";
 
   TempFile::remove(filename);
 }
 
-TEST_F(StringArrayTest, CompressNonEmpty)
+TEST_F(StringArrayTest, SimpleSDSNonEmpty)
 {
   std::vector<std::string> truth
   {
@@ -273,7 +306,28 @@ TEST_F(StringArrayTest, CompressNonEmpty)
   this->check_file_size(original, in);
   copy.simple_sds_load(in);
   in.close();
-  ASSERT_EQ(copy, original) << "Compression changed the non-empty array";
+  ASSERT_EQ(copy, original) << "Simple-SDS serialization changed the non-empty array";
+
+  TempFile::remove(filename);
+}
+
+TEST_F(StringArrayTest, ZstdNonEmpty)
+{
+  std::vector<std::string> truth
+  {
+    "first",
+    "second",
+    "third",
+    "fourth"
+  };
+  StringArray original(truth);
+
+  std::string filename = TempFile::getName("string-array");
+  this->zstd_compress_to(original, filename);
+
+  StringArray copy;
+  this->zstd_decompress_from(copy, filename);
+  ASSERT_EQ(copy, original) << "Zstd compression changed the non-empty array";
 
   TempFile::remove(filename);
 }
@@ -297,12 +351,12 @@ TEST_F(StringArrayTest, DuplicateNonEmpty)
   std::ifstream in(filename, std::ios_base::binary);
   copy.simple_sds_load_duplicate(in, reverse_string);
   in.close();
-  ASSERT_EQ(copy, truth) << "Compression changed the non-empty array";
+  ASSERT_EQ(copy, truth) << "Simple-SDS serialization changed the non-empty array";
 
   TempFile::remove(filename);
 }
 
-TEST_F(StringArrayTest, CompressWithEmptyStrings)
+TEST_F(StringArrayTest, SimpleSDSWithEmptyStrings)
 {
   // Here we test that the compression still works when there is an empty
   // string in the middle and the sd_vector used for the offsets contains
@@ -326,7 +380,29 @@ TEST_F(StringArrayTest, CompressWithEmptyStrings)
   this->check_file_size(original, in);
   copy.simple_sds_load(in);
   in.close();
-  ASSERT_EQ(copy, original) << "Compression changed the array with empty strings";
+  ASSERT_EQ(copy, original) << "Simple-SDS serialization changed the array with empty strings";
+
+  TempFile::remove(filename);
+}
+
+TEST_F(StringArrayTest, ZstdWithEmptyStrings)
+{
+  std::vector<std::string> truth
+  {
+    "first",
+    "second",
+    "",
+    "fourth",
+    ""
+  };
+  StringArray original(truth);
+
+  std::string filename = TempFile::getName("string-array");
+  this->zstd_compress_to(original, filename);
+
+  StringArray copy;
+  this->zstd_decompress_from(copy, filename);
+  ASSERT_EQ(copy, original) << "Zstd compression changed the array with empty strings";
 
   TempFile::remove(filename);
 }
@@ -351,7 +427,7 @@ TEST_F(StringArrayTest, DuplicateWithEmptyStrings)
   std::ifstream in(filename, std::ios_base::binary);
   copy.simple_sds_load_duplicate(in, reverse_string);
   in.close();
-  ASSERT_EQ(copy, truth) << "Compression changed the array with empty strings";
+  ASSERT_EQ(copy, truth) << "Simple-SDS serialization changed the array with empty strings";
 
   TempFile::remove(filename);
 }

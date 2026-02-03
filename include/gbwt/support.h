@@ -540,8 +540,6 @@ public:
   // The transform function should not change the length of the string.
   void simple_sds_load_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform);
 
-  // FIXME: test compression
-
   // Simple-SDS serialization with zstd-compressed strings.
   void simple_sds_compress(std::ostream& out, int compression_level = DEFAULT_COMPRESSION_LEVEL) const;
 
