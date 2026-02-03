@@ -445,6 +445,7 @@ ZstdDecompressor::ZstdDecompressor(std::vector<char>&& input) :
   out_buffer({ this->output_buffer.data(), this->output_buffer.size(), 0 }),
   cursor(0)
 {
+  this->fillOutputBuffer();
 }
 
 ZstdDecompressor::~ZstdDecompressor()
@@ -456,9 +457,8 @@ void
 ZstdDecompressor::decompress(size_t bytes, std::vector<char>& output)
 {
   size_t decompressed = 0;
-  do
+  while(decompressed < bytes)
   {
-    // Iterate at least once in case we have compressed an empty input.
     if(this->cursor < this->out_buffer.pos)
     {
       size_t to_copy = std::min(bytes - decompressed, this->out_buffer.pos - this->cursor);
@@ -469,13 +469,7 @@ ZstdDecompressor::decompress(size_t bytes, std::vector<char>& output)
     }
     else if(this->in_buffer.pos < this->in_buffer.size)
     {
-      this->cursor = 0; this->out_buffer.pos = 0;
-      size_t ret = ZSTD_decompressStream(this->context, &this->out_buffer, &this->in_buffer);
-      if(ZSTD_isError(ret))
-      {
-        std::string msg = "ZstdDecompressor: ZSTD_decompressStream() failed: " + std::string(ZSTD_getErrorName(ret));
-        throw sdsl::simple_sds::InvalidData(msg);
-      }
+      this->fillOutputBuffer();
     }
     else
     {
@@ -483,13 +477,24 @@ ZstdDecompressor::decompress(size_t bytes, std::vector<char>& output)
       throw sdsl::simple_sds::InvalidData(msg);
     }
   }
-  while(decompressed < bytes);
 }
 
 bool
 ZstdDecompressor::finished()
 {
   return (this->in_buffer.pos >= this->in_buffer.size && this->cursor >= this->out_buffer.pos);
+}
+
+void
+ZstdDecompressor::fillOutputBuffer()
+{
+  this->cursor = 0; this->out_buffer.pos = 0;
+  size_t ret = ZSTD_decompressStream(this->context, &this->out_buffer, &this->in_buffer);
+  if(ZSTD_isError(ret))
+  {
+    std::string msg = "ZstdDecompressor: ZSTD_decompressStream() failed: " + std::string(ZSTD_getErrorName(ret));
+    throw sdsl::simple_sds::InvalidData(msg);
+  }
 }
 
 //------------------------------------------------------------------------------

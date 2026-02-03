@@ -495,6 +495,10 @@ public:
   bool finished();
 
 private:
+  // Decompress more data into the output buffer.
+  // Assumes that the output buffer has been consumed.
+  void fillOutputBuffer();
+
   ZSTD_DCtx* context;
 
   std::vector<char> input;

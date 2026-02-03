@@ -75,6 +75,15 @@ public:
     ASSERT_EQ(expected_size, file_size) << "Incorrect file size";
   }
 
+  void simple_sds_duplicate_from(StringArray& array, const std::string& filename, const std::function<std::string(std::string_view)>& transform) const
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    ASSERT_TRUE(in) << "Cannot open input file " << filename;
+    in.exceptions(std::ios::badbit | std::ios::failbit);
+    ASSERT_NO_THROW(array.simple_sds_load_duplicate(in, transform)) << "simple_sds_load_duplicate() failed";
+    in.close();
+  }
+
   void zstd_compress_to(const StringArray& array, const std::string& filename) const
   {
     std::ofstream out(filename, std::ios_base::binary);
@@ -90,6 +99,24 @@ public:
     ASSERT_TRUE(in) << "Cannot open input file " << filename;
     in.exceptions(std::ios::badbit | std::ios::failbit);
     ASSERT_NO_THROW(array.simple_sds_decompress(in)) << "simple_sds_decompress() failed";
+    in.close();
+  }
+
+  void zstd_compress_even_to(const StringArray& array, const std::string& filename) const
+  {
+    std::ofstream out(filename, std::ios_base::binary);
+    ASSERT_TRUE(out) << "Cannot open output file " << filename;
+    out.exceptions(std::ios::badbit | std::ios::failbit);
+    ASSERT_NO_THROW(array.simple_sds_compress_even(out)) << "simple_sds_compress_even() failed";
+    out.close();
+  }
+
+  void zstd_decompress_duplicate_from(StringArray& array, const std::string& filename, const std::function<std::string(std::string_view)>& transform) const
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    ASSERT_TRUE(in) << "Cannot open input file " << filename;
+    in.exceptions(std::ios::badbit | std::ios::failbit);
+    ASSERT_NO_THROW(array.simple_sds_decompress_duplicate(in, transform)) << "simple_sds_decompress_duplicate() failed";
     in.close();
   }
 };
@@ -259,10 +286,23 @@ TEST_F(StringArrayTest, DuplicateEmpty)
   sdsl::simple_sds::serialize_to(original, filename);
 
   StringArray copy;
-  std::ifstream in(filename, std::ios_base::binary);
-  copy.simple_sds_load_duplicate(in, reverse_string);
-  in.close();
+  this->simple_sds_duplicate_from(copy, filename, reverse_string);
   ASSERT_EQ(copy, truth) << "Simple-SDS serialization changed the empty array";
+
+  TempFile::remove(filename);
+}
+
+TEST_F(StringArrayTest, ZstdDuplicateEmpty)
+{
+  std::vector<std::string> source;
+  StringArray original = duplicate_array(source);
+
+  std::string filename = TempFile::getName("string-array");
+  this->zstd_compress_even_to(original, filename);
+
+  StringArray copy;
+  this->zstd_decompress_duplicate_from(copy, filename, reverse_string);
+  ASSERT_EQ(copy, original) << "Zstd compression changed the empty array";
 
   TempFile::remove(filename);
 }
@@ -348,10 +388,29 @@ TEST_F(StringArrayTest, DuplicateNonEmpty)
   sdsl::simple_sds::serialize_to(original, filename);
 
   StringArray copy;
-  std::ifstream in(filename, std::ios_base::binary);
-  copy.simple_sds_load_duplicate(in, reverse_string);
-  in.close();
+  this->simple_sds_duplicate_from(copy, filename, reverse_string);
   ASSERT_EQ(copy, truth) << "Simple-SDS serialization changed the non-empty array";
+
+  TempFile::remove(filename);
+}
+
+TEST_F(StringArrayTest, ZstdDuplicateNonEmpty)
+{
+  std::vector<std::string> source
+  {
+    "first",
+    "second",
+    "third",
+    "fourth"
+  };
+  StringArray original = duplicate_array(source);
+
+  std::string filename = TempFile::getName("string-array");
+  this->zstd_compress_even_to(original, filename);
+
+  StringArray copy;
+  this->zstd_decompress_duplicate_from(copy, filename, reverse_string);
+  ASSERT_EQ(copy, original) << "Zstd compression changed the non-empty array";
 
   TempFile::remove(filename);
 }
@@ -424,10 +483,30 @@ TEST_F(StringArrayTest, DuplicateWithEmptyStrings)
   sdsl::simple_sds::serialize_to(original, filename);
 
   StringArray copy;
-  std::ifstream in(filename, std::ios_base::binary);
-  copy.simple_sds_load_duplicate(in, reverse_string);
-  in.close();
+  this->simple_sds_duplicate_from(copy, filename, reverse_string);
   ASSERT_EQ(copy, truth) << "Simple-SDS serialization changed the array with empty strings";
+
+  TempFile::remove(filename);
+}
+
+TEST_F(StringArrayTest, ZstdDuplicateWithEmptyStrings)
+{
+  std::vector<std::string> source
+  {
+    "first",
+    "second",
+    "",
+    "fourth",
+    ""
+  };
+  StringArray original = duplicate_array(source);
+
+  std::string filename = TempFile::getName("string-array");
+  this->zstd_compress_even_to(original, filename);
+
+  StringArray copy;
+  this->zstd_decompress_duplicate_from(copy, filename, reverse_string);
+  ASSERT_EQ(copy, original) << "Zstd compression changed the array with empty strings";
 
   TempFile::remove(filename);
 }
