@@ -1903,7 +1903,10 @@ StringArray::simple_sds_compress_even(std::ostream& out, int compression_level) 
 
   // Build and compress the index and store the total length of the strings to be compressed.
   {
-    sdsl::sd_vector_builder v_builder(string_size, (this->size() + 1) / 2);
+    // While direct sd_vector construction from an iterator can build multisets automatically,
+    // here we have to specify it explicitly in case the total length of the strings is less
+    // than the number of strings.
+    sdsl::sd_vector_builder v_builder(string_size, (this->size() + 1) / 2, true);
     size_t offset = 0;
     for(size_t i = 0; i < this->size(); i += 2)
     {

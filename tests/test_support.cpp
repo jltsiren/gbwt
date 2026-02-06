@@ -307,6 +307,24 @@ TEST_F(StringArrayTest, ZstdDuplicateEmpty)
   TempFile::remove(filename);
 }
 
+TEST_F(StringArrayTest, ZstdDuplicateEmptyStrings)
+{
+  std::vector<std::string> source
+  {
+    "", "", ""
+  };
+  StringArray original = duplicate_array(source);
+
+  std::string filename = TempFile::getName("string-array");
+  this->zstd_compress_even_to(original, filename);
+
+  StringArray copy;
+  this->zstd_decompress_duplicate_from(copy, filename, reverse_string);
+  ASSERT_EQ(copy, original) << "Zstd compression changed the array with empty strings";
+
+  TempFile::remove(filename);
+}
+
 TEST_F(StringArrayTest, SDSLNonEmpty)
 {
   std::vector<std::string> truth
@@ -497,6 +515,28 @@ TEST_F(StringArrayTest, ZstdDuplicateWithEmptyStrings)
     "second",
     "",
     "fourth",
+    ""
+  };
+  StringArray original = duplicate_array(source);
+
+  std::string filename = TempFile::getName("string-array");
+  this->zstd_compress_even_to(original, filename);
+
+  StringArray copy;
+  this->zstd_decompress_duplicate_from(copy, filename, reverse_string);
+  ASSERT_EQ(copy, original) << "Zstd compression changed the array with empty strings";
+
+  TempFile::remove(filename);
+}
+
+TEST_F(StringArrayTest, ZstdDuplicateWithShortOrEmptyStrings)
+{
+  std::vector<std::string> source
+  {
+    "f",
+    "s",
+    "",
+    "f",
     ""
   };
   StringArray original = duplicate_array(source);
