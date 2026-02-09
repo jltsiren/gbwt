@@ -9,7 +9,7 @@ PARALLEL_FLAGS=-fopenmp -pthread
 
 # Directories for dependencies.
 INCLUDES=-I$(MAIN_DIR)/include -I$(INC_DIR)
-LIBS=-L$(LIB_DIR) -lgbwt -lhandlegraph -lsdsl -ldivsufsort -ldivsufsort64 -lgtest -lgtest_main
+LIBS=-L$(LIB_DIR) -lsdsl -lgtest -lgtest_main
 
 # Use pkg-config to find system dependencies.
 ifeq ($(shell pkg-config --exists libzstd && echo 1), 1)
