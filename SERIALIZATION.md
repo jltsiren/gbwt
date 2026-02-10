@@ -1,6 +1,6 @@
 # Simple-SDS serialization format
 
-GBWT version 5, Metadata version 2. Updated 2026-01-29.
+GBWT version 5, Metadata version 2. Updated 2026-02-10.
 
 Based on Simple-SDS version 0.4.0.
 
@@ -46,7 +46,7 @@ A string array can be **compressed** using Zstandard.
 Serialization format for compressed string arrays:
 
 1. `index`: Starting offset of each string as a sparse vector.
-2. `length`: Length of the `bytes` vector.
+2. `length`: Length of the `bytes` vector as an element.
 3. `data`: A byte vector storing zstd-compressed `bytes` vector.
 
 See above "String array" above for further details.
