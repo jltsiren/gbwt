@@ -12,8 +12,12 @@ There are currently two encodings for BWT runs, depending on local alphabet size
 
 The threshold for the first encoding can be safely increased from 254 to 256.
 
-It may also be a good idea to add a third encoding for runs of two consecutive values (`(ab)^k`).
-That will make the endmarker record in a bidirectional GBWT more compressible and faster to use.
+## Endmarker
+
+The endmarker record `0` will no longer be included in the BWT itself.
+It will be stored separately and decompressed as `DecompressedRecord`.
+There will be separate encodings for unidirectional and bidirectional GBWTs.
+In the latter, we either encode runs `(ab)^k` or have separate endmarker records for forward and reverse paths.
 
 ## Locate functionality
 
@@ -21,6 +25,14 @@ GBWT use a rather inefficient structure for finding the sequence identifier corr
 The [Rust implementation](https://github.com/jltsiren/gbwt-rs) does not support the locate structure.
 Version 2 will remove the structure and replace it with an optional r-index (`FastLocate`), which is larger but much faster.
 Removing the locate support should also simplify the construction algorithm and make it faster.
+
+## Dynamic GBWT
+
+Dynamic GBWT will be simplified and optimized.
+It will only be used for GBWT construction.
+Runs in BWT records will be stored as successor node ids instead of edge ranks.
+There will be no queries or a locate structure.
+Path metadata will be provided in the construction interface itself.
 
 ## Metadata
 
