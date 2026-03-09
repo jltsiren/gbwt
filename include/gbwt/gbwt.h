@@ -40,7 +40,7 @@ public:
   // `subgraphs` or higher will not be included in the output. The subgraph
   // indexes are only valid if the mapping is consistent with the weakly
   // connected components of the graph.
-  // Splits the metadata and ignores the tags.
+  // Drops empty paths. Splits the metadata and ignores the tags.
   std::vector<GBWT> split(size_type subgraphs, const std::function<size_type(node_type)>& mapping) const;
 
   void swap(GBWT& another);

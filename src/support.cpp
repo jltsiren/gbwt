@@ -1,28 +1,6 @@
-/*
-  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025, 2026 Jouni Siren
-  Copyright (c) 2017 Genome Research Ltd.
+#include <gbwt/support.h>
 
-  Author: Jouni Siren <jouni.siren@iki.fi>
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-*/
-
+#include <gbwt/files.h>
 #include <gbwt/internal.h>
 
 #include <cctype>
@@ -832,6 +810,28 @@ DecompressedRecord::DecompressedRecord(const CompressedRecord& source) :
   }
 }
 
+std::vector<DynamicRecord>
+DecompressedRecord::split(size_type subgraphs, const std::function<size_type(node_type)>& mapping) const
+{
+  std::vector<DynamicRecord> result(subgraphs);
+  size_type start = 0, limit = 0;
+  while(limit < this->size())
+  {
+    edge_type next = this->concreteRunLF(start, limit);
+    limit++; // Now at the start of the next run.
+    size_type to = mapping(next.first);
+    if(to < subgraphs)
+    {
+      result[to].body_size += (limit - start);
+      rank_type outrank = result[to].edgeToLinear(next.first);
+      if(outrank >= result[to].outdegree()) { result[to].outgoing.push_back(next); }
+      result[to].body.push_back(run_type(outrank, limit - start));
+    }
+    start = limit;
+  }
+  return result;
+}
+
 void
 DecompressedRecord::swap(DecompressedRecord& another)
 {
@@ -903,6 +903,17 @@ DecompressedRecord::runLF(size_type i, size_type& run_end) const
   {
     while(run_end + 1 < this->size() && this->body[run_end + 1].first == this->body[i].first) { run_end++; }
   }
+
+  return this->body[i];
+}
+
+edge_type
+DecompressedRecord::concreteRunLF(size_type i, size_type& run_end) const
+{
+  if(i >= this->size()) { return invalid_edge(); }
+
+  run_end = i;
+  while(run_end + 1 < this->size() && this->body[run_end + 1].first == this->body[i].first) { run_end++; }
 
   return this->body[i];
 }
@@ -1030,6 +1041,74 @@ RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sd
   this->buildIndex(offsets);
 }
 
+void
+RecordArray::split
+(
+  size_type subgraphs, const std::function<size_type(node_type)>& mapping,
+  size_type alphabet_offset, const DecompressedRecord& endmarker,
+  std::vector<GBWTHeader*>& headers, std::vector<RecordArray*>& bwts
+) const
+{
+  if(this->empty()) { return; }
+  std::vector<std::vector<size_type>> offsets(subgraphs);
+  std::vector<node_type> last_node(subgraphs, ENDMARKER);
+
+  // Split the endmarker record.
+  {
+    std::vector<DynamicRecord> parts = endmarker.split(subgraphs, mapping);
+    for(size_type i = 0; i < subgraphs; i++)
+    {
+      if(!(parts[i].empty()))
+      {
+        headers[i]->sequences = parts[i].size();
+        headers[i]->size = parts[i].size();
+        offsets[i].push_back(0);
+        parts[i].recode();
+        parts[i].writeBWT(bwts[i]->data);
+        bwts[i]->records = 1;
+      }
+    }
+  }
+
+  // Assign records to output BWTs.
+  auto iter = this->index.one_begin();
+  ++iter; // Skip the endmarker record.
+  for(comp_type comp = 1; comp < this->records; comp++)
+  {
+    node_type node = comp + alphabet_offset;
+    size_type to = mapping(node);
+    if(to >= subgraphs) { continue; }
+    if(last_node[to] != ENDMARKER)
+    {
+      // Add empty records between the last node and the current node.
+      for(node_type empty = last_node[to] + 1; empty < node; empty++)
+      {
+        offsets[to].push_back(bwts[to]->data.size());
+        bwts[to]->data.push_back(0);
+        bwts[to]->records++;
+      }
+    }
+    else { headers[to]->offset = node - 1; }
+    headers[to]->alphabet_size = node + 1;
+    offsets[to].push_back(bwts[to]->data.size());
+    size_type source_start = iter->second;
+    ++iter;
+    size_type source_limit = iter->second;
+    size_type target_start = bwts[to]->data.size();
+    bwts[to]->data.insert(bwts[to]->data.end(), this->data.begin() + source_start, this->data.begin() + source_limit);
+    size_type target_limit = bwts[to]->data.size();
+    bwts[to]->records++;
+    CompressedRecord record(bwts[to]->data, target_start, target_limit);
+    headers[to]->size += record.size();
+    last_node[to] = node;
+  }
+
+  // Build indexes for the BWTs.
+  for(size_type i = 0; i < subgraphs; i++)
+  {
+    if(!(bwts[i]->empty())) { bwts[i]->buildIndex(offsets[i]); }
+  }
+}
 
 RecordArray::RecordArray(size_type array_size) :
   records(array_size)

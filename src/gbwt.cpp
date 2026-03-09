@@ -379,8 +379,7 @@ GBWT::split(size_type subgraphs, const std::function<size_type(node_type)>& mapp
       headers[i] = &(result[i].header);
       bwts[i] = &(result[i].bwt);
     }
-    // FIXME: implement this
-    // this->bwt.split(subgraphs, mapping, headers, bwts);
+    this->bwt.split(subgraphs, mapping, this->header.offset, this->endmarker_record, headers, bwts);
     for(size_type i = 0; i < subgraphs; i++)
     {
       if(!(this->bidirectional()) && !(result[i].empty())) { result[i].header.unset(GBWTHeader::FLAG_BIDIRECTIONAL); }
