@@ -1,27 +1,3 @@
-/*
-  Copyright (c) 2019, 2021, 2024, 2025 Jouni Siren
-
-  Author: Jouni Siren <jouni.siren@iki.fi>
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-*/
-
 #include <gtest/gtest.h>
 
 #include <random>
@@ -89,6 +65,18 @@ public:
     std::vector<const Metadata*> sources { &first, &second };
     Metadata constructed(sources, same_samples, same_contigs);
     EXPECT_EQ(constructed, correct_result) << "Merge constructor does not work correctly " << test_name;
+  }
+
+  void testSplit(const Metadata& metadata, const std::vector<Metadata*>& correct_result, const std::vector<size_type>& path_to_subgraph, const std::string& test_name) const
+  {
+    std::vector<Metadata*> result(correct_result.size());
+    for(size_type i = 0; i < correct_result.size(); i++) { result[i] = new Metadata(); }
+    metadata.split(correct_result.size(), path_to_subgraph, result);
+    for(size_type i = 0; i < correct_result.size(); i++)
+    {
+      EXPECT_EQ(*result[i], *correct_result[i]) << "Split failed for component " << i << " in " << test_name;
+      delete result[i];
+    }
   }
 
   // first[start, limit) should be equal to second.
@@ -626,6 +614,74 @@ TEST_F(MetadataTest, PathMerging)
   comparePaths(first_names, third_names, false);
   comparePaths(first_nonames, third_nonames, true);
   comparePaths(first_nonames, third_nonames, false);
+}
+
+TEST_F(MetadataTest, PathSplitting)
+{
+  Metadata first_names, first_nonames, second_names, second_nonames;
+
+  first_names.setSamples({ "sample1", "sample2", "sample3" });
+  first_nonames.setSamples(3);
+  first_names.setContigs({ "contig1", "contig2" });
+  first_nonames.setContigs(2);
+
+  second_names.setSamples({ "sample1", "sample3" });
+  second_nonames.setSamples(2);
+  second_names.setContigs({ "contig3", "contig4" });
+  second_nonames.setContigs(2);
+
+  std::vector<size_type> all_components, first_only, second_only;
+
+  first_names.addPath(0, 0, 0, 0); // sample1, contig1
+  first_names.addPath(0, 1, 0, 0); // sample1, contig2
+  first_names.addPath(1, 0, 0, 0); // sample2, contig1
+  first_names.addPath(1, 1, 0, 0); // sample2, contig2
+  first_names.addPath(2, 0, 0, 0); // sample3, contig1
+  first_names.addPath(2, 1, 0, 0); // sample3, contig2
+  for(size_type i = 0; i < first_names.paths(); i++)
+  {
+    first_nonames.addPath(first_names.path(i));
+    all_components.push_back(0);
+    first_only.push_back(0); second_only.push_back(1);
+  }
+
+  second_names.addPath(0, 0, 0, 0); // sample1, contig3
+  second_names.addPath(0, 1, 0, 0); // sample1, contig4
+  second_names.addPath(1, 0, 0, 0); // sample3, contig3
+  second_names.addPath(1, 1, 0, 0); // sample3, contig4
+  for(size_type i = 0; i < second_names.paths(); i++)
+  {
+    second_nonames.addPath(second_names.path(i));
+    all_components.push_back(1);
+    first_only.push_back(1); second_only.push_back(0);
+  }
+
+  first_names.setHaplotypes(first_names.samples());
+  first_nonames.setHaplotypes(first_nonames.samples());
+  second_names.setHaplotypes(second_names.samples());
+  second_nonames.setHaplotypes(second_nonames.samples());
+
+  // Merge and split with sample/contig names.
+  {
+    Metadata merged({ &first_names, &second_names }, false, false);
+    ASSERT_EQ(merged.samples(), size_type(3)) << "Wrong number of samples in merged metadata with names";
+    ASSERT_EQ(merged.contigs(), size_type(4)) << "Wrong number of contigs in merged metadata with names";
+    ASSERT_EQ(merged.paths(), first_names.paths() + second_names.paths()) << "Wrong number of paths in merged metadata with names";
+    testSplit(merged, { &first_names, &second_names }, all_components, "all components with names");
+    testSplit(merged, { &first_names }, first_only, "first only with names");
+    testSplit(merged, { &second_names }, second_only, "second only with names");
+  }
+
+  // Merge and split without sample/contig names.
+  {
+    Metadata merged({ &first_nonames, &second_nonames }, false, false);
+    ASSERT_EQ(merged.samples(), size_type(5)) << "Wrong number of samples in merged metadata without names";
+    ASSERT_EQ(merged.contigs(), size_type(4)) << "Wrong number of contigs in merged metadata without names";
+    ASSERT_EQ(merged.paths(), first_nonames.paths() + second_nonames.paths()) << "Wrong number of paths in merged metadata without names";
+    testSplit(merged, { &first_nonames, &second_nonames }, all_components, "all components without names");
+    testSplit(merged, { &first_nonames }, first_only, "first only without names");
+    testSplit(merged, { &second_nonames }, second_only, "second only without names");
+  }
 }
 
 TEST_F(MetadataTest, Serialization)

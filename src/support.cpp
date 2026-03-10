@@ -1078,9 +1078,10 @@ RecordArray::split
     node_type node = comp + alphabet_offset;
     size_type to = mapping(node);
     if(to >= subgraphs) { continue; }
+
+    // Pad with empty records if necessary and update alphabet information in the header.
     if(last_node[to] != ENDMARKER)
     {
-      // Add empty records between the last node and the current node.
       for(node_type empty = last_node[to] + 1; empty < node; empty++)
       {
         offsets[to].push_back(bwts[to]->data.size());
@@ -1090,6 +1091,9 @@ RecordArray::split
     }
     else { headers[to]->offset = node - 1; }
     headers[to]->alphabet_size = node + 1;
+    last_node[to] = node;
+
+    // Now write the actual record.
     offsets[to].push_back(bwts[to]->data.size());
     size_type source_start = iter->second;
     ++iter;
@@ -1100,7 +1104,6 @@ RecordArray::split
     bwts[to]->records++;
     CompressedRecord record(bwts[to]->data, target_start, target_limit);
     headers[to]->size += record.size();
-    last_node[to] = node;
   }
 
   // Build indexes for the BWTs.

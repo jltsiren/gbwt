@@ -1,7 +1,7 @@
 #ifndef GBWT_SUPPORT_H
 #define GBWT_SUPPORT_H
 
-#include <gbwt/utils.h>
+#include <gbwt/files.h>
 
 #include <functional>
 #include <map>

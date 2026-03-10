@@ -383,6 +383,7 @@ GBWT::split(size_type subgraphs, const std::function<size_type(node_type)>& mapp
     for(size_type i = 0; i < subgraphs; i++)
     {
       if(!(this->bidirectional()) && !(result[i].empty())) { result[i].header.unset(GBWTHeader::FLAG_BIDIRECTIONAL); }
+      result[i].cacheEndmarker();
     }
   }
 
@@ -410,15 +411,13 @@ GBWT::split(size_type subgraphs, const std::function<size_type(node_type)>& mapp
     // Then split the metadata itself.
     std::vector<Metadata*> metadata(subgraphs);
     for(size_type i = 0; i < subgraphs; i++) { metadata[i] = &(result[i].metadata); }
-    // FIXME: implement this
-    // this->metadata.split(subgraphs, path_to_subgraph, metadata);
+    this->metadata.split(subgraphs, path_to_subgraph, metadata);
     for(size_type i = 0; i < subgraphs; i++)
     {
       if(!(result[i].empty())) { result[i].addMetadata(); }
     }
   }
 
-  for(size_type i = 0; i < subgraphs; i++) { result[i].cacheEndmarker(); }
   return result;
 }
 
