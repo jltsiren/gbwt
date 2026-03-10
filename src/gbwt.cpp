@@ -371,9 +371,9 @@ GBWT::split(size_type subgraphs, const std::function<size_type(node_type)>& mapp
   if(subgraphs == 0) { return result; }
 
   // Split the BWT and update the headers.
+  std::vector<RecordArray*> bwts(subgraphs);
   {
     std::vector<GBWTHeader*> headers(subgraphs);
-    std::vector<RecordArray*> bwts(subgraphs);
     for(size_type i = 0; i < subgraphs; i++)
     {
       headers[i] = &(result[i].header);
@@ -391,8 +391,7 @@ GBWT::split(size_type subgraphs, const std::function<size_type(node_type)>& mapp
   {
     std::vector<DASamples*> da_samples(subgraphs);
     for(size_type i = 0; i < subgraphs; i++) { da_samples[i] = &(result[i].da_samples); }
-    // FIXME: implement this
-    // this->da_samples.split(subgraphs, mapping, da_samples);
+    this->da_samples.split(subgraphs, mapping, this->header.offset, this->endmarker_record, bwts, da_samples);
   }
 
   // Split the metadata.

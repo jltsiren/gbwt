@@ -1481,6 +1481,85 @@ DASamples::DASamples(const std::vector<DASamples const*> sources, const sdsl::in
 }
 
 void
+DASamples::split
+(
+  size_type subgraphs, const std::function<size_type(node_type)>& mapping,
+  size_t alphabet_offset, const DecompressedRecord& endmarker,
+  const std::vector<RecordArray*>& bwts, std::vector<DASamples*>& dasamples
+) const
+{
+  std::vector<std::vector<std::pair<comp_type, sample_type>>> subgraph_samples(subgraphs);
+  std::vector<size_type> seq_counts(subgraphs, 0);
+  std::unordered_map<size_type, std::pair<size_type, size_type>> seq_mapping; // seq_id -> (subgraph, local_seq_id)
+
+  // Assign sequences to subgraphs.
+  for(size_type i = 0; i < endmarker.size(); i++)
+  {
+    edge_type edge = endmarker.LF(i);
+    size_type to = mapping(edge.first);
+    if(to < subgraphs)
+    {
+      seq_mapping[i] = std::make_pair(to, seq_counts[to]);
+      seq_counts[to]++;
+    }
+  }
+  seq_counts = std::vector<size_type>(); // Clear the vector to save memory.
+
+  // Special handling for the endmarker, which is shared between the subgraphs.
+  if(this->isSampled(ENDMARKER))
+  {
+    size_type offset = 0;
+    while(true)
+    {
+      sample_type sample = this->nextSample(ENDMARKER, offset);
+      if(sample == invalid_sample()) { break; }
+      size_type seq_id = sample.second;
+      auto iter = seq_mapping.find(seq_id);
+      if(iter != seq_mapping.end())
+      {
+        size_type to = iter->second.first;
+        size_type local_seq_id = iter->second.second;
+        subgraph_samples[to].push_back(std::make_pair(0, sample_type(local_seq_id, local_seq_id)));
+      }
+      offset = sample.first + 1;
+    }
+  }
+
+  // Assign the records to subgraphs and translate the samples.
+  std::vector<comp_type> record_counts(subgraphs, 1); // Every subgraph already has the endmarker record.
+  for(comp_type comp = 1; comp < this->size(); comp++)
+  {
+    size_type to = mapping(comp + alphabet_offset);
+    if(to >= subgraphs) { continue; }
+    comp_type local_comp = record_counts[to];
+    record_counts[to]++;
+    if(!this->isSampled(comp)) { continue; }
+    size_type offset = 0;
+    while(true)
+    {
+      sample_type sample = this->nextSample(comp, offset);
+      if(sample == invalid_sample()) { break; }
+      size_type seq_id = sample.second;
+      auto iter = seq_mapping.find(seq_id);
+      if(iter != seq_mapping.end())
+      {
+        size_type local_seq_id = iter->second.second;
+        subgraph_samples[to].push_back(std::make_pair(local_comp, sample_type(sample.first, local_seq_id)));
+      }
+      offset = sample.first + 1;
+    }
+  }
+  seq_mapping = std::unordered_map<size_type, std::pair<size_type, size_type>>(); // Clear the map to save memory.
+  record_counts = std::vector<comp_type>(); // Clear the vector to save memory.
+
+  for(size_type i = 0; i < subgraphs; i++)
+  {
+    *dasamples[i] = DASamples(*bwts[i], subgraph_samples[i]);
+    subgraph_samples[i] = std::vector<std::pair<comp_type, sample_type>>(); // Clear the vector to save memory.
+  }
+}
+
+void
 DASamples::swap(DASamples& another)
 {
   if(this != &another)

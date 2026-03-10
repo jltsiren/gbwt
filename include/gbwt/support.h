@@ -382,7 +382,7 @@ struct DASamples
 {
   typedef gbwt::size_type size_type;
 
-  // Does node i have samples?
+  // Does record i have samples?
   sdsl::bit_vector                 sampled_records;
   sdsl::bit_vector::rank_1_type    record_rank;
 
@@ -403,9 +403,17 @@ struct DASamples
   explicit DASamples(const std::vector<DynamicRecord>& bwt);
 
   // Assumes that the samples are in sorted order.
-  explicit DASamples(const RecordArray& bwt, const std::vector<std::pair<node_type, sample_type>>& samples);
+  explicit DASamples(const RecordArray& bwt, const std::vector<std::pair<comp_type, sample_type>>& samples);
 
   DASamples(const std::vector<DASamples const*> sources, const sdsl::int_vector<0>& origins, const std::vector<size_type>& record_offsets, const std::vector<size_type>& sequence_counts);
+
+  // See `GBWT::split()`.
+  void split
+  (
+    size_type subgraphs, const std::function<size_type(node_type)>& mapping,
+    size_t alphabet_offset, const DecompressedRecord& endmarker,
+    const std::vector<RecordArray*>& bwts, std::vector<DASamples*>& dasamples
+  ) const;
 
   void swap(DASamples& another);
   DASamples& operator=(const DASamples& source);
