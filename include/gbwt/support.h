@@ -433,6 +433,7 @@ struct DASamples
   size_type tryLocate(size_type record, size_type offset) const;
 
   // Returns the first sample at >= offset or invalid_sample() if there is no sample.
+  // Continues to report samples in subsequent sampled records.
   sample_type nextSample(size_type record, size_type offset) const;
 
   bool isSampled(size_type record) const { return this->sampled_records[record]; }

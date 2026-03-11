@@ -1075,6 +1075,8 @@ RecordArray::split
   ++iter; // Skip the endmarker record.
   for(comp_type comp = 1; comp < this->records; comp++)
   {
+    size_type source_start = iter->second; ++iter;
+    size_type source_limit = iter->second;
     node_type node = comp + alphabet_offset;
     size_type to = mapping(node);
     if(to >= subgraphs) { continue; }
@@ -1095,9 +1097,6 @@ RecordArray::split
 
     // Now write the actual record.
     offsets[to].push_back(bwts[to]->data.size());
-    size_type source_start = iter->second;
-    ++iter;
-    size_type source_limit = iter->second;
     size_type target_start = bwts[to]->data.size();
     bwts[to]->data.insert(bwts[to]->data.end(), this->data.begin() + source_start, this->data.begin() + source_limit);
     size_type target_limit = bwts[to]->data.size();
@@ -1512,7 +1511,7 @@ DASamples::split
     while(true)
     {
       sample_type sample = this->nextSample(ENDMARKER, offset);
-      if(sample == invalid_sample()) { break; }
+      if(sample == invalid_sample() || sample.first >= endmarker.size()) { break; }
       size_type seq_id = sample.second;
       auto iter = seq_mapping.find(seq_id);
       if(iter != seq_mapping.end())
@@ -1527,18 +1526,18 @@ DASamples::split
 
   // Assign the records to subgraphs and translate the samples.
   std::vector<comp_type> record_counts(subgraphs, 1); // Every subgraph already has the endmarker record.
-  for(comp_type comp = 1; comp < this->size(); comp++)
+  for(comp_type comp = 1; comp < this->records(); comp++)
   {
     size_type to = mapping(comp + alphabet_offset);
     if(to >= subgraphs) { continue; }
     comp_type local_comp = record_counts[to];
     record_counts[to]++;
     if(!this->isSampled(comp)) { continue; }
-    size_type offset = 0;
+    size_type offset = 0, record_size = bwts[to]->size(local_comp);
     while(true)
     {
       sample_type sample = this->nextSample(comp, offset);
-      if(sample == invalid_sample()) { break; }
+      if(sample == invalid_sample() || sample.first >= record_size) { break; }
       size_type seq_id = sample.second;
       auto iter = seq_mapping.find(seq_id);
       if(iter != seq_mapping.end())

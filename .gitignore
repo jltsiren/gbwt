@@ -19,6 +19,7 @@ remove_seq
 
 # Tests
 test_bwtmerge
+test_gbwt
 test_metadata
 test_queries
 test_support
