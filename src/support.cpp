@@ -811,7 +811,7 @@ DecompressedRecord::DecompressedRecord(const CompressedRecord& source) :
 }
 
 std::vector<DynamicRecord>
-DecompressedRecord::split(size_type subgraphs, const std::function<size_type(node_type)>& mapping) const
+DecompressedRecord::split(size_type subgraphs, const std::vector<size_type>& comp_to_subgraph, size_type alphabet_offset) const
 {
   std::vector<DynamicRecord> result(subgraphs);
   size_type start = 0, limit = 0;
@@ -819,7 +819,8 @@ DecompressedRecord::split(size_type subgraphs, const std::function<size_type(nod
   {
     edge_type next = this->concreteRunLF(start, limit);
     limit++; // Now at the start of the next run.
-    size_type to = mapping(next.first);
+    comp_type comp = (next.first == ENDMARKER ? ENDMARKER : next.first - alphabet_offset);
+    size_type to = comp_to_subgraph[comp];
     if(to < subgraphs)
     {
       result[to].body_size += (limit - start);
@@ -1044,7 +1045,7 @@ RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sd
 void
 RecordArray::split
 (
-  size_type subgraphs, const std::function<size_type(node_type)>& mapping,
+  size_type subgraphs, const std::vector<size_type>& comp_to_subgraph,
   size_type alphabet_offset, const DecompressedRecord& endmarker,
   std::vector<GBWTHeader*>& headers, std::vector<RecordArray*>& bwts
 ) const
@@ -1055,7 +1056,7 @@ RecordArray::split
 
   // Split the endmarker record.
   {
-    std::vector<DynamicRecord> parts = endmarker.split(subgraphs, mapping);
+    std::vector<DynamicRecord> parts = endmarker.split(subgraphs, comp_to_subgraph, alphabet_offset);
     for(size_type i = 0; i < subgraphs; i++)
     {
       if(!(parts[i].empty()))
@@ -1078,8 +1079,16 @@ RecordArray::split
     size_type source_start = iter->second; ++iter;
     size_type source_limit = iter->second;
     node_type node = comp + alphabet_offset;
-    size_type to = mapping(node);
+    size_type to = comp_to_subgraph[comp];
     if(to >= subgraphs) { continue; }
+
+    // Skip empty records. If we need them, we add padding with the next non-empty one.
+    // If the mapping is based on the underlying graph node ids rather than the GBWT
+    // node ids, we would otherwise add a record for a missing forward orientation of
+    // the first node / reverse orientation of the last node.
+    CompressedRecord record(this->data, source_start, source_limit);
+    size_type record_size = record.size();
+    if(record_size == 0) { continue; }
 
     // Pad with empty records if necessary and update alphabet information in the header.
     if(last_node[to] != ENDMARKER)
@@ -1101,8 +1110,7 @@ RecordArray::split
     bwts[to]->data.insert(bwts[to]->data.end(), this->data.begin() + source_start, this->data.begin() + source_limit);
     size_type target_limit = bwts[to]->data.size();
     bwts[to]->records++;
-    CompressedRecord record(bwts[to]->data, target_start, target_limit);
-    headers[to]->size += record.size();
+    headers[to]->size += record_size;
   }
 
   // Build indexes for the BWTs.
@@ -1482,9 +1490,10 @@ DASamples::DASamples(const std::vector<DASamples const*> sources, const sdsl::in
 void
 DASamples::split
 (
-  size_type subgraphs, const std::function<size_type(node_type)>& mapping,
+  size_type subgraphs, const std::vector<size_type>& comp_to_subgraph,
   size_t alphabet_offset, const DecompressedRecord& endmarker,
-  const std::vector<RecordArray*>& bwts, std::vector<DASamples*>& dasamples
+  const std::vector<GBWTHeader*>& headers, const std::vector<RecordArray*>& bwts,
+  std::vector<DASamples*>& dasamples
 ) const
 {
   std::vector<std::vector<std::pair<comp_type, sample_type>>> subgraph_samples(subgraphs);
@@ -1495,7 +1504,8 @@ DASamples::split
   for(size_type i = 0; i < endmarker.size(); i++)
   {
     edge_type edge = endmarker.LF(i);
-    size_type to = mapping(edge.first);
+    comp_type comp = (edge.first == ENDMARKER ? ENDMARKER : edge.first - alphabet_offset);
+    size_type to = comp_to_subgraph[comp];
     if(to < subgraphs)
     {
       seq_mapping[i] = std::make_pair(to, seq_counts[to]);
@@ -1525,14 +1535,12 @@ DASamples::split
   }
 
   // Assign the records to subgraphs and translate the samples.
-  std::vector<comp_type> record_counts(subgraphs, 1); // Every subgraph already has the endmarker record.
   for(comp_type comp = 1; comp < this->records(); comp++)
   {
-    size_type to = mapping(comp + alphabet_offset);
-    if(to >= subgraphs) { continue; }
-    comp_type local_comp = record_counts[to];
-    record_counts[to]++;
     if(!this->isSampled(comp)) { continue; }
+    size_type to = comp_to_subgraph[comp];
+    if(to >= subgraphs) { continue; }
+    comp_type local_comp = comp + alphabet_offset - headers[to]->offset;
     size_type offset = 0, record_size = bwts[to]->size(local_comp);
     while(true)
     {
@@ -1549,7 +1557,6 @@ DASamples::split
     }
   }
   seq_mapping = std::unordered_map<size_type, std::pair<size_type, size_type>>(); // Clear the map to save memory.
-  record_counts = std::vector<comp_type>(); // Clear the vector to save memory.
 
   for(size_type i = 0; i < subgraphs; i++)
   {

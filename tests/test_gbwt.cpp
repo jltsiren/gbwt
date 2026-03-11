@@ -2,6 +2,7 @@
 
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <gbwt/dynamic_gbwt.h>
 
@@ -17,6 +18,7 @@ class MergeSplitTest : public ::testing::Test
 public:
   std::vector<vector_type> first_paths, second_paths;
   std::vector<FullPathName> first_path_names, second_path_names;
+  std::unordered_set<size_type> first_ids, second_ids;
 
   vector_type createPath(const std::vector<std::pair<node_type, bool>>& nodes) const
   {
@@ -28,7 +30,8 @@ public:
     return result;
   }
 
-  // This is the components_ref test case from GBWTGraph.
+  // This is the components_ref test case from GBWTGraph, except we have added a
+  // gap (node 24) into the node id space of the second component.
   void SetUp() override
   {
     this->first_paths =
@@ -39,9 +42,9 @@ public:
     };
     this->second_paths =
     {
-      createPath({ { 21, false }, { 23, false }, { 24, true }, { 22, true }, { 21, true } }),
-      createPath({ { 21, false }, { 22, false }, { 24, false }, { 23, true }, { 21, true } }),
-      createPath({ { 21, false }, { 22, false }, { 24, false }, { 25, false } }),
+      createPath({ { 21, false }, { 23, false }, { 25, true }, { 22, true }, { 21, true } }),
+      createPath({ { 21, false }, { 22, false }, { 25, false }, { 23, true }, { 21, true } }),
+      createPath({ { 21, false }, { 22, false }, { 25, false }, { 26, false } }),
     };
 
     this->first_path_names =
@@ -52,6 +55,9 @@ public:
     {
       FullPathName { "ref", "B", 0, 0 }, FullPathName { "sample", "B", 1, 0 }, FullPathName { "sample", "B", 2, 0 }
     };
+
+    this->first_ids = { 11, 12, 13, 14, 15, 16, 17 };
+    this->second_ids = { 21, 22, 23, 25, 26 };
   }
 
   GBWT buildGBWT(const std::vector<vector_type>& paths, const std::vector<FullPathName>& path_names, bool bidirectional) const
@@ -179,8 +185,9 @@ TEST_F(MergeSplitTest, Split)
     size_t subgraphs = 2;
     std::vector<GBWT> parts = merged.split(subgraphs, [&](node_type node) -> size_type
     {
-      if(node >= Node::encode(11, false) && node <= Node::encode(17, bidirectional)) { return 0; }
-      if(node >= Node::encode(21, false) && node <= Node::encode(25, bidirectional)) { return 1; }
+      size_type id = Node::id(node);
+      if(this->first_ids.find(id) != this->first_ids.end()) { return 0; }
+      if(this->second_ids.find(id) != this->second_ids.end()) { return 1; }
       return subgraphs;
     });
     ASSERT_EQ(parts.size(), subgraphs) << "Wrong number of subgraph indexes in " << test_case_name;
@@ -204,8 +211,9 @@ TEST_F(MergeSplitTest, SplitSingle)
     size_t subgraphs = 1;
     auto node_to_subgraph = [&](node_type node) -> size_type
     {
-      if(node >= Node::encode(11, false) && node <= Node::encode(17, bidirectional)) { return 0; }
-      if(node >= Node::encode(21, false) && node <= Node::encode(25, bidirectional)) { return 1; }
+      size_type id = Node::id(node);
+      if(this->first_ids.find(id) != this->first_ids.end()) { return 0; }
+      if(this->second_ids.find(id) != this->second_ids.end()) { return 1; }
       return 2;
     };
 

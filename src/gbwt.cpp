@@ -370,28 +370,33 @@ GBWT::split(size_type subgraphs, const std::function<size_type(node_type)>& mapp
   std::vector<GBWT> result(subgraphs);
   if(subgraphs == 0) { return result; }
 
-  // Split the BWT and update the headers.
-  std::vector<RecordArray*> bwts(subgraphs);
+  // Computing the mapping could be slow, so we cache it here.
+  std::vector<size_type> comp_to_subgraph(this->effective(), subgraphs);
+  for(size_type comp = 1; comp < this->effective(); comp++)
   {
-    std::vector<GBWTHeader*> headers(subgraphs);
-    for(size_type i = 0; i < subgraphs; i++)
-    {
-      headers[i] = &(result[i].header);
-      bwts[i] = &(result[i].bwt);
-    }
-    this->bwt.split(subgraphs, mapping, this->header.offset, this->endmarker_record, headers, bwts);
-    for(size_type i = 0; i < subgraphs; i++)
-    {
-      if(!(this->bidirectional()) && !(result[i].empty())) { result[i].header.unset(GBWTHeader::FLAG_BIDIRECTIONAL); }
-      result[i].cacheEndmarker();
-    }
+    comp_to_subgraph[comp] = mapping(this->toNode(comp));
+  }
+
+  // Split the BWT and update the headers.
+  std::vector<GBWTHeader*> headers(subgraphs);
+  std::vector<RecordArray*> bwts(subgraphs);
+  for(size_type i = 0; i < subgraphs; i++)
+  {
+    headers[i] = &(result[i].header);
+    bwts[i] = &(result[i].bwt);
+  }
+  this->bwt.split(subgraphs, comp_to_subgraph, this->header.offset, this->endmarker_record, headers, bwts);
+  for(size_type i = 0; i < subgraphs; i++)
+  {
+    if(!(this->bidirectional()) && !(result[i].empty())) { result[i].header.unset(GBWTHeader::FLAG_BIDIRECTIONAL); }
+    result[i].cacheEndmarker();
   }
 
   // Split the DA samples.
   {
     std::vector<DASamples*> da_samples(subgraphs);
     for(size_type i = 0; i < subgraphs; i++) { da_samples[i] = &(result[i].da_samples); }
-    this->da_samples.split(subgraphs, mapping, this->header.offset, this->endmarker_record, bwts, da_samples);
+    this->da_samples.split(subgraphs, comp_to_subgraph, this->header.offset, this->endmarker_record, headers, bwts, da_samples);
   }
 
   // Split the metadata.
@@ -404,7 +409,7 @@ GBWT::split(size_type subgraphs, const std::function<size_type(node_type)>& mapp
     for(size_type path_id = 0, seq_id = 0; path_id < paths; path_id++, seq_id += increment)
     {
       edge_type start = this->start(seq_id);
-      path_to_subgraph[path_id] = mapping(start.first);
+      path_to_subgraph[path_id] = comp_to_subgraph[this->toComp(start.first)];
     }
 
     // Then split the metadata itself.

@@ -278,7 +278,7 @@ struct DecompressedRecord
 
   // See `GBWT::split()`.
   // The returned records have no incoming edges or samples.
-  std::vector<DynamicRecord> split(size_type subgraphs, const std::function<size_type(node_type)>& mapping) const;
+  std::vector<DynamicRecord> split(size_type subgraphs, const std::vector<size_type>& comp_to_subgraph, size_type alphabet_offset) const;
 
   void swap(DecompressedRecord& another);
   DecompressedRecord& operator=(const DecompressedRecord& source);
@@ -339,7 +339,7 @@ struct RecordArray
   // See `GBWT::split()`.
   void split
   (
-    size_type subgraphs, const std::function<size_type(node_type)>& mapping,
+    size_type subgraphs, const std::vector<size_type>& comp_to_subgraph,
     size_type alphabet_offset, const DecompressedRecord& endmarker,
     std::vector<GBWTHeader*>& headers, std::vector<RecordArray*>& bwts
   ) const;
@@ -410,9 +410,10 @@ struct DASamples
   // See `GBWT::split()`.
   void split
   (
-    size_type subgraphs, const std::function<size_type(node_type)>& mapping,
+    size_type subgraphs, const std::vector<size_type>& comp_to_subgraph,
     size_t alphabet_offset, const DecompressedRecord& endmarker,
-    const std::vector<RecordArray*>& bwts, std::vector<DASamples*>& dasamples
+    const std::vector<GBWTHeader*>& headers, const std::vector<RecordArray*>& bwts,
+    std::vector<DASamples*>& dasamples
   ) const;
 
   void swap(DASamples& another);
