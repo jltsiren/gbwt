@@ -1,32 +1,7 @@
-/*
-  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025, 2026 Jouni Siren
-  Copyright (c) 2017 Genome Research Ltd.
-
-  Author: Jouni Siren <jouni.siren@iki.fi>
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-*/
-
 #ifndef GBWT_SUPPORT_H
 #define GBWT_SUPPORT_H
 
-#include <gbwt/utils.h>
+#include <gbwt/files.h>
 
 #include <functional>
 #include <map>
@@ -301,6 +276,10 @@ struct DecompressedRecord
   explicit DecompressedRecord(const DynamicRecord& source);
   explicit DecompressedRecord(const CompressedRecord& source);
 
+  // See `GBWT::split()`.
+  // The returned records have no incoming edges or samples.
+  std::vector<DynamicRecord> split(size_type subgraphs, const std::function<size_type(node_type)>& mapping) const;
+
   void swap(DecompressedRecord& another);
   DecompressedRecord& operator=(const DecompressedRecord& source);
   DecompressedRecord& operator=(DecompressedRecord&& source);
@@ -317,6 +296,9 @@ struct DecompressedRecord
 
   // As above, but also sets 'run_end' to the last offset of the current logical run.
   edge_type runLF(size_type i, size_type& run_end) const;
+
+  // As above, but with concrete runs.
+  edge_type concreteRunLF(size_type i, size_type& run_end) const;
 
   // Returns BWT[i] within the record.
   node_type operator[](size_type i) const;
@@ -353,6 +335,14 @@ struct RecordArray
 
   explicit RecordArray(const std::vector<DynamicRecord>& bwt);
   RecordArray(const std::vector<RecordArray const*> sources, const sdsl::int_vector<0>& origins);
+
+  // See `GBWT::split()`.
+  void split
+  (
+    size_type subgraphs, const std::function<size_type(node_type)>& mapping,
+    size_type alphabet_offset, const DecompressedRecord& endmarker,
+    std::vector<GBWTHeader*>& headers, std::vector<RecordArray*>& bwts
+  ) const;
 
   // Set the number of records, build the data manually, and give the offsets to build the index.
   explicit RecordArray(size_type array_size);
@@ -392,7 +382,7 @@ struct DASamples
 {
   typedef gbwt::size_type size_type;
 
-  // Does node i have samples?
+  // Does record i have samples?
   sdsl::bit_vector                 sampled_records;
   sdsl::bit_vector::rank_1_type    record_rank;
 
@@ -413,9 +403,17 @@ struct DASamples
   explicit DASamples(const std::vector<DynamicRecord>& bwt);
 
   // Assumes that the samples are in sorted order.
-  explicit DASamples(const RecordArray& bwt, const std::vector<std::pair<node_type, sample_type>>& samples);
+  explicit DASamples(const RecordArray& bwt, const std::vector<std::pair<comp_type, sample_type>>& samples);
 
   DASamples(const std::vector<DASamples const*> sources, const sdsl::int_vector<0>& origins, const std::vector<size_type>& record_offsets, const std::vector<size_type>& sequence_counts);
+
+  // See `GBWT::split()`.
+  void split
+  (
+    size_type subgraphs, const std::function<size_type(node_type)>& mapping,
+    size_t alphabet_offset, const DecompressedRecord& endmarker,
+    const std::vector<RecordArray*>& bwts, std::vector<DASamples*>& dasamples
+  ) const;
 
   void swap(DASamples& another);
   DASamples& operator=(const DASamples& source);
@@ -435,6 +433,7 @@ struct DASamples
   size_type tryLocate(size_type record, size_type offset) const;
 
   // Returns the first sample at >= offset or invalid_sample() if there is no sample.
+  // Continues to report samples in subsequent sampled records.
   sample_type nextSample(size_type record, size_type offset) const;
 
   bool isSampled(size_type record) const { return this->sampled_records[record]; }

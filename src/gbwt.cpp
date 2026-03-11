@@ -1,28 +1,3 @@
-/*
-  Copyright (c) 2017, 2019, 2020, 2021, 2025 Jouni Siren
-  Copyright (c) 2017 Genome Research Ltd.
-
-  Author: Jouni Siren <jouni.siren@iki.fi>
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-*/
-
 #include <gbwt/gbwt.h>
 
 #include <gbwt/dynamic_gbwt.h>
@@ -387,6 +362,62 @@ GBWT::GBWT(const std::vector<GBWT>& sources)
   }
 
   this->cacheEndmarker();
+}
+
+std::vector<GBWT>
+GBWT::split(size_type subgraphs, const std::function<size_type(node_type)>& mapping) const
+{
+  std::vector<GBWT> result(subgraphs);
+  if(subgraphs == 0) { return result; }
+
+  // Split the BWT and update the headers.
+  std::vector<RecordArray*> bwts(subgraphs);
+  {
+    std::vector<GBWTHeader*> headers(subgraphs);
+    for(size_type i = 0; i < subgraphs; i++)
+    {
+      headers[i] = &(result[i].header);
+      bwts[i] = &(result[i].bwt);
+    }
+    this->bwt.split(subgraphs, mapping, this->header.offset, this->endmarker_record, headers, bwts);
+    for(size_type i = 0; i < subgraphs; i++)
+    {
+      if(!(this->bidirectional()) && !(result[i].empty())) { result[i].header.unset(GBWTHeader::FLAG_BIDIRECTIONAL); }
+      result[i].cacheEndmarker();
+    }
+  }
+
+  // Split the DA samples.
+  {
+    std::vector<DASamples*> da_samples(subgraphs);
+    for(size_type i = 0; i < subgraphs; i++) { da_samples[i] = &(result[i].da_samples); }
+    this->da_samples.split(subgraphs, mapping, this->header.offset, this->endmarker_record, bwts, da_samples);
+  }
+
+  // Split the metadata.
+  if(this->hasMetadata())
+  {
+    // First assign the paths to subgraphs.
+    size_type paths = (this->bidirectional() ? this->sequences() / 2 : this->sequences());
+    size_type increment = (this->bidirectional() ? 2 : 1);
+    std::vector<size_type> path_to_subgraph(paths, subgraphs);
+    for(size_type path_id = 0, seq_id = 0; path_id < paths; path_id++, seq_id += increment)
+    {
+      edge_type start = this->start(seq_id);
+      path_to_subgraph[path_id] = mapping(start.first);
+    }
+
+    // Then split the metadata itself.
+    std::vector<Metadata*> metadata(subgraphs);
+    for(size_type i = 0; i < subgraphs; i++) { metadata[i] = &(result[i].metadata); }
+    this->metadata.split(subgraphs, path_to_subgraph, metadata);
+    for(size_type i = 0; i < subgraphs; i++)
+    {
+      if(!(result[i].empty())) { result[i].addMetadata(); }
+    }
+  }
+
+  return result;
 }
 
 //------------------------------------------------------------------------------

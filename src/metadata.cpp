@@ -1,27 +1,3 @@
-/*
-  Copyright (c) 2019, 2020, 2021, 2024, 2025 Jouni Siren
-
-  Author: Jouni Siren <jouni.siren@iki.fi>
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-*/
-
 #include <gbwt/internal.h>
 #include <gbwt/metadata.h>
 
@@ -619,6 +595,81 @@ Metadata::merge(const Metadata& source, bool same_samples, bool same_contigs)
       std::cerr << "Metadata::merge(): Warning: Clearing path names; the source has no path names" << std::endl;
     }
     this->clearPathNames();
+  }
+}
+
+void
+Metadata::split(size_type subgraphs, const std::vector<size_type>& path_to_subgraph, std::vector<Metadata*>& metadata) const
+{
+  if(!(this->hasPathNames()))
+  {
+    // We cannot do anything meaningful without path names.
+    if(Verbosity::level >= Verbosity::FULL)
+    {
+      std::cerr << "Metadata::split(): Warning: Cannot split metadata without path names" << std::endl;
+    }
+    return;
+  }
+
+  // Split the paths and determine sample/contig ids and haplotype counts for each subgraph.
+  std::vector<std::unordered_map<size_type, size_type>> sample_id_maps(subgraphs);
+  std::vector<std::unordered_map<size_type, size_type>> contig_id_maps(subgraphs);
+  std::vector<std::set<std::pair<size_type, size_type>>> haplotypes(subgraphs);
+  for(size_type i = 0; i < this->paths(); i++)
+  {
+    PathName path = this->path(i);
+    size_type subgraph = path_to_subgraph[i];
+    if(subgraph >= subgraphs) { continue; }
+
+    auto result = sample_id_maps[subgraph].try_emplace(path.sample, sample_id_maps[subgraph].size());
+    path.sample = result.first->second;
+    result = contig_id_maps[subgraph].try_emplace(path.contig, contig_id_maps[subgraph].size());
+    path.contig = result.first->second;
+
+    haplotypes[subgraph].emplace(path.sample, path.phase);
+    metadata[subgraph]->addPath(path);
+  }
+
+  // Samples.
+  for(size_type i = 0; i < subgraphs; i++)
+  {
+    if(this->hasSampleNames())
+    {
+      std::vector<std::string> sample_names(sample_id_maps[i].size());
+      for(const auto& sample_pair : sample_id_maps[i])
+      {
+        sample_names[sample_pair.second] = this->sample_names[sample_pair.first];
+      }
+      metadata[i]->setSamples(sample_names);
+    }
+    else
+    {
+      metadata[i]->setSamples(sample_id_maps[i].size());
+    }
+  }
+
+  // Contigs.
+  for(size_type i = 0; i < subgraphs; i++)
+  {
+    if(this->hasContigNames())
+    {
+      std::vector<std::string> contig_names(contig_id_maps[i].size());
+      for(const auto& contig_pair : contig_id_maps[i])
+      {
+        contig_names[contig_pair.second] = this->contig_names[contig_pair.first];
+      }
+      metadata[i]->setContigs(contig_names);
+    }
+    else
+    {
+      metadata[i]->setContigs(contig_id_maps[i].size());
+    }
+  }
+
+  // Haplotypes.
+  for(size_type i = 0; i < subgraphs; i++)
+  {
+    metadata[i]->setHaplotypes(haplotypes[i].size());
   }
 }
 

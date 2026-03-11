@@ -1,28 +1,6 @@
-/*
-  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025, 2026 Jouni Siren
-  Copyright (c) 2017 Genome Research Ltd.
+#include <gbwt/support.h>
 
-  Author: Jouni Siren <jouni.siren@iki.fi>
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-*/
-
+#include <gbwt/files.h>
 #include <gbwt/internal.h>
 
 #include <cctype>
@@ -832,6 +810,28 @@ DecompressedRecord::DecompressedRecord(const CompressedRecord& source) :
   }
 }
 
+std::vector<DynamicRecord>
+DecompressedRecord::split(size_type subgraphs, const std::function<size_type(node_type)>& mapping) const
+{
+  std::vector<DynamicRecord> result(subgraphs);
+  size_type start = 0, limit = 0;
+  while(limit < this->size())
+  {
+    edge_type next = this->concreteRunLF(start, limit);
+    limit++; // Now at the start of the next run.
+    size_type to = mapping(next.first);
+    if(to < subgraphs)
+    {
+      result[to].body_size += (limit - start);
+      rank_type outrank = result[to].edgeToLinear(next.first);
+      if(outrank >= result[to].outdegree()) { result[to].outgoing.push_back(next); }
+      result[to].body.push_back(run_type(outrank, limit - start));
+    }
+    start = limit;
+  }
+  return result;
+}
+
 void
 DecompressedRecord::swap(DecompressedRecord& another)
 {
@@ -903,6 +903,17 @@ DecompressedRecord::runLF(size_type i, size_type& run_end) const
   {
     while(run_end + 1 < this->size() && this->body[run_end + 1].first == this->body[i].first) { run_end++; }
   }
+
+  return this->body[i];
+}
+
+edge_type
+DecompressedRecord::concreteRunLF(size_type i, size_type& run_end) const
+{
+  if(i >= this->size()) { return invalid_edge(); }
+
+  run_end = i;
+  while(run_end + 1 < this->size() && this->body[run_end + 1].first == this->body[i].first) { run_end++; }
 
   return this->body[i];
 }
@@ -1030,6 +1041,76 @@ RecordArray::RecordArray(const std::vector<RecordArray const*> sources, const sd
   this->buildIndex(offsets);
 }
 
+void
+RecordArray::split
+(
+  size_type subgraphs, const std::function<size_type(node_type)>& mapping,
+  size_type alphabet_offset, const DecompressedRecord& endmarker,
+  std::vector<GBWTHeader*>& headers, std::vector<RecordArray*>& bwts
+) const
+{
+  if(this->empty()) { return; }
+  std::vector<std::vector<size_type>> offsets(subgraphs);
+  std::vector<node_type> last_node(subgraphs, ENDMARKER);
+
+  // Split the endmarker record.
+  {
+    std::vector<DynamicRecord> parts = endmarker.split(subgraphs, mapping);
+    for(size_type i = 0; i < subgraphs; i++)
+    {
+      if(!(parts[i].empty()))
+      {
+        headers[i]->sequences = parts[i].size();
+        headers[i]->size = parts[i].size();
+        offsets[i].push_back(0);
+        parts[i].recode();
+        parts[i].writeBWT(bwts[i]->data);
+        bwts[i]->records = 1;
+      }
+    }
+  }
+
+  // Assign records to output BWTs.
+  auto iter = this->index.one_begin();
+  ++iter; // Skip the endmarker record.
+  for(comp_type comp = 1; comp < this->records; comp++)
+  {
+    size_type source_start = iter->second; ++iter;
+    size_type source_limit = iter->second;
+    node_type node = comp + alphabet_offset;
+    size_type to = mapping(node);
+    if(to >= subgraphs) { continue; }
+
+    // Pad with empty records if necessary and update alphabet information in the header.
+    if(last_node[to] != ENDMARKER)
+    {
+      for(node_type empty = last_node[to] + 1; empty < node; empty++)
+      {
+        offsets[to].push_back(bwts[to]->data.size());
+        bwts[to]->data.push_back(0);
+        bwts[to]->records++;
+      }
+    }
+    else { headers[to]->offset = node - 1; }
+    headers[to]->alphabet_size = node + 1;
+    last_node[to] = node;
+
+    // Now write the actual record.
+    offsets[to].push_back(bwts[to]->data.size());
+    size_type target_start = bwts[to]->data.size();
+    bwts[to]->data.insert(bwts[to]->data.end(), this->data.begin() + source_start, this->data.begin() + source_limit);
+    size_type target_limit = bwts[to]->data.size();
+    bwts[to]->records++;
+    CompressedRecord record(bwts[to]->data, target_start, target_limit);
+    headers[to]->size += record.size();
+  }
+
+  // Build indexes for the BWTs.
+  for(size_type i = 0; i < subgraphs; i++)
+  {
+    if(!(bwts[i]->empty())) { bwts[i]->buildIndex(offsets[i]); }
+  }
+}
 
 RecordArray::RecordArray(size_type array_size) :
   records(array_size)
@@ -1396,6 +1477,85 @@ DASamples::DASamples(const std::vector<DASamples const*> sources, const sdsl::in
   this->bwt_ranges = sdsl::sd_vector<>(range_builder);
   sdsl::util::init_support(this->bwt_select, &(this->bwt_ranges));
   this->sampled_offsets = sdsl::sd_vector<>(offset_builder);
+}
+
+void
+DASamples::split
+(
+  size_type subgraphs, const std::function<size_type(node_type)>& mapping,
+  size_t alphabet_offset, const DecompressedRecord& endmarker,
+  const std::vector<RecordArray*>& bwts, std::vector<DASamples*>& dasamples
+) const
+{
+  std::vector<std::vector<std::pair<comp_type, sample_type>>> subgraph_samples(subgraphs);
+  std::vector<size_type> seq_counts(subgraphs, 0);
+  std::unordered_map<size_type, std::pair<size_type, size_type>> seq_mapping; // seq_id -> (subgraph, local_seq_id)
+
+  // Assign sequences to subgraphs.
+  for(size_type i = 0; i < endmarker.size(); i++)
+  {
+    edge_type edge = endmarker.LF(i);
+    size_type to = mapping(edge.first);
+    if(to < subgraphs)
+    {
+      seq_mapping[i] = std::make_pair(to, seq_counts[to]);
+      seq_counts[to]++;
+    }
+  }
+  seq_counts = std::vector<size_type>(); // Clear the vector to save memory.
+
+  // Special handling for the endmarker, which is shared between the subgraphs.
+  if(this->isSampled(ENDMARKER))
+  {
+    size_type offset = 0;
+    while(true)
+    {
+      sample_type sample = this->nextSample(ENDMARKER, offset);
+      if(sample == invalid_sample() || sample.first >= endmarker.size()) { break; }
+      size_type seq_id = sample.second;
+      auto iter = seq_mapping.find(seq_id);
+      if(iter != seq_mapping.end())
+      {
+        size_type to = iter->second.first;
+        size_type local_seq_id = iter->second.second;
+        subgraph_samples[to].push_back(std::make_pair(0, sample_type(local_seq_id, local_seq_id)));
+      }
+      offset = sample.first + 1;
+    }
+  }
+
+  // Assign the records to subgraphs and translate the samples.
+  std::vector<comp_type> record_counts(subgraphs, 1); // Every subgraph already has the endmarker record.
+  for(comp_type comp = 1; comp < this->records(); comp++)
+  {
+    size_type to = mapping(comp + alphabet_offset);
+    if(to >= subgraphs) { continue; }
+    comp_type local_comp = record_counts[to];
+    record_counts[to]++;
+    if(!this->isSampled(comp)) { continue; }
+    size_type offset = 0, record_size = bwts[to]->size(local_comp);
+    while(true)
+    {
+      sample_type sample = this->nextSample(comp, offset);
+      if(sample == invalid_sample() || sample.first >= record_size) { break; }
+      size_type seq_id = sample.second;
+      auto iter = seq_mapping.find(seq_id);
+      if(iter != seq_mapping.end())
+      {
+        size_type local_seq_id = iter->second.second;
+        subgraph_samples[to].push_back(std::make_pair(local_comp, sample_type(sample.first, local_seq_id)));
+      }
+      offset = sample.first + 1;
+    }
+  }
+  seq_mapping = std::unordered_map<size_type, std::pair<size_type, size_type>>(); // Clear the map to save memory.
+  record_counts = std::vector<comp_type>(); // Clear the vector to save memory.
+
+  for(size_type i = 0; i < subgraphs; i++)
+  {
+    *dasamples[i] = DASamples(*bwts[i], subgraph_samples[i]);
+    subgraph_samples[i] = std::vector<std::pair<comp_type, sample_type>>(); // Clear the vector to save memory.
+  }
 }
 
 void
