@@ -1106,9 +1106,7 @@ RecordArray::split
 
     // Now write the actual record.
     offsets[to].push_back(bwts[to]->data.size());
-    size_type target_start = bwts[to]->data.size();
     bwts[to]->data.insert(bwts[to]->data.end(), this->data.begin() + source_start, this->data.begin() + source_limit);
-    size_type target_limit = bwts[to]->data.size();
     bwts[to]->records++;
     headers[to]->size += record_size;
   }
