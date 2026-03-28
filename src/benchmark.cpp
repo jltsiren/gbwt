@@ -1,27 +1,3 @@
-/*
-  Copyright (c) 2017, 2018, 2019, 2020 Jouni Siren
-
-  Author: Jouni Siren <jouni.siren@iki.fi>
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-*/
-
 #include <fstream>
 #include <random>
 #include <string>
@@ -55,6 +31,8 @@ void locateBenchmark<FastLocate>(const FastLocate& index, const std::vector<Sear
 
 void extractBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, size_type extract_queries);
 
+void longestCommonSuffix(const GBWT& index, size_type lcs_queries);
+
 //------------------------------------------------------------------------------
 
 int
@@ -63,11 +41,11 @@ main(int argc, char** argv)
   if(argc < 2) { printUsage(); }
 
   int c = 0;
-  bool compare = false, find = false, locate = false, extract = false, statistics = false, breakdown = false;
+  bool compare = false, find = false, locate = false, extract = false, statistics = false, breakdown = false, lcs = false;
   bool use_r_index = false;
-  size_type find_queries = 0, pattern_length = 0, extract_queries = 0;
+  size_type find_queries = 0, pattern_length = 0, extract_queries = 0, lcs_queries = 0;
   std::string compare_base;
-  while((c = getopt(argc, argv, "c:f:p:le:rsS")) != -1)
+  while((c = getopt(argc, argv, "c:f:p:lre:L:sS")) != -1)
   {
     switch(c)
     {
@@ -82,11 +60,14 @@ main(int argc, char** argv)
       pattern_length = std::stoul(optarg); break;
     case 'l':
       locate = true; break;
+    case 'r':
+      use_r_index = true; break;
     case 'e':
       extract = true;
       extract_queries = std::stoul(optarg); break;
-    case 'r':
-      use_r_index = true; break;
+    case 'L':
+      lcs = true;
+      lcs_queries = std::stoul(optarg); break;
     case 's':
       statistics = true;
       break;
@@ -129,12 +110,13 @@ main(int argc, char** argv)
 
   Version::print(std::cout, tool_name);
   printHeader("Index name"); std::cout << index_base << std::endl;
-  if(find || locate || extract)
+  if(find || locate || extract || lcs)
   {
     printHeader("Queries");
     if(find) { std::cout << "find(" << find_queries << ", " << pattern_length << ") "; }
     if(locate) { std::cout << "locate() "; }
     if(extract) { std::cout << "extract(" << extract_queries << ") "; }
+    if(lcs) { std::cout << "lcs(" << lcs_queries << ") "; }
     std::cout << std::endl;
   }
   std::cout << std::endl;
@@ -158,12 +140,18 @@ main(int argc, char** argv)
     std::cout << std::endl;
   }
 
+  // These benchmarks only use a compressed index, as they measure the data
+  // in the index rather than the query time.
   if(compare)
   {
     GBWT second_index;
     sdsl::simple_sds::load_from(second_index, compare_base + GBWT::EXTENSION);
     printStatistics(second_index, compare_base);
     compareIndexes(compressed_index, second_index, index_base, compare_base);
+  }
+  if(lcs)
+  {
+    longestCommonSuffix(compressed_index, lcs_queries);
   }
 
   if(!(find || locate || extract || statistics)) { return 0; }
@@ -224,8 +212,9 @@ printUsage(int exit_code)
   std::cerr << "  -f N  Benchmark N find() queries (requires -p)" << std::endl;
   std::cerr << "  -p N  Use patterns of length N" << std::endl;
   std::cerr << "  -l    Benchmark locate() queries (requires -f)" << std::endl;
-  std::cerr << "  -e N  Benchmark N extract() queries" << std::endl;
   std::cerr << "  -r    Also use the r-index for find()/locate() queries" << std::endl;
+  std::cerr << "  -e N  Benchmark N extract() queries" << std::endl;
+  std::cerr << "  -L N  Benchmark N longest common suffix queries" << std::endl;
   std::cerr << "  -s    Print extended statistics" << std::endl;
   std::cerr << "  -S    Write size breakdown to index_base.html" << std::endl;
   std::cerr << std::endl;
@@ -609,6 +598,49 @@ extractBenchmark(const GBWT& compressed_index, const DynamicGBWT& dynamic_index,
     std::cerr << "extractBenchmark(): Total length " << compressed_length << " (" << indexType(compressed_index) << "), "
       << dynamic_length << " (" << indexType(dynamic_index) << ")" << std::endl;
   }
+  std::cout << std::endl;
+}
+
+//------------------------------------------------------------------------------
+
+void
+longestCommonSuffix(const GBWT& index, size_type lcs_queries)
+{
+  if(!(index.bidirectional()))
+  {
+    std::cerr << "longestCommonSuffix(): A bidirectional index is required for inverseLF()" << std::endl;
+    return;
+  }
+  if(index.effective() < 2)
+  {
+    std::cerr << "longestCommonSuffix(): A non-endmarker node is required for the queries" << std::endl;
+    return;
+  }
+  std::cout << "LCS benchmarks:" << std::endl;
+
+  double start = readTimer();
+  std::mt19937_64 rng(RANDOM_SEED ^ lcs_queries);
+  size_type total_length = 0;
+  for(size_type i = 0; i < lcs_queries;)
+  {
+    // Random offset (not the end) in a random node (not the endmarker).
+    node_type node = index.toNode(rng() % (index.effective() - 1) + 1);
+    size_type node_size = index.nodeSize(node);
+    if(node_size < 2) { continue; }
+    edge_type first(node, rng() % (node_size - 1));
+    edge_type second(node, first.second + 1);
+    size_type lcs = 0;
+    while(first.first == second.first && first.first != ENDMARKER)
+    {
+      lcs++;
+      first = index.inverseLF(first);
+      second = index.inverseLF(second);
+    }
+    total_length += lcs; i++;
+  }
+
+  double seconds = readTimer() - start;
+  printTimeLength(indexType(index), lcs_queries, total_length, seconds);
   std::cout << std::endl;
 }
 
