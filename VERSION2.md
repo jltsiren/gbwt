@@ -53,3 +53,5 @@ The current approach of scanning the path metadata does not work well with frequ
 GBWT currently supports two serialization formats: one based on [SDSL](https://github.com/vgteam/sdsl-lite) serialization, and another on [Simple-SDS](https://github.com/jltsiren/simple-sds) serialization.
 The Simple-SDS format is more versatile and better documented, and it is also supported by the Rust implementation.
 It will become the only format supported in version 2.
+
+Serialized records (the `data` component in BWT) will be compressed using Zstandard.
