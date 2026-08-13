@@ -63,20 +63,24 @@ struct GBWTHeader
 
   // Symbolic names for versions that may be relevant when examining files,
   // even when the version is current or obsolete.
-  constexpr static std::uint32_t TAGS_VERSION       = 5;
+  constexpr static std::uint32_t TAGS_VERSION = 5;
 
   // Flag masks for old compatible versions.
-  constexpr static std::uint32_t META2_VERSION      = 4;
-  constexpr static std::uint64_t META2_FLAG_MASK    = 0x0003;
+  constexpr static std::uint32_t META2_VERSION = 4;
+  constexpr static std::uint64_t META2_FLAG_MASK = 0x0003;
 
-  constexpr static std::uint32_t META_VERSION       = 3;
-  constexpr static std::uint64_t META_FLAG_MASK     = 0x0003;
+  constexpr static std::uint32_t META_VERSION = 3;
+  constexpr static std::uint64_t META_FLAG_MASK = 0x0003;
 
-  constexpr static std::uint32_t BD_VERSION         = 2;
-  constexpr static std::uint64_t BD_FLAG_MASK       = 0x0001;
+  constexpr static std::uint32_t BD_VERSION = 2;
+  constexpr static std::uint64_t BD_FLAG_MASK = 0x0001;
 
-  constexpr static std::uint32_t OLD_VERSION        = 1;
-  constexpr static std::uint64_t OLD_FLAG_MASK      = 0x0000;
+  constexpr static std::uint32_t OLD_VERSION = 1;
+  constexpr static std::uint64_t OLD_FLAG_MASK = 0x0000;
+
+  constexpr static std::uint32_t MIN_VERSION = OLD_VERSION; // The oldest version we can read.
+  constexpr static std::uint32_t MIN_SERIALIZE_VERSION = TAGS_VERSION; // The oldest version we can write.
+  constexpr static std::uint32_t DEFAULT_VERSION = TAGS_VERSION; // The version we write by default.
 
   GBWTHeader();
 

@@ -157,7 +157,7 @@ DynamicGBWT::load(std::istream& in)
   GBWTHeader h = sdsl::simple_sds::load_value<GBWTHeader>(in);
   h.check();
   bool simple_sds = h.get(GBWTHeader::FLAG_SIMPLE_SDS);
-  bool has_tags = h.version >= 5; // FIXME Replace with symbolic constant.
+  bool has_tags = h.version >= GBWTHeader::TAGS_VERSION;
   h.unset(GBWTHeader::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
   h.setVersion(); // Update to the current version.
   this->header = h;
@@ -254,9 +254,16 @@ DynamicGBWT::load(std::istream& in)
 }
 
 void
-DynamicGBWT::simple_sds_serialize(std::ostream& out) const
+DynamicGBWT::simple_sds_serialize_version(std::ostream& out, std::uint32_t version) const
 {
+  if(version < GBWTHeader::MIN_SERIALIZE_VERSION || version > GBWTHeader::VERSION)
+  {
+    std::string msg = "DynamicGBWT: Cannot serialize version " + std::to_string(version);
+    throw std::runtime_error(msg);
+  }
+
   GBWTHeader h = this->header;
+  h.version = version;
   h.set(GBWTHeader::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
   sdsl::simple_sds::serialize_value(h, out);
 

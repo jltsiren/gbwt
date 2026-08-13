@@ -70,7 +70,12 @@ public:
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
 
-  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_serialize(std::ostream& out) const
+  {
+    this->simple_sds_serialize_version(out, GBWTHeader::DEFAULT_VERSION);
+  }
+
+  void simple_sds_serialize_version(std::ostream& out, std::uint32_t version) const;
   void simple_sds_load(std::istream& in);
   size_t simple_sds_size() const;
 
