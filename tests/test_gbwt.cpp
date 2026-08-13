@@ -13,6 +13,10 @@ namespace
 
 //------------------------------------------------------------------------------
 
+// FIXME: Serialize and load GBWT / DynamicGBWT in all supported versions.
+
+//------------------------------------------------------------------------------
+
 class MergeSplitTest : public ::testing::Test
 {
 public:

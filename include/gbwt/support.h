@@ -359,6 +359,12 @@ struct RecordArray
   void simple_sds_load(std::istream& in);
   size_t simple_sds_size() const;
 
+  // Simple-SDS serialization with zstd-compressed data.
+  void simple_sds_compress(std::ostream& out, int compression_level = ZstdCompressor::DEFAULT_COMPRESSION_LEVEL) const;
+
+  // Simple-SDS deserialization with zstd-compressed data.
+  void simple_sds_decompress(std::istream& in);
+
   size_type size() const { return this->records; }
   bool empty() const { return (this->size() == 0); }
 
@@ -499,8 +505,6 @@ class StringArray
 public:
   typedef gbwt::size_type size_type;
 
-  constexpr static int DEFAULT_COMPRESSION_LEVEL = 3;
-
   StringArray() : index(1, 0, 1) {}
   StringArray(const std::vector<std::string>& source);
 
@@ -541,11 +545,11 @@ public:
   void simple_sds_load_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform);
 
   // Simple-SDS serialization with zstd-compressed strings.
-  void simple_sds_compress(std::ostream& out, int compression_level = DEFAULT_COMPRESSION_LEVEL) const;
+  void simple_sds_compress(std::ostream& out, int compression_level = ZstdCompressor::DEFAULT_COMPRESSION_LEVEL) const;
 
   // Simple-SDS serialization with zstd-compressed strings.
   // This version only serializes strings at even positions.
-  void simple_sds_compress_even(std::ostream& out, int compression_level = DEFAULT_COMPRESSION_LEVEL) const;
+  void simple_sds_compress_even(std::ostream& out, int compression_level = ZstdCompressor::DEFAULT_COMPRESSION_LEVEL) const;
 
   // Simple-SDS deserialization with zstd-compressed strings.
   void simple_sds_decompress(std::istream& in);

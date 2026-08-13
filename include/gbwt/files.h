@@ -15,23 +15,27 @@ namespace gbwt
 /*
   GBWT file header.
 
+  Version 6:
+  - BWT is compressed using Zstandard.
+  - Versions 1 to 5 can still be read.
+
   Version 5:
   - Uses metadata version 2.
   - Includes tags.
   - SDSL and simple-sds formats.
-  - Compatible with versions 1 to 4.
+  - Versions 1 to 4 can still be read.
 
   Version 4:
   - Uses metadata version 1.
-  - Compatible with versions 1 to 3.
+  - Versions 1 to 3 can still be read.
 
   Version 3:
   - Includes a flag for metadata.
-  - Compatible with versions 1 and 2.
+  - Versions 1 and 2 can still be read.
 
   Version 2:
   - Includes a flag for a bidirectional index.
-  - Compatible with version 1.
+  - Version 1 can still be read.
 
   Version 1:
   - The first proper version.
@@ -63,9 +67,12 @@ struct GBWTHeader
 
   // Symbolic names for versions that may be relevant when examining files,
   // even when the version is current or obsolete.
-  constexpr static std::uint32_t TAGS_VERSION = 5;
+  constexpr static std::uint32_t ZSTD_VERSION = 6; // The current version with Zstandard compression.
 
   // Flag masks for old compatible versions.
+  constexpr static std::uint32_t TAGS_VERSION = 5;
+  constexpr static std::uint64_t TAGS_FLAG_MASK = 0x0007;
+
   constexpr static std::uint32_t META2_VERSION = 4;
   constexpr static std::uint64_t META2_FLAG_MASK = 0x0003;
 

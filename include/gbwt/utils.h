@@ -1,28 +1,3 @@
-/*
-  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025, 2026 Jouni Siren
-  Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
-
-  Author: Jouni Siren <jouni.siren@iki.fi>
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-*/
-
 #ifndef GBWT_UTILS_H
 #define GBWT_UTILS_H
 
@@ -229,7 +204,7 @@ struct Version
   constexpr static size_type MINOR_VERSION    = 5;
   constexpr static size_type PATCH_VERSION    = 0;
 
-  constexpr static size_type GBWT_VERSION     = 5;
+  constexpr static size_type GBWT_VERSION     = 6;
   constexpr static size_type METADATA_VERSION = 2;
   constexpr static size_type VARIANT_VERSION  = 1;
   constexpr static size_type R_INDEX_VERSION  = 1;
@@ -490,6 +465,9 @@ public:
 
   // Decompresses the given number of bytes and appends them to the output vector.
   void decompress(size_t bytes, std::vector<char>& output);
+
+  // Decompresses the given number of bytes and appends them to the output vector.
+  void decompress(size_t bytes, std::vector<byte_type>& output);
 
   // Returns `true` if all input data has been consumed.
   bool finished();

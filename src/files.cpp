@@ -13,7 +13,9 @@ constexpr std::uint64_t GBWTHeader::FLAG_MASK;
 constexpr std::uint64_t GBWTHeader::FLAG_BIDIRECTIONAL;
 constexpr std::uint64_t GBWTHeader::FLAG_METADATA;
 constexpr std::uint64_t GBWTHeader::FLAG_SIMPLE_SDS;
+constexpr std::uint32_t GBWTHeader::ZSTD_VERSION;
 constexpr std::uint32_t GBWTHeader::TAGS_VERSION;
+constexpr std::uint64_t GBWTHeader::TAGS_FLAG_MASK;
 constexpr std::uint32_t GBWTHeader::META2_VERSION;
 constexpr std::uint64_t GBWTHeader::META2_FLAG_MASK;
 constexpr std::uint32_t GBWTHeader::META_VERSION;
@@ -97,6 +99,8 @@ GBWTHeader::check() const
   {
   case VERSION:
     mask = FLAG_MASK; break;
+  case TAGS_VERSION:
+    mask = TAGS_FLAG_MASK; break;
   case META2_VERSION:
     mask = META2_FLAG_MASK; break;
   case META_VERSION:

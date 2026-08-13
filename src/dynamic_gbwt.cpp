@@ -1,28 +1,3 @@
-/*
-  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2023 Jouni Siren
-  Copyright (c) 2017 Genome Research Ltd.
-
-  Author: Jouni Siren <jouni.siren@iki.fi>
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-*/
-
 #include <gbwt/dynamic_gbwt.h>
 #include <gbwt/bwtmerge.h>
 
@@ -158,6 +133,7 @@ DynamicGBWT::load(std::istream& in)
   h.check();
   bool simple_sds = h.get(GBWTHeader::FLAG_SIMPLE_SDS);
   bool has_tags = h.version >= GBWTHeader::TAGS_VERSION;
+  bool zstd_bwt = h.version >= GBWTHeader::ZSTD_VERSION; // Only in simple-sds format.
   h.unset(GBWTHeader::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
   h.setVersion(); // Update to the current version.
   this->header = h;
@@ -177,7 +153,11 @@ DynamicGBWT::load(std::istream& in)
   this->bwt.resize(this->effective());
   {
     RecordArray array;
-    if(simple_sds) { array.simple_sds_load(in); }
+    if(simple_sds)
+    {
+      if(zstd_bwt) { array.simple_sds_decompress(in); }
+      else { array.simple_sds_load(in); }
+    }
     else { array.load(in); }
     if(array.size() != this->effective())
     {
@@ -270,7 +250,8 @@ DynamicGBWT::simple_sds_serialize_version(std::ostream& out, std::uint32_t versi
   this->tags.simple_sds_serialize(out);
   {
     RecordArray array(this->bwt);
-    array.simple_sds_serialize(out);
+    if(version >= GBWTHeader::ZSTD_VERSION) { array.simple_sds_compress(out); }
+    else { array.simple_sds_serialize(out); }
   }
   {
     DASamples compressed_samples(this->bwt);

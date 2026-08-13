@@ -131,6 +131,7 @@ GBWT::load(std::istream& in)
   h.check();
   bool simple_sds = h.get(GBWTHeader::FLAG_SIMPLE_SDS);
   bool has_tags = h.version >= GBWTHeader::TAGS_VERSION;
+  bool zstd_bwt = h.version >= GBWTHeader::ZSTD_VERSION; // Only in simple-sds format.
   h.unset(GBWTHeader::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
   h.setVersion(); // Update to the current version.
   this->header = h;
@@ -148,7 +149,11 @@ GBWT::load(std::istream& in)
   else { this->resetTags(); }
 
   // Read the BWT.
-  if(simple_sds) { this->bwt.simple_sds_load(in); }
+  if(simple_sds)
+  {
+    if(zstd_bwt) { this->bwt.simple_sds_decompress(in); }
+    else { this->bwt.simple_sds_load(in); }
+  }
   else { this->bwt.load(in); }
   if(this->bwt.size() != this->effective())
   {
@@ -208,7 +213,8 @@ GBWT::simple_sds_serialize_version(std::ostream& out, std::uint32_t version) con
   sdsl::simple_sds::serialize_value(h, out);
 
   this->tags.simple_sds_serialize(out);
-  this->bwt.simple_sds_serialize(out);
+  if(version >= GBWTHeader::ZSTD_VERSION) { this->bwt.simple_sds_compress(out); }
+  else { this->bwt.simple_sds_serialize(out); }
   sdsl::simple_sds::serialize_option(this->da_samples, out);
   if(this->hasMetadata()) { sdsl::simple_sds::serialize_option(this->metadata, out); }
   else { sdsl::simple_sds::empty_option(out); }
