@@ -1948,19 +1948,29 @@ StringArray<CharAllocatorType>::StringArray(
   {
     if(choose(i)) { chosen++; total_length += sequence(i).size(); }
   }
-  this->index = sdsl::int_vector<0>(chosen + 1, 0, sdsl::bits::length(total_length));
-  this->strings->reserve(total_length);
-
-  size_type curr = 0, total = 0;
-  for(size_type i = 0; i < n; i++)
+  // `this->strings` is only null here when CharAllocatorType is
+  // SharedMemCharAllocatorType and shared_memory is null: without a real
+  // segment, there is nowhere to store actual content.
+  if(this->strings == nullptr && chosen > 0)
   {
-    if(!choose(i)) { continue; }
-    std::string_view view = sequence(i);
-    this->index[curr] = total; curr++;
-    this->strings->insert(this->strings->end(), view.data(), view.data() + view.size());
-    total += view.size();
+    GBWT_THROW(std::runtime_error("StringArray: Cannot store strings in shared memory without a real segment"));
   }
-  this->index[chosen] = total;
+  this->index = sdsl::int_vector<0>(chosen + 1, 0, sdsl::bits::length(total_length));
+  if(this->strings != nullptr)
+  {
+    this->strings->reserve(total_length);
+
+    size_type curr = 0, total = 0;
+    for(size_type i = 0; i < n; i++)
+    {
+      if(!choose(i)) { continue; }
+      std::string_view view = sequence(i);
+      this->index[curr] = total; curr++;
+      this->strings->insert(this->strings->end(), view.data(), view.data() + view.size());
+      total += view.size();
+    }
+    this->index[chosen] = total;
+  }
 
   if constexpr
     (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
@@ -2004,18 +2014,28 @@ StringArray<CharAllocatorType>::StringArray(
 
   size_type total_length = 0;
   for(size_type i = 0; i < n; i++) { total_length += length(i); }
-  this->index = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
-  this->strings->reserve(total_length);
-
-  size_type total = 0;
-  for(size_type i = 0; i < n; i++)
+  // `this->strings` is only null here when CharAllocatorType is
+  // SharedMemCharAllocatorType and shared_memory is null: without a real
+  // segment, there is nowhere to store actual content.
+  if(this->strings == nullptr && total_length > 0)
   {
-    std::string str = sequence(i);
-    this->index[i] = total;
-    this->strings->insert(this->strings->end(), str.begin(), str.end());
-    total += str.size();
+    GBWT_THROW(std::runtime_error("StringArray: Cannot store strings in shared memory without a real segment"));
   }
-  this->index[n] = total;
+  this->index = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
+  if(this->strings != nullptr)
+  {
+    this->strings->reserve(total_length);
+
+    size_type total = 0;
+    for(size_type i = 0; i < n; i++)
+    {
+      std::string str = sequence(i);
+      this->index[i] = total;
+      this->strings->insert(this->strings->end(), str.begin(), str.end());
+      total += str.size();
+    }
+    this->index[n] = total;
+  }
 
   if constexpr
     (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
