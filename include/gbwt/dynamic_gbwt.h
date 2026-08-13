@@ -28,7 +28,7 @@
 
 #include <thread>
 
-#include <gbwt/gbwt.h>
+#include "gbwt.h"
 
 namespace gbwt
 {

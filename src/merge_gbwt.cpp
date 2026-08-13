@@ -53,7 +53,7 @@ main(int argc, char** argv)
   std::string output;
   bool sdsl_format = false;
   int c = 0;
-  while((c = getopt(argc, argv, "b:C:fiJ:M:o:OpP:s:S:t:T:")) != -1)
+  while((c = getopt(argc, argv, "b:C:fiJ:M:o:OpP:s:t:T:")) != -1)
   {
     switch(c)
     {
@@ -79,8 +79,8 @@ main(int argc, char** argv)
       parameters.setPosBufferSize(std::stoul(optarg)); break;
     case 's':
       sample_interval = std::stoul(optarg); break;
-    case 'S':
-      omp_set_num_threads(std::stoul(optarg)); break;
+    /*case 'S':
+      omp_set_num_threads(std::stoul(optarg)); break;*/
     case 't':
       TempFile::setDirectory(optarg); break;
     case 'T':
@@ -109,7 +109,8 @@ main(int argc, char** argv)
   else if(algorithm == ma_parallel)
   {
     printHeader("Temp directory"); std::cout << TempFile::temp_dir << std::endl;
-    printHeader("Search threads"); std::cout << omp_get_max_threads() << std::endl;
+    int threads = 1;//omp_get_max_threads();
+    printHeader("Search threads"); std::cout << threads << std::endl;
     printHeader("Pos buffers"); std::cout << parameters.pos_buffer_size << " MB" << std::endl;
     printHeader("Thread buffers"); std::cout << parameters.thread_buffer_size << " MB" << std::endl;
     printHeader("Merge buffers"); std::cout << parameters.merge_buffers << std::endl;
@@ -221,7 +222,7 @@ printUsage(int exit_code)
   std::cerr << "  -J N  Run N parallel merge jobs (default: " << MergeParameters::MERGE_JOBS << ")" << std::endl;
   std::cerr << "  -M N  Use N merge buffers (default: " << MergeParameters::MERGE_BUFFERS << ")" << std::endl;
   std::cerr << "  -P N  Use N-megabyte position buffers (default: " << MergeParameters::POS_BUFFER_SIZE << ")" << std::endl;
-  std::cerr << "  -S N  Use N search threads (default: " << omp_get_max_threads() << ")" << std::endl;
+  //std::cerr << "  -S N  Use N search threads (default: " << omp_get_max_threads() << ")" << std::endl;
   std::cerr << "  -t X  Use directory X for temporary files (default: " << TempFile::DEFAULT_TEMP_DIR << ")" << std::endl;
   std::cerr << "  -T N  Use N-megabyte thread buffers (default: " << MergeParameters::THREAD_BUFFER_SIZE << ")" << std::endl;
   std::cerr << std::endl;

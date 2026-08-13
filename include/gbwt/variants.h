@@ -26,7 +26,7 @@
 #ifndef GBWT_VARIANTS_H
 #define GBWT_VARIANTS_H
 
-#include <gbwt/utils.h>
+#include "utils.h"
 
 #include <functional>
 #include <map>

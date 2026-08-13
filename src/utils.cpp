@@ -31,6 +31,7 @@
 #include <set>
 #include <string>
 #include <stdexcept>
+#include <ctime>
 
 #include <sys/resource.h>
 #include <unistd.h>
@@ -167,12 +168,20 @@ printTimeLength(const std::string& header, size_type queries, size_type total_le
 }
 
 //------------------------------------------------------------------------------
-
+/*
 double
 readTimer()
 {
   return omp_get_wtime();
 }
+*/
+
+double readTimer()
+{
+    std::clock_t now = std::clock();                // Get current time
+    return static_cast<double>(now)/ CLOCKS_PER_SEC;  // Compute elapsed time
+}
+
 
 size_type
 memoryUsage()

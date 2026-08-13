@@ -41,6 +41,10 @@
 #include <omp.h>
 #include <zstd.h>
 
+#include <boost/interprocess/managed_shared_memory.hpp>
+#include <boost/interprocess/shared_memory_object.hpp>
+#include <boost/interprocess/sync/named_mutex.hpp>
+
 // Parallel sorting is only available with libstdc++ parallel mode.
 #ifdef __GLIBCXX__
 #include <parallel/algorithm>
@@ -61,6 +65,8 @@ namespace gbwt
   of nodes, the number of paths, the length of the paths, and the number of
   occurrences of each node to less than 2^32.
 */
+
+typedef boost::interprocess::allocator<char,boost::interprocess::managed_shared_memory::segment_manager>SharedMemCharAllocatorType;
 
 #define GBWT_SAVE_MEMORY
 
@@ -352,28 +358,28 @@ template<class Iterator, class Comparator>
 void
 parallelQuickSort(Iterator first, Iterator last, const Comparator& comp)
 {
-#ifdef __GLIBCXX__
+/*#ifdef __GLIBCXX__
   int nested = omp_get_nested();
   omp_set_nested(1);
   __gnu_parallel::sort(first, last, comp, __gnu_parallel::balanced_quicksort_tag());
   omp_set_nested(nested);
-#else
+#else*/
   std::sort(first, last, comp);
-#endif
+//#endif
 }
 
 template<class Iterator>
 void
 parallelQuickSort(Iterator first, Iterator last)
 {
-#ifdef __GLIBCXX__
+/*#ifdef __GLIBCXX__
   int nested = omp_get_nested();
   omp_set_nested(1);
   __gnu_parallel::sort(first, last, __gnu_parallel::balanced_quicksort_tag());
   omp_set_nested(nested);
-#else
+#else*/
   std::sort(first, last);
-#endif
+//#endif
 }
 
 template<class Iterator, class Comparator>

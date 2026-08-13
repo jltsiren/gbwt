@@ -492,7 +492,7 @@ void
 MergeBuffers::flush()
 {
   // First insert all thread-specific buffers.
-  #pragma omp parallel for schedule(static, 1)
+  //#pragma omp parallel for schedule(static, 1)
   for(size_type thread = 0; thread < this->threads(); thread++)
   {
     this->insert(this->pos_buffers[thread], this->thread_buffers[thread], true);
@@ -529,7 +529,8 @@ MergeBuffers::insert(std::vector<edge_type>& pos_buffer, buffer_type& thread_buf
   if(Verbosity::level >= Verbosity::FULL)
   {
     std::lock_guard<std::mutex> lock(this->stderr_access);
-    std::cerr << "MergeBuffers::insert(): Thread " << omp_get_thread_num() << ": Inserting "
+    int thread_id = 0;//omp_get_thread_num();
+    std::cerr << "MergeBuffers::insert(): Thread " << thread_id << ": Inserting "
               << thread_buffer.size() << " values to the merge buffers" << std::endl;
   }
 
@@ -545,7 +546,8 @@ MergeBuffers::insert(std::vector<edge_type>& pos_buffer, buffer_type& thread_buf
         if(Verbosity::level >= Verbosity::FULL)
         {
           std::lock_guard<std::mutex> lock(this->stderr_access);
-          std::cerr << "MergeBuffers::insert(): Thread " << omp_get_thread_num()
+          int thread_id = 0;//omp_get_thread_num();
+          std::cerr << "MergeBuffers::insert(): Thread " << thread_id
                     << ": Inserted the values to buffer " << i << std::endl;
         }
         return;
@@ -603,7 +605,8 @@ MergeBuffers::write(buffer_type& buffer)
   if(Verbosity::level >= Verbosity::EXTENDED)
   {
     std::lock_guard<std::mutex> lock(this->stderr_access);
-    std::cerr << "MergeBuffers::write(): Thread " << omp_get_thread_num()
+    int thread_id = 0;//omp_get_thread_num();
+    std::cerr << "MergeBuffers::write(): Thread " << thread_id
               << ": Wrote " << buffer_values << " values to the rank array" << std::endl;
     std::cerr << "MergeBuffers::write(): " << ra_done << "% done; RA size " << ra_gb << " GB" << std::endl;
   }

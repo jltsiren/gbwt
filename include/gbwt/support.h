@@ -1,14 +1,54 @@
+/*
+  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025, 2026 Jouni Siren
+  Copyright (c) 2017 Genome Research Ltd.
+
+  Author: Jouni Siren <jouni.siren@iki.fi>
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+*/
+
 #ifndef GBWT_SUPPORT_H
 #define GBWT_SUPPORT_H
 
 #include <gbwt/files.h>
+#include <gbwt/utils.h>
+
+#include <boost/interprocess/creation_tags.hpp>
+#include <boost/interprocess/managed_shared_memory.hpp>
+#include <boost/interprocess/shared_memory_object.hpp>
+#include <boost/interprocess/allocators/allocator.hpp>
+#include <boost/interprocess/sync/named_mutex.hpp>
+
+#include <sdsl/int_vector.hpp>
+#include <sdsl/sd_vector.hpp>
 
 #include <functional>
 #include <map>
+#include <memory>
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace gbwt
 {
+
+namespace bi = boost::interprocess;
 
 /*
   support.h: Public support structures.
@@ -482,6 +522,7 @@ struct MergeParameters
   size_type merge_jobs;
 };
 
+
 //------------------------------------------------------------------------------
 
 /*
@@ -494,6 +535,7 @@ struct MergeParameters
   Serialization/deserialization failures throw `std::runtime_error` or its
   subclasses. In particular, sanity checks throw `sdsl::simple_sds::InvalidData`.
 */
+template <typename CharAllocatorType = std::allocator<char>>  // Default type is std::vector<char>
 class StringArray
 {
 public:
@@ -501,33 +543,50 @@ public:
 
   constexpr static int DEFAULT_COMPRESSION_LEVEL = 3;
 
-  StringArray() : index(1, 0, 1) {}
-  StringArray(const std::vector<std::string>& source);
+  StringArray(bi::managed_shared_memory* shared_memory = nullptr, std::string object_prefix_in_shared_memory = "") :
+    index(1, 0, 1),
+    strings(nullptr),
+    shared_memory(shared_memory),
+    object_prefix_in_shared_memory(object_prefix_in_shared_memory) {}
+  StringArray(const std::vector<std::string>& source,
+              bi::managed_shared_memory* shared_memory = nullptr,
+              std::string object_prefix_in_shared_memory = "");
 
   // Create an array of `2 * source.size()` strings from the given map,
   // alternating between keys and values in iteration order.
-  StringArray(const std::map<std::string, std::string>& source);
+  StringArray(const std::map<std::string, std::string>& source,
+              bi::managed_shared_memory* shared_memory = nullptr,
+              std::string object_prefix_in_shared_memory = "");
 
   // Create an array of n strings using the given function to get the sequence.
   // This version can be used when the sequences are already stored somewhere else.
-  StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence);
+  StringArray(size_type n,
+              const std::function<std::string_view(size_type)>& sequence,
+              bi::managed_shared_memory* shared_memory = nullptr,
+              std::string object_prefix_in_shared_memory = "");
 
   // Create an array of up to n strings using the given functions to get the sequence
   // and for choosing which strings to include.
   // This version can be used when the sequences are already stored somewhere else.
-  StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence, const std::function<bool(size_type)>& choose);
+  StringArray(size_type n,
+              const std::function<std::string_view(size_type)>& sequence,
+              const std::function<bool(size_type)>& choose,
+              bi::managed_shared_memory* shared_memory = nullptr,
+              std::string object_prefix_in_shared_memory = "");
 
   // Create an array of n strings using the given functions to get the length and the sequence.
   // This version is appropriate when the sequences are created on the fly but their
   // lengths are known in advance.
-  StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence);
+  StringArray(size_type n,
+              const std::function<size_type(size_type)>& length,
+              const std::function<std::string(size_type)>& sequence,
+              bi::managed_shared_memory* shared_memory = nullptr,
+              std::string object_prefix_in_shared_memory = "");
 
-  StringArray(const StringArray& source) = default;
-  StringArray(StringArray&& source) = default;
-  StringArray& operator=(const StringArray& source) = default;
-  StringArray& operator=(StringArray&& source) = default;
+  ~StringArray();
 
-  void swap(StringArray& another);
+  template<typename CharAllocatorTypeOther>
+  void swap(StringArray<CharAllocatorTypeOther>& another);
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
@@ -555,29 +614,49 @@ public:
   // The transform function should not change the length of the string.
   void simple_sds_decompress_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform);
 
-  bool operator==(const StringArray& another) const;
-  bool operator!=(const StringArray& another) const;
+  // Copy assignment operator
+  StringArray& operator=(const StringArray& another);
+  // Copy constructor
+  StringArray(const StringArray& another);
+  // Move assignment operator
+  StringArray& operator=(StringArray&& another);
+
+  template<typename CharAllocatorTypeOther>
+  bool operator==(const StringArray<CharAllocatorTypeOther>& another) const;
+
+  template<typename CharAllocatorTypeOther>
+  bool operator!=(const StringArray<CharAllocatorTypeOther>& another) const;
 
   size_type size() const { return this->index.size() - 1; }
   bool empty() const { return (this->size() == 0); }
-  size_type length() const { return this->strings.size(); }
+  size_type length() const { return this->strings->size(); }
   size_type length(size_type i) const { return (this->index[i + 1] - this->index[i]); }
   size_type length(size_type start, size_t limit) const { return (this->index[limit] - this->index[start]); }
 
   std::string str(size_type i) const
   {
-    return std::string(this->strings.data() + this->index[i], this->strings.data() + this->index[i + 1]);
+    return std::string(this->strings->data() + this->index[i], this->strings->data() + this->index[i + 1]);
   }
 
    std::string_view view(size_type i) const
   {
-    return std::string_view(this->strings.data() + this->index[i], this->length(i));
+    return std::string_view(this->strings->data() + this->index[i], this->length(i));
   }
 
   void remove(size_type i);
 
   sdsl::int_vector<0> index;
-  std::vector<char>   strings;
+  std::vector<char, CharAllocatorType>* strings;  // std::vector<char, SharedMemCharAllocatorType>
+  bi::managed_shared_memory* shared_memory;
+  SharedMemCharAllocatorType* shared_memory_char_allocator;
+  std::string object_prefix_in_shared_memory;
+  bool is_data_loaded_into_shared_memory = false;
+
+  void construct_index_in_shared_memory();
+  void find_index_from_shared_memory();
+  void find_strings_from_shared_memory();
+  void construct_strings_in_shared_memory();
+  void check_existence_in_shared_memory();
 
 private:
   // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
@@ -591,7 +670,7 @@ class Dictionary
 public:
   typedef gbwt::size_type size_type;
 
-  StringArray         strings;
+  StringArray<std::allocator<char>>        strings;
   sdsl::int_vector<0> sorted_ids; // String ids in sorted order.
 
   Dictionary();
@@ -707,7 +786,8 @@ public:
   bool empty() const { return (this->size() == 0); }
 
 private:
-  void build(const StringArray& source);
+  template<typename CharAllocatorType>
+  void build(const StringArray<CharAllocatorType>& source);
   static std::string normalize(const std::string& key);
 };
 

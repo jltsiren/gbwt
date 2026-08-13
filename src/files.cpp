@@ -1,3 +1,29 @@
+/*
+  Copyright (c) 2017, 2018, 2019, 2021 Jouni Sirén
+  Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
+
+  Author: Jouni Siren <jouni.siren@iki.fi>
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+*/
+
+#include "absl/log/absl_log.h"
 #include <gbwt/files.h>
 
 namespace gbwt
@@ -80,13 +106,13 @@ GBWTHeader::check() const
 {
   if(this->tag != TAG)
   {
-    throw sdsl::simple_sds::InvalidData("GBWTHeader: Invalid tag");
+    ABSL_LOG(FATAL) << "GBWTHeader: Invalid tag";
   }
 
   if(this->version > VERSION || this->version < OLD_VERSION)
   {
     std::string msg = "GBWTHeader: Expected version " + std::to_string(OLD_VERSION) + " to version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
-    throw sdsl::simple_sds::InvalidData(msg);
+    ABSL_LOG(FATAL) << msg;
   }
 
   std::uint64_t mask = 0;
@@ -105,7 +131,7 @@ GBWTHeader::check() const
   }
   if((this->flags & mask) != this->flags)
   {
-    throw sdsl::simple_sds::InvalidData("GBWTHeader: Invalid flags");
+    ABSL_LOG(FATAL) << "GBWTHeader: Invalid flags";
   }
 }
 
@@ -185,13 +211,13 @@ MetadataHeader::check() const
 {
   if(this->tag != TAG)
   {
-    throw sdsl::simple_sds::InvalidData("MetadataHeader: Invalid tag");
+    ABSL_LOG(FATAL) << "MetadataHeader: Invalid tag";
   }
 
   if(this->version > VERSION || this->version < INITIAL_VERSION)
   {
     std::string msg = "MetadataHeader: Expected version " + std::to_string(INITIAL_VERSION) + " to version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
-    throw sdsl::simple_sds::InvalidData(msg);
+    ABSL_LOG(FATAL) << msg;
   }
 
   std::uint64_t mask = 0;
@@ -206,7 +232,7 @@ MetadataHeader::check() const
   }
   if((this->flags & mask) != this->flags)
   {
-    throw sdsl::simple_sds::InvalidData("MetadataHeader: Invalid flags");
+    ABSL_LOG(FATAL) << "MetadataHeader: Invalid flags";
   }
 }
 
@@ -215,13 +241,13 @@ MetadataHeader::check_simple_sds() const
 {
   if(this->tag != TAG)
   {
-    throw sdsl::simple_sds::InvalidData("MetadataHeader: Invalid tag");
+    ABSL_LOG(FATAL) << "MetadataHeader: Invalid tag";
   }
 
   if(this->version != VERSION)
   {
     std::string msg = "MetadataHeader: Expected version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
-    throw sdsl::simple_sds::InvalidData(msg);
+    ABSL_LOG(FATAL) << msg;
   }
 
   std::uint64_t mask = 0;
@@ -232,7 +258,7 @@ MetadataHeader::check_simple_sds() const
   }
   if((this->flags & mask) != this->flags)
   {
-    throw sdsl::simple_sds::InvalidData("MetadataHeader: Invalid flags");
+    ABSL_LOG(FATAL) << "MetadataHeader: Invalid flags";
   }
 }
 

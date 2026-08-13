@@ -25,7 +25,7 @@
 #ifndef GBWT_FAST_LOCATE_H
 #define GBWT_FAST_LOCATE_H
 
-#include <gbwt/gbwt.h>
+#include "gbwt.h"
 
 namespace gbwt
 {

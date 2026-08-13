@@ -1,3 +1,28 @@
+/*
+  Copyright (c) 2019, 2020, 2021, 2024 Jouni Siren
+
+  Author: Jouni Siren <jouni.siren@iki.fi>
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+*/
+
+#include "absl/log/absl_log.h"
 #include <gbwt/internal.h>
 #include <gbwt/metadata.h>
 
@@ -136,31 +161,31 @@ Metadata::sanityChecks() const
 {
   if(!(this->hasPathNames()) && this->path_names.size() > 0)
   {
-    throw sdsl::simple_sds::InvalidData("Metadata: Invalid path name flag in the header");
+    ABSL_LOG(FATAL) << "Metadata: Invalid path name flag in the header";
   }
 
   if(this->hasSampleNames())
   {
     if(this->header.sample_count != this->sample_names.size())
     {
-      throw sdsl::simple_sds::InvalidData("Metadata: Sample / sample name count mismatch");
+      ABSL_LOG(FATAL) << "Metadata: Sample / sample name count mismatch";
     }
   }
   else if(this->sample_names.size() > 0)
   {
-    throw sdsl::simple_sds::InvalidData("Metadata: Invalid sample name flag in the header");
+    ABSL_LOG(FATAL) << "Metadata: Invalid sample name flag in the header";
   }
 
   if(this->hasContigNames())
   {
     if(this->header.contig_count != this->contig_names.size())
     {
-      throw sdsl::simple_sds::InvalidData("Metadata: Contig / contig name count mismatch");
+      ABSL_LOG(FATAL) << "Metadata: Contig / contig name count mismatch";
     }
   }
   else if(this->contig_names.size() > 0)
   {
-    throw sdsl::simple_sds::InvalidData("Metadata: Invalid contig name flag in the header");
+    ABSL_LOG(FATAL) << "Metadata: Invalid contig name flag in the header";
   }
 }
 

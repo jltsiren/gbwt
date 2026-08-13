@@ -22,6 +22,7 @@
   SOFTWARE.
 */
 
+#include "absl/log/absl_log.h"
 #include <gbwt/fast_locate.h>
 #include <gbwt/internal.h>
 
@@ -79,13 +80,13 @@ FastLocate::Header::check() const
 {
   if(this->tag != TAG)
   {
-    throw sdsl::simple_sds::InvalidData("FastLocate: Invalid tag");
+    ABSL_LOG(FATAL) << "FastLocate: Invalid tag";
   }
 
   if(this->version != VERSION)
   {
     std::string msg = "FastLocate: Expected version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
-    throw sdsl::simple_sds::InvalidData(msg);
+    ABSL_LOG(FATAL) << msg;
   }
 
   std::uint64_t mask = 0;
@@ -96,7 +97,7 @@ FastLocate::Header::check() const
   }
   if((this->flags & mask) != this->flags)
   {
-    throw sdsl::simple_sds::InvalidData("FastLocate: Invalid flags");
+    ABSL_LOG(FATAL) << "FastLocate: Invalid flags";
   }
 }
 
@@ -264,7 +265,7 @@ FastLocate::FastLocate(const GBWT& source) :
   {
     std::cerr << "FastLocate::FastLocate(): Extracting head/tail samples" << std::endl;
   }
-  #pragma omp parallel for schedule(dynamic, 1)
+  //#pragma omp parallel for schedule(dynamic, 1)
   for(size_type i = 0; i < this->index->sequences(); i++)
   {
     std::vector<sample_record> head_buffer, tail_buffer;
@@ -297,7 +298,7 @@ FastLocate::FastLocate(const GBWT& source) :
     // path, to the start of the string).
     for(sample_record& record : head_buffer) { record.seq_offset = seq_offset - 1 - record.seq_offset; }
     for(sample_record& record : tail_buffer) { record.seq_offset = seq_offset - 1 - record.seq_offset; }
-    #pragma omp critical
+    //#pragma omp critical
     {
       this->header.max_length = std::max(this->header.max_length, seq_offset);
       head_samples.insert(head_samples.end(), head_buffer.begin(), head_buffer.end());

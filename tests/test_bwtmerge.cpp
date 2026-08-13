@@ -580,7 +580,7 @@ TEST_F(RankArrayTest, MergeBuffers)
   MergeBuffers buffers(data[0].size() + data[1].size(), data.size(), parameters, node_ranges);
 
   // Insert the data.
-  #pragma omp parallel for schedule(static)
+  //#pragma omp parallel for schedule(static)
   for(size_type thread = 0; thread < data.size(); thread++)
   {
     for(edge_type position : data[thread])
