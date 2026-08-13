@@ -22,7 +22,7 @@
   SOFTWARE.
 */
 
-#include "absl/log/absl_log.h"
+#include <gbwt/error_handling.h>
 #include <gbwt/variants.h>
 #include <gbwt/internal.h>
 
@@ -205,13 +205,13 @@ VariantPaths::check() const
 {
   if(this->tag != TAG)
   {
-    ABSL_LOG(FATAL) << "VariantPaths: Invalid tag";
+    GBWT_THROW(sdsl::simple_sds::InvalidData("VariantPaths: Invalid tag"));
   }
 
   if(this->version != VERSION)
   {
     std::string msg = "VariantPaths: Expected version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
-    ABSL_LOG(FATAL) << msg;
+    GBWT_THROW(sdsl::simple_sds::InvalidData(msg));
   }
 
   std::uint64_t mask = 0;
@@ -222,7 +222,7 @@ VariantPaths::check() const
   }
   if((this->flags & mask) != this->flags)
   {
-    ABSL_LOG(FATAL) << "VariantPaths: Invalid flags";
+    GBWT_THROW(sdsl::simple_sds::InvalidData("VariantPaths: Invalid flags"));
   }
 }
 

@@ -57,12 +57,12 @@ main(int argc, char** argv)
   std::string base_name;
   bool verify_index = false;
   int c = 0;
-  while((c = getopt(argc, argv, "v")) != -1)
+  while((c = getopt(argc, argv, "t:v")) != -1)
   {
     switch(c)
     {
-    /*case 't':
-      omp_set_num_threads(std::stoul(optarg)); break;*/
+    case 't':
+      omp_set_num_threads(std::stoul(optarg)); break;
     case 'v':
       verify_index = true; break;
     case '?':
@@ -198,10 +198,9 @@ verifyLocate(const GBWT& gbwt_index, const FastLocate& r_index, const std::vecto
   double start = readTimer();
   size_type initial_errors = errors;
   std::cout << queries.size() << " ranges of total length " << totalLength(queries) << std::endl;
-  int threads = 1; //omp_get_max_threads();
-  std::vector<range_type> blocks = Range::partition(range_type(0, queries.size() - 1), 4 * threads);
+  std::vector<range_type> blocks = Range::partition(range_type(0, queries.size() - 1), 4 * omp_get_max_threads());
 
-  //#pragma omp parallel for schedule(dynamic, 1)
+  #pragma omp parallel for schedule(dynamic, 1)
   for(size_type block = 0; block < blocks.size(); block++)
   {
     for(size_type i = blocks[block].first; i <= blocks[block].second; i++)
@@ -223,7 +222,7 @@ verifyLocate(const GBWT& gbwt_index, const FastLocate& r_index, const std::vecto
 
       if(r_index_slow != gbwt_hash || r_index_fast != gbwt_hash)
       {
-        //#pragma omp critical
+        #pragma omp critical
         {
           errors++;
           if(errors <= MAX_ERRORS)

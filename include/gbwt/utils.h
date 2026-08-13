@@ -38,15 +38,47 @@
 #include <sdsl/sd_vector.hpp>
 #include <sdsl/simple_sds.hpp>
 
+// GBWT_USE_OPENMP is on by default, matching GBWT's traditional behavior.
+// Some environments (notably Bazel builds embedding GBWT in code that
+// manages its own threading, such as Google's DeepVariant) build with
+// GBWT_USE_OPENMP off instead. In that mode, the handful of OpenMP runtime
+// calls GBWT makes outside of parallelQuickSort()/parallelMergeSort() are
+// satisfied by trivial single-threaded fallbacks below, so call sites don't
+// need to know OpenMP is unavailable. The build system is responsible for
+// not passing -fopenmp and for silencing the resulting unused "#pragma omp"
+// directives (e.g. with -Wno-unknown-pragmas) when this is off.
+#ifdef GBWT_USE_OPENMP
 #include <omp.h>
+#else
+#include <chrono>
+inline int omp_get_max_threads() { return 1; }
+inline int omp_get_thread_num() { return 0; }
+inline void omp_set_num_threads(int) { }
+inline double omp_get_wtime()
+{
+  return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+#endif
+
 #include <zstd.h>
 
+// GBWT_ENABLE_SHARED_MEMORY is off by default: Boost is not a dependency of
+// GBWT unless a caller actually wants StringArray's shared-memory-backed
+// storage (see the shared-memory constructors and members in support.h,
+// which only exist when this is defined).
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <boost/interprocess/shared_memory_object.hpp>
 #include <boost/interprocess/sync/named_mutex.hpp>
+#include <boost/interprocess/allocators/allocator.hpp>
+namespace gbwt
+{
+typedef boost::interprocess::allocator<char, boost::interprocess::managed_shared_memory::segment_manager> SharedMemCharAllocatorType;
+}
+#endif
 
 // Parallel sorting is only available with libstdc++ parallel mode.
-#ifdef __GLIBCXX__
+#if defined(__GLIBCXX__) && defined(GBWT_USE_OPENMP)
 #include <parallel/algorithm>
 #endif
 
@@ -65,8 +97,6 @@ namespace gbwt
   of nodes, the number of paths, the length of the paths, and the number of
   occurrences of each node to less than 2^32.
 */
-
-typedef boost::interprocess::allocator<char,boost::interprocess::managed_shared_memory::segment_manager>SharedMemCharAllocatorType;
 
 #define GBWT_SAVE_MEMORY
 
@@ -358,35 +388,35 @@ template<class Iterator, class Comparator>
 void
 parallelQuickSort(Iterator first, Iterator last, const Comparator& comp)
 {
-/*#ifdef __GLIBCXX__
+#if defined(__GLIBCXX__) && defined(GBWT_USE_OPENMP)
   int nested = omp_get_nested();
   omp_set_nested(1);
   __gnu_parallel::sort(first, last, comp, __gnu_parallel::balanced_quicksort_tag());
   omp_set_nested(nested);
-#else*/
+#else
   std::sort(first, last, comp);
-//#endif
+#endif
 }
 
 template<class Iterator>
 void
 parallelQuickSort(Iterator first, Iterator last)
 {
-/*#ifdef __GLIBCXX__
+#if defined(__GLIBCXX__) && defined(GBWT_USE_OPENMP)
   int nested = omp_get_nested();
   omp_set_nested(1);
   __gnu_parallel::sort(first, last, __gnu_parallel::balanced_quicksort_tag());
   omp_set_nested(nested);
-#else*/
+#else
   std::sort(first, last);
-//#endif
+#endif
 }
 
 template<class Iterator, class Comparator>
 void
 parallelMergeSort(Iterator first, Iterator last, const Comparator& comp)
 {
-#ifdef __GLIBCXX__
+#if defined(__GLIBCXX__) && defined(GBWT_USE_OPENMP)
   __gnu_parallel::sort(first, last, comp, __gnu_parallel::multiway_mergesort_tag());
 #else
   std::sort(first, last, comp);
@@ -397,7 +427,7 @@ template<class Iterator>
 void
 parallelMergeSort(Iterator first, Iterator last)
 {
-#ifdef __GLIBCXX__
+#if defined(__GLIBCXX__) && defined(GBWT_USE_OPENMP)
   __gnu_parallel::sort(first, last, __gnu_parallel::multiway_mergesort_tag());
 #else
   std::sort(first, last);
@@ -408,7 +438,7 @@ template<class Iterator, class Comparator>
 void
 sequentialSort(Iterator first, Iterator last, const Comparator& comp)
 {
-#ifdef __GLIBCXX__
+#if defined(__GLIBCXX__) && defined(GBWT_USE_OPENMP)
   __gnu_parallel::sort(first, last, comp, __gnu_parallel::sequential_tag());
 #else
   std::sort(first, last, comp);
@@ -419,7 +449,7 @@ template<class Iterator>
 void
 sequentialSort(Iterator first, Iterator last)
 {
-#ifdef __GLIBCXX__
+#if defined(__GLIBCXX__) && defined(GBWT_USE_OPENMP)
   __gnu_parallel::sort(first, last, __gnu_parallel::sequential_tag());
 #else
   std::sort(first, last);

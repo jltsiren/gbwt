@@ -29,12 +29,16 @@
 #include <gbwt/internal.h>
 #include <gbwt/utils.h>
 
+#include <gbwt/error_handling.h>
+
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
 #include "absl/log/absl_log.h"
 #include <boost/interprocess/creation_tags.hpp>
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <boost/interprocess/shared_memory_object.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/interprocess/sync/named_mutex.hpp>
+#endif
 
 #include <sdsl/int_vector.hpp>
 #include <sdsl/sd_vector.hpp>
@@ -1322,7 +1326,7 @@ RecordArray::sanityChecks() const
 {
   if(this->index.size() != this->data.size())
   {
-    ABSL_LOG(FATAL) << "RecordArray: Index / data size mismatch";
+    GBWT_THROW(sdsl::simple_sds::InvalidData("RecordArray: Index / data size mismatch"));
   }
 }
 
@@ -1755,15 +1759,15 @@ DASamples::sanityChecks() const
 {
   if(this->record_rank(this->sampled_records.size()) != this->bwt_ranges.ones())
   {
-    ABSL_LOG(FATAL) << "DASamples: Sampled record / BWT range count mismatch";
+    GBWT_THROW(sdsl::simple_sds::InvalidData("DASamples: Sampled record / BWT range count mismatch"));
   }
   if(this->bwt_ranges.size() != this->sampled_offsets.size())
   {
-    ABSL_LOG(FATAL) << "DASamples: BWT range / sampled offsets size mismatch";
+    GBWT_THROW(sdsl::simple_sds::InvalidData("DASamples: BWT range / sampled offsets size mismatch"));
   }
   if(this->sampled_offsets.ones() != this->array.size())
   {
-    ABSL_LOG(FATAL) << "DASamples: Sampled offset / sample count mismatch";
+    GBWT_THROW(sdsl::simple_sds::InvalidData("DASamples: Sampled offset / sample count mismatch"));
   }
 }
 
@@ -1834,6 +1838,8 @@ MergeParameters::setMergeJobs(size_type n)
 }
 
 //------------------------------------------------------------------------------
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
+
 template <typename CharAllocatorType>
 StringArray<CharAllocatorType>::StringArray(
     bi::managed_shared_memory* shared_memory,
@@ -2026,6 +2032,103 @@ StringArray<CharAllocatorType>::StringArray(
   }
 }
 
+#else // !GBWT_ENABLE_SHARED_MEMORY
+
+template <typename CharAllocatorType>
+StringArray<CharAllocatorType>::StringArray() :
+  index(1, 0, 1), strings(new std::vector<char, CharAllocatorType>())
+{
+}
+
+template <typename CharAllocatorType>
+StringArray<CharAllocatorType>::StringArray(const std::vector<std::string>& source)
+{
+  *this = StringArray(source.size(), [&source](size_type i) -> std::string_view
+  {
+    return std::string_view(source[i]);
+  },
+  [](size_type) -> bool
+  {
+    return true;
+  });
+}
+
+template <typename CharAllocatorType>
+StringArray<CharAllocatorType>::StringArray(const std::map<std::string, std::string>& source)
+{
+  std::vector<std::string> linearized;
+  for(auto iter = source.begin(); iter != source.end(); ++iter)
+  {
+    linearized.push_back(iter->first); linearized.push_back(iter->second);
+  }
+  *this = StringArray(linearized);
+}
+
+template <typename CharAllocatorType>
+StringArray<CharAllocatorType>::StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence)
+{
+  *this = StringArray(n, sequence,
+  [](size_type) -> bool
+  {
+    return true;
+  });
+}
+
+template <typename CharAllocatorType>
+StringArray<CharAllocatorType>::StringArray(
+    size_type n,
+    const std::function<std::string_view(size_type)>& sequence,
+    const std::function<bool(size_type)>& choose)
+{
+  this->strings = new std::vector<char, CharAllocatorType>();
+
+  size_type chosen = 0, total_length = 0;
+  for(size_type i = 0; i < n; i++)
+  {
+    if(choose(i)) { chosen++; total_length += sequence(i).size(); }
+  }
+  this->index = sdsl::int_vector<0>(chosen + 1, 0, sdsl::bits::length(total_length));
+  this->strings->reserve(total_length);
+
+  size_type curr = 0, total = 0;
+  for(size_type i = 0; i < n; i++)
+  {
+    if(!choose(i)) { continue; }
+    std::string_view view = sequence(i);
+    this->index[curr] = total; curr++;
+    this->strings->insert(this->strings->end(), view.data(), view.data() + view.size());
+    total += view.size();
+  }
+  this->index[chosen] = total;
+}
+
+// This has a separate implementation, because we cannot take a view of a temporary string.
+template <typename CharAllocatorType>
+StringArray<CharAllocatorType>::StringArray(
+    size_type n,
+    const std::function<size_type(size_type)>& length,
+    const std::function<std::string(size_type)>& sequence)
+{
+  this->strings = new std::vector<char, CharAllocatorType>();
+
+  size_type total_length = 0;
+  for(size_type i = 0; i < n; i++) { total_length += length(i); }
+  this->index = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
+  this->strings->reserve(total_length);
+
+  size_type total = 0;
+  for(size_type i = 0; i < n; i++)
+  {
+    std::string str = sequence(i);
+    this->index[i] = total;
+    this->strings->insert(this->strings->end(), str.begin(), str.end());
+    total += str.size();
+  }
+  this->index[n] = total;
+}
+
+#endif // GBWT_ENABLE_SHARED_MEMORY
+
 template <typename CharAllocatorType>
 StringArray<CharAllocatorType>::~StringArray()
 {
@@ -2044,6 +2147,7 @@ void StringArray<CharAllocatorType>::swap(
 {
   std::swap(this->index, another.index);
   std::swap(this->strings, another.strings);
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
   std::swap(this->shared_memory, another.shared_memory);
   std::swap(this->shared_memory_char_allocator,
             another.shared_memory_char_allocator);
@@ -2051,6 +2155,7 @@ void StringArray<CharAllocatorType>::swap(
             another.object_prefix_in_shared_memory);
   std::swap(this->is_data_loaded_into_shared_memory,
             another.is_data_loaded_into_shared_memory);
+#endif
 }
 
 template <typename CharAllocatorType>
@@ -2071,7 +2176,10 @@ size_type StringArray<CharAllocatorType>::serialize(std::ostream& out, sdsl::str
 template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::load(std::istream& in)
 {
-  if (this->is_data_loaded_into_shared_memory == false){
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
+  if (this->is_data_loaded_into_shared_memory == false)
+#endif
+  {
     loadVector(*this->strings, in);
     this->index.load(in);
   }
@@ -2131,6 +2239,7 @@ void StringArray<CharAllocatorType>::simple_sds_serialize(std::ostream& out) con
 template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::simple_sds_load(std::istream& in)
 {
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
   if constexpr
     (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
     check_existence_in_shared_memory();
@@ -2151,6 +2260,9 @@ void StringArray<CharAllocatorType>::simple_sds_load(std::istream& in)
     // No shared memory so create a vector with default allocator for strings.
     this->strings = new std::vector<char, std::allocator<char>>();
   }
+#else
+  this->strings = new std::vector<char, CharAllocatorType>();
+#endif
 
   // Load the index. We cannot decompress it yet because we do not know the width of the sentinel
   // value `strings.size()`.
@@ -2175,12 +2287,14 @@ void StringArray<CharAllocatorType>::simple_sds_load(std::istream& in)
 
   this->sanityChecks();
 
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
   if constexpr
     (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
     if (this->is_data_loaded_into_shared_memory == false){
       construct_index_in_shared_memory();
     }
   }
+#endif
 }
 
 template <typename CharAllocatorType>
@@ -2208,14 +2322,16 @@ size_t StringArray<CharAllocatorType>::simple_sds_size() const
 template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::simple_sds_load_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform)
 {
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
   if constexpr (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value)
   {
     // The shared-memory allocator cannot be default-constructed, so this
     // method (which was never used with shared-memory StringArrays) does
     // not support it.
-    ABSL_LOG(FATAL) << "StringArray: simple_sds_load_duplicate() is not supported for the shared-memory allocator";
+    GBWT_THROW(std::logic_error("StringArray: simple_sds_load_duplicate() is not supported for the shared-memory allocator"));
   }
   else
+#endif
   {
     // Load the data.
     sdsl::sd_vector<> v; v.simple_sds_load(in);
@@ -2312,14 +2428,16 @@ void StringArray<CharAllocatorType>::simple_sds_compress_even(std::ostream& out,
 template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::simple_sds_decompress(std::istream& in)
 {
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
   if constexpr (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value)
   {
     // ZstdDecompressor only decompresses into a plain std::vector<char>, so
     // this method (which was never used with shared-memory StringArrays)
     // does not support the shared-memory allocator.
-    ABSL_LOG(FATAL) << "StringArray: simple_sds_decompress() is not supported for the shared-memory allocator";
+    GBWT_THROW(std::logic_error("StringArray: simple_sds_decompress() is not supported for the shared-memory allocator"));
   }
   else
+#endif
   {
     // Load the index.
     size_t string_size = 0;
@@ -2344,7 +2462,7 @@ void StringArray<CharAllocatorType>::simple_sds_decompress(std::istream& in)
       if(!decompressor.finished())
       {
         std::string msg = "StringArray: Trailing bytes after decompression";
-        throw sdsl::simple_sds::InvalidData(msg);
+        GBWT_THROW(sdsl::simple_sds::InvalidData(msg));
       }
     }
 
@@ -2355,14 +2473,16 @@ void StringArray<CharAllocatorType>::simple_sds_decompress(std::istream& in)
 template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::simple_sds_decompress_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform)
 {
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
   if constexpr (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value)
   {
     // ZstdDecompressor only decompresses into a plain std::vector<char>, so
     // this method (which was never used with shared-memory StringArrays)
     // does not support the shared-memory allocator.
-    ABSL_LOG(FATAL) << "StringArray: simple_sds_decompress_duplicate() is not supported for the shared-memory allocator";
+    GBWT_THROW(std::logic_error("StringArray: simple_sds_decompress_duplicate() is not supported for the shared-memory allocator"));
   }
   else
+#endif
   {
     // Load the index and allocate space for the members.
     sdsl::sd_vector<> v;
@@ -2404,13 +2524,15 @@ void StringArray<CharAllocatorType>::simple_sds_decompress_duplicate(std::istrea
       if(!decompressor.finished())
       {
         std::string msg = "StringArray: Trailing bytes after decompression";
-        throw sdsl::simple_sds::InvalidData(msg);
+        GBWT_THROW(sdsl::simple_sds::InvalidData(msg));
       }
     }
 
     this->sanityChecks();
   }
 }
+
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
 
 template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::construct_index_in_shared_memory()
@@ -2486,6 +2608,7 @@ void StringArray<CharAllocatorType>::find_index_from_shared_memory()
   }
 }
 
+
 template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::find_strings_from_shared_memory()
 {
@@ -2507,6 +2630,7 @@ void StringArray<CharAllocatorType>::find_strings_from_shared_memory()
     }
   }
 }
+
 
 template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::construct_strings_in_shared_memory()
@@ -2558,6 +2682,8 @@ void StringArray<CharAllocatorType>::check_existence_in_shared_memory(){
   }
 }
 
+#endif // GBWT_ENABLE_SHARED_MEMORY
+
 template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::remove(size_type i)
 {
@@ -2589,6 +2715,7 @@ StringArray<CharAllocatorType>& StringArray<CharAllocatorType>::operator=(
   if (this == &another) return *this;  // Avoid self-assignment
   // Copy non-dynamic members
   this->index = another.index;
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
   this->shared_memory = another.shared_memory;
   this->shared_memory_char_allocator =
       another.shared_memory_char_allocator;
@@ -2601,7 +2728,9 @@ StringArray<CharAllocatorType>& StringArray<CharAllocatorType>::operator=(
     (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
     // Directly copy the strings pointer for shared memory
     this->strings = another.strings;
-  } else {
+  } else
+#endif
+  {
       delete this->strings;
       this->strings = new std::vector<char, CharAllocatorType>(*another.strings);
   }
@@ -2643,20 +2772,21 @@ void StringArray<CharAllocatorType>::sanityChecks() const
 {
   if(this->index.size() == 0 || this->index[0] != 0 || this->index[this->index.size() - 1] != this->strings->size())
   {
-    ABSL_LOG(FATAL) << "StringArray: Offsets and strings do not match";
+    GBWT_THROW(sdsl::simple_sds::InvalidData("StringArray: Offsets and strings do not match"));
   }
 }
 
 template class StringArray<std::allocator<char>>;
-template class StringArray<gbwt::SharedMemCharAllocatorType>;
-
 template void gbwt::StringArray<std::allocator<char>>::swap(gbwt::StringArray<std::allocator<char>>&);
-template void gbwt::StringArray<gbwt::SharedMemCharAllocatorType>::swap(gbwt::StringArray<gbwt::SharedMemCharAllocatorType>&);
-
 template bool gbwt::StringArray<std::allocator<char>>::operator==(const gbwt::StringArray<std::allocator<char>>&) const;
 template bool gbwt::StringArray<std::allocator<char>>::operator!=(const gbwt::StringArray<std::allocator<char>>&) const;
+
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
+template class StringArray<gbwt::SharedMemCharAllocatorType>;
+template void gbwt::StringArray<gbwt::SharedMemCharAllocatorType>::swap(gbwt::StringArray<gbwt::SharedMemCharAllocatorType>&);
 template bool gbwt::StringArray<gbwt::SharedMemCharAllocatorType>::operator==(const gbwt::StringArray<gbwt::SharedMemCharAllocatorType>&) const;
 template bool gbwt::StringArray<gbwt::SharedMemCharAllocatorType>::operator!=(const gbwt::StringArray<gbwt::SharedMemCharAllocatorType>&) const;
+#endif
 
 //------------------------------------------------------------------------------
 
@@ -2817,7 +2947,7 @@ Dictionary::sanityChecks() const
 {
   if(this->sorted_ids.size() != this->strings.size())
   {
-    ABSL_LOG(FATAL) << "Dictionary: Size mismatch between strings and sorted ids";
+    GBWT_THROW(sdsl::simple_sds::InvalidData("Dictionary: Size mismatch between strings and sorted ids"));
   }
 }
 
@@ -3002,7 +3132,7 @@ Tags::build(const StringArray<CharAllocatorType>& source)
 {
   if(source.size() % 2 != 0)
   {
-    ABSL_LOG(FATAL) << "Tags: Key without a value";
+    GBWT_THROW(sdsl::simple_sds::InvalidData("Tags: Key without a value"));
   }
 
   this->tags.clear();
@@ -3015,7 +3145,7 @@ Tags::build(const StringArray<CharAllocatorType>& source)
 
   if(this->tags.size() != source.size() / 2)
   {
-    ABSL_LOG(FATAL) << "Tags: Duplicate keys";
+    GBWT_THROW(sdsl::simple_sds::InvalidData("Tags: Duplicate keys"));
   }
 }
 

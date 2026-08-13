@@ -23,7 +23,7 @@
   SOFTWARE.
 */
 
-#include "absl/log/absl_log.h"
+#include <gbwt/error_handling.h>
 #include <gbwt/dynamic_gbwt.h>
 #include <gbwt/bwtmerge.h>
 
@@ -182,7 +182,7 @@ DynamicGBWT::load(std::istream& in)
     else { array.load(in); }
     if(array.size() != this->effective())
     {
-      ABSL_LOG(FATAL) << "DynamicGBWT: BWT record count / alphabet size mismatch";
+      GBWT_THROW(sdsl::simple_sds::InvalidData("DynamicGBWT: BWT record count / alphabet size mismatch"));
     }
     array.forEach([&](size_type comp, const CompressedRecord& record)
     {
@@ -215,7 +215,7 @@ DynamicGBWT::load(std::istream& in)
     {
       if(samples.records() != this->effective())
       {
-        ABSL_LOG(FATAL) << "DynamicGBWT: Sample record count / alphabet size mismatch";
+        GBWT_THROW(sdsl::simple_sds::InvalidData("DynamicGBWT: Sample record count / alphabet size mismatch"));
       }
       SampleIterator sample_iter(samples);
       for(SampleRangeIterator range_iter(samples); !(range_iter.end()); ++range_iter)
@@ -237,7 +237,7 @@ DynamicGBWT::load(std::istream& in)
     bool loaded_metadata = sdsl::simple_sds::load_option(this->metadata, in);
     if(loaded_metadata != this->hasMetadata())
     {
-      ABSL_LOG(FATAL) << "DynamicGBWT: Invalid metadata flag in the header";
+      GBWT_THROW(sdsl::simple_sds::InvalidData("DynamicGBWT: Invalid metadata flag in the header"));
     }
   }
   else if(this->hasMetadata()) { this->metadata.load(in); }
@@ -246,7 +246,7 @@ DynamicGBWT::load(std::istream& in)
     size_type expected_paths = (this->bidirectional() ? this->sequences() / 2 : this->sequences());
     if(this->metadata.paths() != expected_paths)
     {
-      ABSL_LOG(FATAL) << "DynamicGBWT: Path name / sequence count mismatch";
+      GBWT_THROW(sdsl::simple_sds::InvalidData("DynamicGBWT: Path name / sequence count mismatch"));
     }
   }
 
@@ -1158,14 +1158,12 @@ DynamicGBWT::remove(const std::vector<size_type>& seq_ids, size_type chunk_size)
   // Build the rank array.
   double ra_start = readTimer();
   std::vector<edge_type> ra;
-  int threads = 1; //omp_get_max_threads();
-  std::vector<std::vector<edge_type>> buffers(threads);
+  std::vector<std::vector<edge_type>> buffers(omp_get_max_threads());
   DecompressedRecord fast_endmarker = this->endmarker();
-  //#pragma omp parallel for schedule(dynamic, chunk_size)
+  #pragma omp parallel for schedule(dynamic, chunk_size)
   for(size_type i = 0; i < to_remove.size(); i++)
   {
-    int thread_id = 0;//omp_get_thread_num();
-    std::vector<edge_type>& buffer = buffers[thread_id];
+    std::vector<edge_type>& buffer = buffers[omp_get_thread_num()];
     buffer.push_back(edge_type(ENDMARKER, to_remove[i]));
     edge_type pos = fast_endmarker.LF(to_remove[i]);
     while(pos.first != ENDMARKER)
@@ -1173,7 +1171,7 @@ DynamicGBWT::remove(const std::vector<size_type>& seq_ids, size_type chunk_size)
       buffer.push_back(pos);
       pos = this->LF(pos);
     }
-    //#pragma omp critical
+    #pragma omp critical
     {
       ra.insert(ra.end(), buffer.begin(), buffer.end());
     }
@@ -1340,11 +1338,11 @@ buildRA(const DynamicGBWT& left, const DynamicGBWT& right, MergeBuffers& buffers
 {
   DecompressedRecord right_endmarker = right.endmarker();
 
-  //#pragma omp parallel for schedule(dynamic, buffers.parameters.chunk_size)
+  #pragma omp parallel for schedule(dynamic, buffers.parameters.chunk_size)
   for(size_type sequence = 0; sequence < right.sequences(); sequence++)
   {
     // The new sequence will be after all existing sequences in 'left'.
-    size_type thread = 0;//omp_get_thread_num();
+    size_type thread = omp_get_thread_num();
     buffers.insert(edge_type(ENDMARKER, left.sequences()), thread);
 
     // Computing LF() at the endmarker can be expensive, so we do it using the incoming
@@ -1507,8 +1505,7 @@ DynamicGBWT::merge(const DynamicGBWT& source, const MergeParameters& parameters)
 
   // Build the rank array.
   double ra_start = readTimer();
-  int threads = 1; //omp_get_max_threads();
-  MergeBuffers mb(source.size(), threads, parameters, node_ranges);
+  MergeBuffers mb(source.size(), omp_get_max_threads(), parameters, node_ranges);
   buildRA(*this, source, mb);
   if(Verbosity::level >= Verbosity::BASIC)
   {
@@ -1518,7 +1515,7 @@ DynamicGBWT::merge(const DynamicGBWT& source, const MergeParameters& parameters)
 
   // Merge the records.
   double merge_start = readTimer();
-  //#pragma omp parallel for schedule(static)
+  #pragma omp parallel for schedule(static)
   for(size_type job = 0; job < node_ranges.size(); job++)
   {
     ProducerBuffer<RankArray> ra(*(mb.ra[job]));

@@ -23,7 +23,7 @@
   SOFTWARE.
 */
 
-#include "absl/log/absl_log.h"
+#include <gbwt/error_handling.h>
 #include <gbwt/files.h>
 
 namespace gbwt
@@ -106,13 +106,13 @@ GBWTHeader::check() const
 {
   if(this->tag != TAG)
   {
-    ABSL_LOG(FATAL) << "GBWTHeader: Invalid tag";
+    GBWT_THROW(sdsl::simple_sds::InvalidData("GBWTHeader: Invalid tag"));
   }
 
   if(this->version > VERSION || this->version < OLD_VERSION)
   {
     std::string msg = "GBWTHeader: Expected version " + std::to_string(OLD_VERSION) + " to version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
-    ABSL_LOG(FATAL) << msg;
+    GBWT_THROW(sdsl::simple_sds::InvalidData(msg));
   }
 
   std::uint64_t mask = 0;
@@ -131,7 +131,7 @@ GBWTHeader::check() const
   }
   if((this->flags & mask) != this->flags)
   {
-    ABSL_LOG(FATAL) << "GBWTHeader: Invalid flags";
+    GBWT_THROW(sdsl::simple_sds::InvalidData("GBWTHeader: Invalid flags"));
   }
 }
 
@@ -211,13 +211,13 @@ MetadataHeader::check() const
 {
   if(this->tag != TAG)
   {
-    ABSL_LOG(FATAL) << "MetadataHeader: Invalid tag";
+    GBWT_THROW(sdsl::simple_sds::InvalidData("MetadataHeader: Invalid tag"));
   }
 
   if(this->version > VERSION || this->version < INITIAL_VERSION)
   {
     std::string msg = "MetadataHeader: Expected version " + std::to_string(INITIAL_VERSION) + " to version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
-    ABSL_LOG(FATAL) << msg;
+    GBWT_THROW(sdsl::simple_sds::InvalidData(msg));
   }
 
   std::uint64_t mask = 0;
@@ -232,7 +232,7 @@ MetadataHeader::check() const
   }
   if((this->flags & mask) != this->flags)
   {
-    ABSL_LOG(FATAL) << "MetadataHeader: Invalid flags";
+    GBWT_THROW(sdsl::simple_sds::InvalidData("MetadataHeader: Invalid flags"));
   }
 }
 
@@ -241,13 +241,13 @@ MetadataHeader::check_simple_sds() const
 {
   if(this->tag != TAG)
   {
-    ABSL_LOG(FATAL) << "MetadataHeader: Invalid tag";
+    GBWT_THROW(sdsl::simple_sds::InvalidData("MetadataHeader: Invalid tag"));
   }
 
   if(this->version != VERSION)
   {
     std::string msg = "MetadataHeader: Expected version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
-    ABSL_LOG(FATAL) << msg;
+    GBWT_THROW(sdsl::simple_sds::InvalidData(msg));
   }
 
   std::uint64_t mask = 0;
@@ -258,7 +258,7 @@ MetadataHeader::check_simple_sds() const
   }
   if((this->flags & mask) != this->flags)
   {
-    ABSL_LOG(FATAL) << "MetadataHeader: Invalid flags";
+    GBWT_THROW(sdsl::simple_sds::InvalidData("MetadataHeader: Invalid flags"));
   }
 }
 

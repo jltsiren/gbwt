@@ -69,8 +69,12 @@ public:
     ASSERT_NO_THROW(decompressor.decompress(original_size, output))
       << "decompress() failed for " << test_case;
     ASSERT_TRUE(decompressor.finished()) << "Decompressor not finished after direct decompression for " << test_case;
+#ifndef GBWT_NO_EXCEPTIONS
+    // With GBWT_NO_EXCEPTIONS, this failure path aborts instead of throwing,
+    // so ASSERT_THROW can't catch it.
     ASSERT_THROW(decompressor.decompress(1, output), sdsl::simple_sds::InvalidData)
       << "Decompressor did not throw on decompressing more data than available for " << test_case;
+#endif
   }
 
   void decompress_incremental(const std::vector<char>& input, size_t original_size, std::vector<char>& output, size_t chunk_size, const std::string& test_case) const
@@ -88,8 +92,12 @@ public:
     }
     while(decompressed < original_size);
     ASSERT_TRUE(decompressor.finished()) << "Decompressor not finished after incremental decompression for " << test_case;
+#ifndef GBWT_NO_EXCEPTIONS
+    // With GBWT_NO_EXCEPTIONS, this failure path aborts instead of throwing,
+    // so ASSERT_THROW can't catch it.
     ASSERT_THROW(decompressor.decompress(1, output), sdsl::simple_sds::InvalidData)
       << "Decompressor did not throw on decompressing more data than available for " << test_case;
+#endif
   }
 
   void try_decompress(const std::vector<char>& input, const std::vector<char>& original, size_t chunk_size, const std::string& test_case) const

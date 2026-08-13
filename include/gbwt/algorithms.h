@@ -26,7 +26,7 @@
 #ifndef GBWT_ALGORITHMS_H
 #define GBWT_ALGORITHMS_H
 
-#include "support.h"
+#include <gbwt/support.h>
 
 namespace gbwt
 {
@@ -278,7 +278,7 @@ resample(const GBWTType& index, size_type sample_interval)
   if(sample_interval == 0) { sample_interval = std::numeric_limits<size_type>::max(); }
   std::vector<std::pair<comp_type, sample_type>> result;
 
-  //#pragma omp parallel for schedule(dynamic, 1)
+  #pragma omp parallel for schedule(dynamic, 1)
   for(size_type sequence = 0; sequence < index.sequences(); sequence++)
   {
     std::vector<edge_type> buffer;
@@ -291,7 +291,7 @@ resample(const GBWTType& index, size_type sample_interval)
       curr = next;
     }
     while(curr.first != ENDMARKER);
-    //#pragma omp critical
+    #pragma omp critical
     {
       result.reserve(result.size() + buffer.size());
       for(edge_type pos : buffer)

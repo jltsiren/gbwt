@@ -718,10 +718,9 @@ verifyLocate(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, con
   double start = readTimer();
   size_type initial_errors = errors;
   std::cout << queries.size() << " ranges of total length " << totalLength(queries) << std::endl;
-  int threads = 1; //omp_get_max_threads();
-  std::vector<range_type> blocks = Range::partition(range_type(0, queries.size() - 1), 4 * threads);
+  std::vector<range_type> blocks = Range::partition(range_type(0, queries.size() - 1), 4 * omp_get_max_threads());
 
-  //#pragma omp parallel for schedule(dynamic, 1)
+  #pragma omp parallel for schedule(dynamic, 1)
   for(size_type block = 0; block < blocks.size(); block++)
   {
     for(size_type i = blocks[block].first; i <= blocks[block].second; i++)
@@ -736,7 +735,7 @@ verifyLocate(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, con
 
       if(compressed_direct != dynamic_direct || dynamic_direct != compressed_fast || compressed_fast != dynamic_fast)
       {
-        //#pragma omp critical
+        #pragma omp critical
         {
           errors++;
           if(errors <= MAX_ERRORS)
@@ -780,7 +779,7 @@ tryExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index,
   // Compare the lengths.
   if(compressed_result.size() != correct_sequence.size() || compressed_result.size() != dynamic_result.size())
   {
-    //#pragma omp critical
+    #pragma omp critical
     {
       errors++;
       if(errors <= MAX_ERRORS)
@@ -799,7 +798,7 @@ tryExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index,
   {
     if(compressed_result[i] != correct_sequence[i] || compressed_result[i] != dynamic_result[i])
     {
-      //#pragma omp critical
+      #pragma omp critical
       {
         errors++;
         if(errors <= MAX_ERRORS)
@@ -837,10 +836,9 @@ verifyExtract(const GBWT& compressed_index, const DynamicGBWT& dynamic_index, co
     std::cout << "extract() verification failed" << std::endl;
     return;
   }
-  int threads = 1; //omp_get_max_threads();
-  std::vector<range_type> blocks = Range::partition(range_type(0, offsets.size() - 1), 4 * threads);
+  std::vector<range_type> blocks = Range::partition(range_type(0, offsets.size() - 1), 4 * omp_get_max_threads());
 
-  //#pragma omp parallel for schedule(dynamic, 1)
+  #pragma omp parallel for schedule(dynamic, 1)
   for(size_type block = 0; block < blocks.size(); block++)
   {
     text_buffer_type text(base_name);
@@ -871,7 +869,7 @@ verifyInverseLF(const GBWT& compressed_index, const DynamicGBWT& dynamic_index)
   double start = readTimer();
   size_type initial_errors = errors;
 
-  //#pragma omp parallel for schedule(dynamic, 1)
+  #pragma omp parallel for schedule(dynamic, 1)
   for(size_type sequence = 0; sequence < compressed_index.sequences(); sequence++)
   {
     edge_type prev(ENDMARKER, sequence);
@@ -916,7 +914,7 @@ trySample(const GBWTType& index, size_type sequence, edge_type& current, std::at
     samples_found++;
     if(sample != sequence)
     {
-      //#pragma omp critical
+      #pragma omp critical
       {
         errors++;
         if(errors <= MAX_ERRORS)
@@ -940,10 +938,9 @@ verifySamples(const GBWT& compressed_index, const DynamicGBWT& dynamic_index)
   double start = readTimer();
   size_type initial_errors = errors;
   std::atomic<size_type> found_compressed(0), found_dynamic(0);
-  int threads = 1; //omp_get_max_threads();
-  std::vector<range_type> blocks = Range::partition(range_type(0, compressed_index.sequences() - 1), 4 * threads);
+  std::vector<range_type> blocks = Range::partition(range_type(0, compressed_index.sequences() - 1), 4 * omp_get_max_threads());
 
-  //#pragma omp parallel for schedule(dynamic, 1)
+  #pragma omp parallel for schedule(dynamic, 1)
   for(size_type block = 0; block < blocks.size(); block++)
   {
     for(size_type sequence = blocks[block].first; sequence <= blocks[block].second; sequence++)
@@ -955,7 +952,7 @@ verifySamples(const GBWT& compressed_index, const DynamicGBWT& dynamic_index)
         if(!trySample(dynamic_index, sequence, curr_dynamic, found_dynamic)) { break; }
         if(curr_compressed != curr_dynamic)
         {
-          //#pragma omp critical
+          #pragma omp critical
           {
             errors++;
             if(errors <= MAX_ERRORS)
