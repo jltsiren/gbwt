@@ -529,6 +529,48 @@ TEST_F(StringArrayTest, ZstdDuplicateWithShortOrEmptyStrings)
 
 //------------------------------------------------------------------------------
 
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
+
+class StringArraySharedMemoryTest : public ::testing::Test
+{
+public:
+  std::string segment_name;
+
+  void SetUp() override
+  {
+    this->segment_name = "gbwt_test_string_array_" + std::to_string(sdsl::util::pid());
+    bi::shared_memory_object::remove(this->segment_name.c_str());
+  }
+
+  void TearDown() override
+  {
+    bi::shared_memory_object::remove(this->segment_name.c_str());
+  }
+};
+
+// A second StringArray attaching to a name a prior one already published
+// under, from the same process, should find and reuse that data instead of
+// trying to construct it again under the same name.
+TEST_F(StringArraySharedMemoryTest, AttachAfterPublish)
+{
+  std::vector<std::string> source { "first", "second", "third" };
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+
+  StringArray<SharedMemCharAllocatorType> writer(source, &segment, "arr");
+  ASSERT_EQ(writer.size(), source.size()) << "Writer has the wrong size";
+
+  StringArray<SharedMemCharAllocatorType> reader(&segment, "arr");
+  ASSERT_EQ(reader.size(), source.size()) << "Reader did not attach to the published data";
+  for(size_type i = 0; i < source.size(); i++)
+  {
+    EXPECT_EQ(reader.str(i), source[i]) << "Wrong string " << i << " after attaching";
+  }
+}
+
+#endif
+
+//------------------------------------------------------------------------------
+
 TEST(DictionaryTest, Empty)
 {
   Dictionary empty;

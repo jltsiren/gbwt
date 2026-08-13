@@ -681,6 +681,9 @@ public:
   void find_strings_from_shared_memory();
   void construct_strings_in_shared_memory();
   void check_existence_in_shared_memory();
+  // Marks the "_loaded" flag check_existence_in_shared_memory() reads as
+  // true; call only after the strings and index have both been published.
+  void mark_published_in_shared_memory();
 #endif
 
 private:

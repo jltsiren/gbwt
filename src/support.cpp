@@ -1873,6 +1873,7 @@ StringArray<CharAllocatorType>::StringArray(
     (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
     if (this->is_data_loaded_into_shared_memory == false){
       construct_index_in_shared_memory();
+      mark_published_in_shared_memory();
     }
   }
 }
@@ -1974,6 +1975,7 @@ StringArray<CharAllocatorType>::StringArray(
     (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
     if (this->is_data_loaded_into_shared_memory == false){
       construct_index_in_shared_memory();
+      mark_published_in_shared_memory();
     }
   }
 }
@@ -2028,6 +2030,7 @@ StringArray<CharAllocatorType>::StringArray(
     (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
     if (this->is_data_loaded_into_shared_memory == false){
       construct_index_in_shared_memory();
+      mark_published_in_shared_memory();
     }
   }
 }
@@ -2292,6 +2295,7 @@ void StringArray<CharAllocatorType>::simple_sds_load(std::istream& in)
     (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
     if (this->is_data_loaded_into_shared_memory == false){
       construct_index_in_shared_memory();
+      mark_published_in_shared_memory();
     }
   }
 #endif
@@ -2560,7 +2564,8 @@ void StringArray<CharAllocatorType>::construct_index_in_shared_memory()
         ABSL_LOG(INFO) << "capacity_bytes: " << capacity_bytes;
         memcpy(index_data, index.data(), capacity_bytes);
         *index_width = index.width();
-        *index_size = index.bit_size();
+        // int_vector's shared-memory constructor takes an element count, not a bit count.
+        *index_size = index.size();
         ABSL_LOG(INFO) <<
             "Saved index data into shared memory:" <<
             capacity_bytes / 1e9<< " Gbytes";
@@ -2678,6 +2683,21 @@ void StringArray<CharAllocatorType>::check_existence_in_shared_memory(){
     }else{
       ABSL_LOG(INFO) <<
           "check_existence_in_shared_memory: Shared memory is null";
+    }
+  }
+}
+
+template <typename CharAllocatorType>
+void StringArray<CharAllocatorType>::mark_published_in_shared_memory(){
+  if constexpr
+    (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
+    if (shared_memory != nullptr){
+      std::string existence_name_in_shared_memory =
+            this->object_prefix_in_shared_memory + "_loaded";
+      bool* bool_ptr = shared_memory->find_or_construct<bool>
+            (existence_name_in_shared_memory.c_str())(false);
+      *bool_ptr = true;
+      this->is_data_loaded_into_shared_memory = true;
     }
   }
 }
