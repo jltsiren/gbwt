@@ -206,5 +206,7 @@ test:$(LIBRARY)
 
 clean:
 	rm -rf $(BUILD_BIN) $(BUILD_LIB) $(BUILD_OBJ)
-	rm -f *.o *.a $(OBSOLETE) Make.helper $(CONFIG_HEADER)
+	# tests/Makefile includes Make.helper at parse time, so it must still
+	# exist when we recurse into tests/; remove it only afterwards.
 	cd tests && $(MAKE) clean
+	rm -f *.o *.a $(OBSOLETE) Make.helper $(CONFIG_HEADER)
