@@ -32,7 +32,6 @@
 #include <gbwt/error_handling.h>
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-#include "absl/log/absl_log.h"
 #include <boost/interprocess/creation_tags.hpp>
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <boost/interprocess/shared_memory_object.hpp>
@@ -2561,17 +2560,10 @@ void StringArray<CharAllocatorType>::construct_index_in_shared_memory()
         uint64_t* index_size =
             shared_memory->construct<uint64_t>
             (index_size_name.c_str())();
-        ABSL_LOG(INFO) << "capacity_bytes: " << capacity_bytes;
         memcpy(index_data, index.data(), capacity_bytes);
         *index_width = index.width();
         // int_vector's shared-memory constructor takes an element count, not a bit count.
         *index_size = index.size();
-        ABSL_LOG(INFO) <<
-            "Saved index data into shared memory:" <<
-            capacity_bytes / 1e9<< " Gbytes";
-    }else{
-      ABSL_LOG(INFO) <<
-          "construct_index_in_shared_memory: Shared memory is null";
     }
   }
 }
@@ -2594,21 +2586,11 @@ void StringArray<CharAllocatorType>::find_index_from_shared_memory()
             shared_memory->find<uint8_t>(index_width_name.c_str()).first;
         uint64_t* index_size =
             shared_memory->find<uint64_t>(index_size_name.c_str()).first;
-        ABSL_LOG(INFO) <<
-            "Loading index data from shared memory ...";
         bool loaded_from_shared_memory = true;
         this->index = sdsl::int_vector<>(*index_size,
                                 *index_width,
                                 index_data,
                                 loaded_from_shared_memory);
-
-        uint64_t capacity_bytes = this->index.capacity() / 8;
-        ABSL_LOG(INFO) <<
-            "Loaded index data from shared memory:" <<
-            capacity_bytes / 1e9<< " Gbytes";
-    }else{
-      ABSL_LOG(INFO) <<
-          "find_index_from_shared_memory: Shared memory is null";
     }
   }
 }
@@ -2628,10 +2610,6 @@ void StringArray<CharAllocatorType>::find_strings_from_shared_memory()
       this->strings =
         shared_memory->find<std::vector<char, CharAllocatorType>>
         (strings_name_in_shared_memory.c_str()).first;
-      ABSL_LOG(INFO) << this->strings->size() / 1e9 << " Gbytes";
-    }else{
-      ABSL_LOG(INFO) <<
-          "find_strings_from_shared_memory: Shared memory is null";
     }
   }
 }
@@ -2643,20 +2621,15 @@ void StringArray<CharAllocatorType>::construct_strings_in_shared_memory()
   if constexpr
     (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
     if (shared_memory != nullptr){
-      ABSL_LOG(INFO) << "StringArray: Shared memory is not null";
       std::string strings_name_in_shared_memory =
           object_prefix_in_shared_memory + "_strings";
       this->shared_memory_char_allocator =
             new SharedMemCharAllocatorType(
                 this->shared_memory->get_segment_manager());
-      ABSL_LOG(INFO) << "Run construct_strings_in_shared_memory : "
-          << strings_name_in_shared_memory;
       this->strings =
         shared_memory->construct<std::vector<char, CharAllocatorType>>
         (strings_name_in_shared_memory.c_str())
         (*this->shared_memory_char_allocator);
-    }else{
-      ABSL_LOG(INFO) << "StringArray: Shared memory is null";
     }
   }
 }
@@ -2671,18 +2644,6 @@ void StringArray<CharAllocatorType>::check_existence_in_shared_memory(){
       bool* bool_ptr = shared_memory->find_or_construct<bool>
             (existence_name_in_shared_memory.c_str())(false);
       this->is_data_loaded_into_shared_memory = *bool_ptr;
-      if (this->is_data_loaded_into_shared_memory == true){
-          ABSL_LOG(INFO) <<
-              "check_existence_in_shared_memory: " <<
-              "Strings are already loaded in shared memory. ";
-        }else{
-          ABSL_LOG(INFO) <<
-              "check_existence_in_shared_memory: " <<
-              "Strings are not loaded in shared memory. ";
-        }
-    }else{
-      ABSL_LOG(INFO) <<
-          "check_existence_in_shared_memory: Shared memory is null";
     }
   }
 }
