@@ -1,28 +1,3 @@
-/*
-  Copyright (c) 2017, 2018, 2019, 2020, 2021 Jouni Siren
-  Copyright (c) 2017 Genome Research Ltd.
-
-  Author: Jouni Siren <jouni.siren@iki.fi>
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-*/
-
 #ifndef GBWT_DYNAMIC_GBWT_H
 #define GBWT_DYNAMIC_GBWT_H
 
@@ -70,7 +45,12 @@ public:
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
 
-  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_serialize(std::ostream& out) const
+  {
+    this->simple_sds_serialize_version(out, GBWTHeader::DEFAULT_VERSION);
+  }
+
+  void simple_sds_serialize_version(std::ostream& out, std::uint32_t version) const;
   void simple_sds_load(std::istream& in);
   size_t simple_sds_size() const;
 

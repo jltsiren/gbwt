@@ -28,8 +28,6 @@ constexpr size_type MergeParameters::MAX_BUFFER_SIZE;
 constexpr size_type MergeParameters::MAX_MERGE_BUFFERS;
 constexpr size_type MergeParameters::MAX_MERGE_JOBS;
 
-constexpr int StringArray::DEFAULT_COMPRESSION_LEVEL;
-
 //------------------------------------------------------------------------------
 
 void
@@ -1223,6 +1221,44 @@ size_t
 RecordArray::simple_sds_size() const
 {
   return this->index.simple_sds_size() + sdsl::simple_sds::vector_size(this->data);
+}
+
+void
+RecordArray::simple_sds_compress(std::ostream& out, int compression_level) const
+{
+  this->index.simple_sds_serialize(out);
+  {
+    ZstdCompressor compressor(compression_level);
+    compressor.compressDirect(std::string_view(reinterpret_cast<const char*>(this->data.data()), this->data.size()));
+    compressor.finish();
+    sdsl::simple_sds::serialize_vector(compressor.outputData(), out);
+  }
+}
+
+void
+RecordArray::simple_sds_decompress(std::istream& in)
+{
+  this->index.simple_sds_load(in);
+  this->records = this->index.ones();
+  sdsl::util::init_support(this->select, &(this->index));
+
+  // TODO: This would also be a bit more efficient if we could read directly from the input stream.
+  {
+    std::vector<char> compressed = sdsl::simple_sds::load_vector<char>(in);
+    ZstdDecompressor decompressor(std::move(compressed));
+    this->data = std::vector<byte_type>();
+    this->data.reserve(this->index.size());
+    decompressor.decompress(this->index.size(), this->data);
+
+    // Check that there are no trailing bytes.
+    if(!decompressor.finished())
+    {
+      std::string msg = "RecordArray: Trailing bytes after decompression";
+      throw sdsl::simple_sds::InvalidData(msg);
+    }
+  }
+
+  this->sanityChecks();
 }
 
 size_type

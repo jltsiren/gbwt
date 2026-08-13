@@ -130,7 +130,8 @@ GBWT::load(std::istream& in)
   GBWTHeader h = sdsl::simple_sds::load_value<GBWTHeader>(in);
   h.check();
   bool simple_sds = h.get(GBWTHeader::FLAG_SIMPLE_SDS);
-  bool has_tags = h.version >= 5; // FIXME Replace with symbolic constant.
+  bool has_tags = h.version >= GBWTHeader::TAGS_VERSION;
+  bool zstd_bwt = h.version >= GBWTHeader::ZSTD_VERSION; // Only in simple-sds format.
   h.unset(GBWTHeader::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
   h.setVersion(); // Update to the current version.
   this->header = h;
@@ -148,7 +149,11 @@ GBWT::load(std::istream& in)
   else { this->resetTags(); }
 
   // Read the BWT.
-  if(simple_sds) { this->bwt.simple_sds_load(in); }
+  if(simple_sds)
+  {
+    if(zstd_bwt) { this->bwt.simple_sds_decompress(in); }
+    else { this->bwt.simple_sds_load(in); }
+  }
   else { this->bwt.load(in); }
   if(this->bwt.size() != this->effective())
   {
@@ -194,14 +199,22 @@ GBWT::load(std::istream& in)
 }
 
 void
-GBWT::simple_sds_serialize(std::ostream& out) const
+GBWT::simple_sds_serialize_version(std::ostream& out, std::uint32_t version) const
 {
+  if(version < GBWTHeader::MIN_SERIALIZE_VERSION || version > GBWTHeader::VERSION)
+  {
+    std::string msg = "GBWT: Cannot serialize version " + std::to_string(version);
+    throw std::runtime_error(msg);
+  }
+
   GBWTHeader h = this->header;
+  h.version = version;
   h.set(GBWTHeader::FLAG_SIMPLE_SDS); // We only set this flag in the serialized header.
   sdsl::simple_sds::serialize_value(h, out);
 
   this->tags.simple_sds_serialize(out);
-  this->bwt.simple_sds_serialize(out);
+  if(version >= GBWTHeader::ZSTD_VERSION) { this->bwt.simple_sds_compress(out); }
+  else { this->bwt.simple_sds_serialize(out); }
   sdsl::simple_sds::serialize_option(this->da_samples, out);
   if(this->hasMetadata()) { sdsl::simple_sds::serialize_option(this->metadata, out); }
   else { sdsl::simple_sds::empty_option(out); }

@@ -1,6 +1,6 @@
 # Simple-SDS serialization format
 
-GBWT version 5, Metadata version 2. Updated 2026-02-10.
+GBWT version 6, Metadata version 2. Updated 2026-08-13.
 
 Based on Simple-SDS version 0.4.0.
 
@@ -109,7 +109,7 @@ Serialization format for the GBWT:
 
 1. GBWT header
 2. Tags
-3. BWT
+3. BWT or Compressed BWT
 4. Optional document array samples
 5. Optional metadata
 
@@ -119,6 +119,9 @@ The reverse strand of the endmarker node is never used.
 A bidirectional index also stores each **original path** as two **GBWT paths**.
 The forward sequence for original path `i` is stored as GBWT path `2 * i`.
 The reverse sequence, which visits the opposite strands of each node in reverse order, is stored as GBWT path `2 * i + 1`.
+
+Until GBWT version `5`, the **BWT** was serialized directly.
+Starting from version `6`, it is **compressed** using Zstandard.
 
 If key `source` is present in the tags, the corresponding value indicates the GBWT implementation used for serializing the structure.
 The reader may use that information for determining if it can understand the serialization formats for unspecified optional structures.
@@ -137,7 +140,7 @@ The original GBWT implementation is `jltsiren/gbwt`.
 7. `flags`: Binary flags as an element.
 
 The first two fields are 32-bit unsigned little-endian integers for compatibility with the SDSL-based serialization format.
-Simple-SDS serialization format requires file format version `5`.
+Simple-SDS serialization format requires file format version `5` or above.
 
 Because the BWT stores some information for all integers in the **effective alphabet**, the GBWT uses simple alphabet compaction based on an alphabet offset:
 
@@ -178,6 +181,19 @@ Edges not used on the indexed paths may be omitted from the local alphabet.
 **Note:** The length of `index` must be equal to the length of `data`.
 
 **Note:** If the BWT encodes the topology of the subgraph induced by the paths, all unused nodes and edges must be omitted.
+
+### Compressed BWT
+
+The BWT can be **compressed** using Zstandard.
+
+Serialization format for compressed BWT:
+
+1. `index`: Starting offset of each record as a sparse vector.
+2. `compressed_data`: A byte vector storing zstd-compressed `data` vector.
+
+See above "BWT" above for further details.
+
+**Note:** We get the original length of `data` from `index`.
 
 ### BWT records
 
@@ -242,7 +258,7 @@ An optional structure implies that the data is optional, while the names are the
 6. `flags`: Binary flags as an element.
 
 The first two fields are 32-bit unsigned little-endian integers for compatibility with the SDSL-based serialization format.
-Simple-SDS serialization format requires file format version `2`.
+Simple-SDS serialization format requires file format version `2` or above.
 Contigs typically match connected components in the graph.
 Haplotype count is an estimate for the total number of full-length paths in each component.
 

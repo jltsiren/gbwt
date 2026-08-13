@@ -1,28 +1,3 @@
-/*
-  Copyright (c) 2017, 2018, 2019, 2020, 2021, 2025, 2026 Jouni Siren
-  Copyright (c) 2015, 2016, 2017 Genome Research Ltd.
-
-  Author: Jouni Siren <jouni.siren@iki.fi>
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-*/
-
 #include <gbwt/utils.h>
 
 #include <cstdio>
@@ -462,7 +437,33 @@ ZstdDecompressor::decompress(size_t bytes, std::vector<char>& output)
     if(this->cursor < this->out_buffer.pos)
     {
       size_t to_copy = std::min(bytes - decompressed, this->out_buffer.pos - this->cursor);
-      const char* start_ptr = static_cast<char*>(this->out_buffer.dst) + this->cursor;
+      const char* start_ptr = static_cast<const char*>(this->out_buffer.dst) + this->cursor;
+      output.insert(output.end(), start_ptr, start_ptr + to_copy);
+      this->cursor += to_copy;
+      decompressed += to_copy;
+    }
+    else if(this->in_buffer.pos < this->in_buffer.size)
+    {
+      this->fillOutputBuffer();
+    }
+    else
+    {
+      std::string msg = "ZstdDecompressor: Unexpected end of input data";
+      throw sdsl::simple_sds::InvalidData(msg);
+    }
+  }
+}
+
+void
+ZstdDecompressor::decompress(size_t bytes, std::vector<byte_type>& output)
+{
+  size_t decompressed = 0;
+  while(decompressed < bytes)
+  {
+    if(this->cursor < this->out_buffer.pos)
+    {
+      size_t to_copy = std::min(bytes - decompressed, this->out_buffer.pos - this->cursor);
+      const byte_type* start_ptr = static_cast<const byte_type*>(this->out_buffer.dst) + this->cursor;
       output.insert(output.end(), start_ptr, start_ptr + to_copy);
       this->cursor += to_copy;
       decompressed += to_copy;

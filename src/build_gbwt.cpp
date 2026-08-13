@@ -1,28 +1,3 @@
-/*
-  Copyright (c) 2018, 2019, 2020, 2021, 2023 Jouni Siren
-  Copyright (c) 2017 Genome Research Ltd.
-
-  Author: Jouni Siren <jouni.siren@iki.fi>
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-*/
-
 #include <set>
 #include <unistd.h>
 
@@ -84,7 +59,11 @@ struct Config
   // Output.
   std::string output_base;
   bool sdsl_format = false;
+  std::uint32_t simple_sds_version = 0; // Not set.
 };
+
+template<typename IndexType>
+void serialize_gbwt(const IndexType& index, const Config& config);
 
 //------------------------------------------------------------------------------
 
@@ -123,7 +102,6 @@ main(int argc, char** argv)
   Verbosity::set(Verbosity::FULL);
   Config config(argc, argv);
   if(!(config.validate())) { std::exit(EXIT_FAILURE); }
-  std::string gbwt_name = config.output_base + DynamicGBWT::EXTENSION;
 
   Version::print(std::cout, tool_name);
 
@@ -138,7 +116,11 @@ main(int argc, char** argv)
     std::cout << ")";
   }
   std::cout << std::endl;
-  printHeader("Output name"); std::cout << config.output_base << (config.sdsl_format ? " (SDSL format)" : " (simple-sds format)") << std::endl;
+  printHeader("Output name"); std::cout << config.output_base;
+  if(config.sdsl_format) { std::cout << " (SDSL format)"; }
+  else if(config.simple_sds_version == 0) { std::cout << " (Simple-SDS format)"; }
+  else { std::cout << " (Simple-SDS format version " << config.simple_sds_version << ")"; }
+  std::cout << std::endl;
   if(config.batch_size != 0) { printHeader("Batch size"); std::cout << config.batch_size << " million" << std::endl; }
   printHeader("Orientation"); std::cout << (config.both_orientations ? "both" : "forward only") << std::endl;
   printHeader("Sample interval"); std::cout << config.sample_interval << std::endl;
@@ -204,15 +186,7 @@ main(int argc, char** argv)
     }
 
     // Serialize and print statistics.
-    if(config.sdsl_format)
-    {
-      if(!sdsl::store_to_file(dynamic_index, gbwt_name))
-      {
-        std::cerr << "build_gbwt: Cannot write the index to " << gbwt_name << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-    }
-    else { sdsl::simple_sds::serialize_to(dynamic_index, gbwt_name); }
+    serialize_gbwt(dynamic_index, config);
     printStatistics(dynamic_index, config.output_base);
 
     double seconds = readTimer() - start;
@@ -224,28 +198,36 @@ main(int argc, char** argv)
 
   if(config.resample)
   {
-    std::string input_base = config.input_files.front();
     std::cout << "Resampling the index..." << std::endl;
-    double resample_start = readTimer();
     std::cout << std::endl;
+    std::string input_base = config.input_files.front();
+    double resample_start = readTimer();
 
     GBWT compressed_index;
     sdsl::simple_sds::load_from(compressed_index, input_base + GBWT::EXTENSION);
     compressed_index.resample(config.sample_interval);
     printStatistics(compressed_index, config.output_base);
 
-    if(config.sdsl_format)
-    {
-      if(!sdsl::store_to_file(compressed_index, gbwt_name))
-      {
-        std::cerr << "build_gbwt: Cannot write the index to " << gbwt_name << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-    }
-    else { sdsl::simple_sds::serialize_to(compressed_index, gbwt_name); }
+    serialize_gbwt(compressed_index, config);
 
     double resample_seconds = readTimer() - resample_start;
     std::cout << "Resampled the index in " << resample_seconds << " seconds" << std::endl;
+    std::cout << std::endl;
+  }
+
+  if(!(config.build_index || config.resample) && (config.sdsl_format || config.simple_sds_version != 0))
+  {
+    std::cout << "Rewriting the index..." << std::endl;
+    std::cout << std::endl;
+    std::string input_base = config.input_files.front();
+    double rewrite_start = readTimer();
+
+    GBWT compressed_index;
+    sdsl::simple_sds::load_from(compressed_index, input_base + GBWT::EXTENSION);
+    serialize_gbwt(compressed_index, config);
+
+    double rewrite_seconds = readTimer() - rewrite_start;
+    std::cout << "Rewrote the index in " << rewrite_seconds << " seconds" << std::endl;
     std::cout << std::endl;
   }
 
@@ -257,6 +239,7 @@ main(int argc, char** argv)
     std::cout << std::endl;
 
     GBWT compressed_index;
+    std::string gbwt_name = config.output_base + GBWT::EXTENSION;
     sdsl::simple_sds::load_from(compressed_index, gbwt_name);
     DynamicGBWT dynamic_index(compressed_index);
 
@@ -290,7 +273,7 @@ Config::Config(int argc, char** argv)
   if(argc < 2) { usage(); std::exit(EXIT_FAILURE); }
 
   int c = 0;
-  while((c = getopt(argc, argv, "b:cefF:i:lL:o:OpP:rRs:Stv")) != -1)
+  while((c = getopt(argc, argv, "b:cefF:i:lL:o:OV:pP:rRs:Stv")) != -1)
   {
     switch(c)
     {
@@ -319,6 +302,8 @@ Config::Config(int argc, char** argv)
       this->output_base = optarg; break;
     case 'O':
       this->sdsl_format = true; break;
+    case 'V':
+      this->simple_sds_version = std::stoul(optarg); break;
     case 'p':
       this->input = input_parse; break;
     case 'P':
@@ -408,7 +393,8 @@ Config::usage()
   std::cerr << "  -l    Load an existing index instead of building it" << std::endl;
   std::cerr << "  -R    Resample sequence ids in the loaded index (implies -l)" << std::endl;
   std::cerr << "  -o X  Use base name X for output (default: the only input)" << std::endl;
-  std::cerr << "  -O    Output SDSL format instead of simple-sds format" << std::endl;
+  std::cerr << "  -O    Output SDSL format instead of Simple-SDS format" << std::endl;
+  std::cerr << "  -V X  Output Simple-SDS format version X (default: " << GBWTHeader::DEFAULT_VERSION << ")" << std::endl;
   std::cerr << "  -t    The input is a text file (each line is a comma-separated sequence of nodes)" << std::endl;
   std::cerr << std::endl;
   std::cerr << "Construction parameters:" << std::endl;
@@ -425,6 +411,39 @@ Config::usage()
   std::cerr << "  -c    Check for overlapping variants in haplotypes" << std::endl;
   std::cerr << "  -S    Skip overlapping variants" << std::endl;
   std::cerr << std::endl;
+}
+
+template<typename IndexType>
+void serialize_gbwt(const IndexType& index, const Config& config)
+{
+  std::string gbwt_name = config.output_base + DynamicGBWT::EXTENSION;
+  if(config.sdsl_format)
+  {
+    if(!sdsl::store_to_file(index, gbwt_name))
+    {
+      std::cerr << "build_gbwt: Cannot write the index to " << gbwt_name << std::endl;
+      std::exit(EXIT_FAILURE);
+    }
+  }
+  else
+  {
+    if(config.simple_sds_version == 0)
+    {
+      sdsl::simple_sds::serialize_to(index, gbwt_name);
+    }
+    else
+    {
+      std::ofstream out(gbwt_name, std::ios_base::binary);
+      if(!out)
+      {
+        std::cerr << "build_gbwt: Cannot write the index to " << gbwt_name << std::endl;
+        std::exit(EXIT_FAILURE);
+      }
+      out.exceptions(std::ofstream::failbit | std::ofstream::badbit);
+      index.simple_sds_serialize_version(out, config.simple_sds_version);
+      out.close();
+    }
+  }
 }
 
 //------------------------------------------------------------------------------
