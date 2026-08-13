@@ -1850,31 +1850,23 @@ StringArray<CharAllocatorType>::StringArray(
   this->strings = nullptr;
   if constexpr
     (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
+    // Unlike the other shared-memory constructors, this one has no source
+    // content to publish, so it only makes sense as an attach to strings
+    // another process already published under this name.
     check_existence_in_shared_memory();
-    if (this->is_data_loaded_into_shared_memory == true){
-      // Load the strings and index from shared memory.
-      find_strings_from_shared_memory();
-      find_index_from_shared_memory();
-      return;
-    }else{
-      // construct a vector for strings in shared memory.
-      // this vector will be filled in the next step.
-      construct_strings_in_shared_memory();
+    if (this->is_data_loaded_into_shared_memory != true)
+    {
+      GBWT_THROW(std::runtime_error("StringArray: No strings named " + object_prefix_in_shared_memory + " exist in the given shared memory segment"));
     }
+    find_strings_from_shared_memory();
+    find_index_from_shared_memory();
+    return;
   }else{
     // No shared memory so create a vector with default allocator for strings.
     this->strings = new std::vector<char, std::allocator<char>>();
   }
 
   this->index = sdsl::int_vector<0>(1, 0, 1);
-
-  if constexpr
-    (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
-    if (this->is_data_loaded_into_shared_memory == false){
-      construct_index_in_shared_memory();
-      mark_published_in_shared_memory();
-    }
-  }
 }
 
 template <typename CharAllocatorType>
