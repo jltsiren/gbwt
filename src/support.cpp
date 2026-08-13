@@ -1836,6 +1836,43 @@ MergeParameters::setMergeJobs(size_type n)
 //------------------------------------------------------------------------------
 template <typename CharAllocatorType>
 StringArray<CharAllocatorType>::StringArray(
+    bi::managed_shared_memory* shared_memory,
+    std::string object_prefix_in_shared_memory)
+{
+  this->shared_memory = shared_memory;
+  this->object_prefix_in_shared_memory = object_prefix_in_shared_memory;
+  this->shared_memory_char_allocator = nullptr;
+  this->strings = nullptr;
+  if constexpr
+    (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
+    check_existence_in_shared_memory();
+    if (this->is_data_loaded_into_shared_memory == true){
+      // Load the strings and index from shared memory.
+      find_strings_from_shared_memory();
+      find_index_from_shared_memory();
+      return;
+    }else{
+      // construct a vector for strings in shared memory.
+      // this vector will be filled in the next step.
+      construct_strings_in_shared_memory();
+    }
+  }else{
+    // No shared memory so create a vector with default allocator for strings.
+    this->strings = new std::vector<char, std::allocator<char>>();
+  }
+
+  this->index = sdsl::int_vector<0>(1, 0, 1);
+
+  if constexpr
+    (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
+    if (this->is_data_loaded_into_shared_memory == false){
+      construct_index_in_shared_memory();
+    }
+  }
+}
+
+template <typename CharAllocatorType>
+StringArray<CharAllocatorType>::StringArray(
     const std::vector<std::string>& source,
     bi::managed_shared_memory* shared_memory,
     std::string object_prefix_in_shared_memory)
@@ -2171,38 +2208,48 @@ size_t StringArray<CharAllocatorType>::simple_sds_size() const
 template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::simple_sds_load_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform)
 {
-  // Load the data.
-  sdsl::sd_vector<> v; v.simple_sds_load(in);
-  sdsl::int_vector<8> comp_to_char; comp_to_char.simple_sds_load(in);
-  sdsl::int_vector<> compressed; compressed.simple_sds_load(in);
-
-  // Initialize the members.
-  this->strings = new std::vector<char, CharAllocatorType>(); this->strings->reserve(2 * compressed.size());
-  this->index = sdsl::int_vector<>(2 * v.ones() + 1, 0, sdsl::bits::length(2 * compressed.size()));
-
-  // Decompress the data.
-  this->index[0] = 0;
-  auto iter = v.one_begin();
-  size_type i = 1;
-  while(iter != v.one_end())
+  if constexpr (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value)
   {
-    size_type curr = iter->second;
-    ++iter;
-    size_type length = (iter == v.one_end() ? compressed.size() : iter->second) - curr;
-
-    // First copy.
-    this->index[i] = this->index[i - 1] + length; i++;
-    size_t start = this->strings->size();
-    for(size_type j = 0; j < length; j++) { this->strings->push_back(comp_to_char[compressed[curr + j]]); }
-    std::string_view view(this->strings->data() + start, length);
-
-    // Transformed copy.
-    this->index[i] = this->index[i - 1] + length; i++;
-    std::string transformed_str = transform(view);
-    this->strings->insert(this->strings->end(), transformed_str.begin(), transformed_str.end());
+    // The shared-memory allocator cannot be default-constructed, so this
+    // method (which was never used with shared-memory StringArrays) does
+    // not support it.
+    ABSL_LOG(FATAL) << "StringArray: simple_sds_load_duplicate() is not supported for the shared-memory allocator";
   }
+  else
+  {
+    // Load the data.
+    sdsl::sd_vector<> v; v.simple_sds_load(in);
+    sdsl::int_vector<8> comp_to_char; comp_to_char.simple_sds_load(in);
+    sdsl::int_vector<> compressed; compressed.simple_sds_load(in);
 
-  this->sanityChecks();
+    // Initialize the members.
+    this->strings = new std::vector<char, CharAllocatorType>(); this->strings->reserve(2 * compressed.size());
+    this->index = sdsl::int_vector<>(2 * v.ones() + 1, 0, sdsl::bits::length(2 * compressed.size()));
+
+    // Decompress the data.
+    this->index[0] = 0;
+    auto iter = v.one_begin();
+    size_type i = 1;
+    while(iter != v.one_end())
+    {
+      size_type curr = iter->second;
+      ++iter;
+      size_type length = (iter == v.one_end() ? compressed.size() : iter->second) - curr;
+
+      // First copy.
+      this->index[i] = this->index[i - 1] + length; i++;
+      size_t start = this->strings->size();
+      for(size_type j = 0; j < length; j++) { this->strings->push_back(comp_to_char[compressed[curr + j]]); }
+      std::string_view view(this->strings->data() + start, length);
+
+      // Transformed copy.
+      this->index[i] = this->index[i - 1] + length; i++;
+      std::string transformed_str = transform(view);
+      this->strings->insert(this->strings->end(), transformed_str.begin(), transformed_str.end());
+    }
+
+    this->sanityChecks();
+  }
 }
 
 template <typename CharAllocatorType>
@@ -2265,84 +2312,104 @@ void StringArray<CharAllocatorType>::simple_sds_compress_even(std::ostream& out,
 template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::simple_sds_decompress(std::istream& in)
 {
-  // Load the index.
-  size_t string_size = 0;
+  if constexpr (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value)
   {
-    sdsl::sd_vector<> v; v.simple_sds_load(in);
-    string_size = sdsl::simple_sds::load_value<size_t>(in);
-    this->index = sdsl::int_vector<>(v.ones() + 1, 0, sdsl::bits::length(string_size));
-    size_t i = 0;
-    for(auto iter = v.one_begin(); iter != v.one_end(); ++iter, i++) { this->index[i] = iter->second; }
-    this->index[this->size()] = string_size;
+    // ZstdDecompressor only decompresses into a plain std::vector<char>, so
+    // this method (which was never used with shared-memory StringArrays)
+    // does not support the shared-memory allocator.
+    ABSL_LOG(FATAL) << "StringArray: simple_sds_decompress() is not supported for the shared-memory allocator";
   }
-
-  // TODO: This would also be a bit more efficient if we could read directly from the input stream.
+  else
   {
-    std::vector<char> compressed = sdsl::simple_sds::load_vector<char>(in);
-    ZstdDecompressor decompressor(std::move(compressed));
-    this->strings = new std::vector<char, CharAllocatorType>();
-    this->strings->reserve(string_size);
-    decompressor.decompress(string_size, *this->strings);
-
-    // Check that there are no trailing bytes.
-    if(!decompressor.finished())
+    // Load the index.
+    size_t string_size = 0;
     {
-      std::string msg = "StringArray: Trailing bytes after decompression";
-      throw sdsl::simple_sds::InvalidData(msg);
+      sdsl::sd_vector<> v; v.simple_sds_load(in);
+      string_size = sdsl::simple_sds::load_value<size_t>(in);
+      this->index = sdsl::int_vector<>(v.ones() + 1, 0, sdsl::bits::length(string_size));
+      size_t i = 0;
+      for(auto iter = v.one_begin(); iter != v.one_end(); ++iter, i++) { this->index[i] = iter->second; }
+      this->index[this->size()] = string_size;
     }
-  }
 
-  this->sanityChecks();
+    // TODO: This would also be a bit more efficient if we could read directly from the input stream.
+    {
+      std::vector<char> compressed = sdsl::simple_sds::load_vector<char>(in);
+      ZstdDecompressor decompressor(std::move(compressed));
+      this->strings = new std::vector<char, CharAllocatorType>();
+      this->strings->reserve(string_size);
+      decompressor.decompress(string_size, *this->strings);
+
+      // Check that there are no trailing bytes.
+      if(!decompressor.finished())
+      {
+        std::string msg = "StringArray: Trailing bytes after decompression";
+        throw sdsl::simple_sds::InvalidData(msg);
+      }
+    }
+
+    this->sanityChecks();
+  }
 }
 
 template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::simple_sds_decompress_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform)
 {
-  // Load the index and allocate space for the members.
-  sdsl::sd_vector<> v;
-  size_t string_size = 0; // Total length of the original strings.
+  if constexpr (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value)
   {
-    v.simple_sds_load(in);
-    string_size = sdsl::simple_sds::load_value<size_t>(in);
-    this->index = sdsl::int_vector<>(2 * v.ones() + 1, 0, sdsl::bits::length(2 * string_size));
-    this->strings = new std::vector<char, CharAllocatorType>(); this->strings->reserve(2 * string_size);
+    // ZstdDecompressor only decompresses into a plain std::vector<char>, so
+    // this method (which was never used with shared-memory StringArrays)
+    // does not support the shared-memory allocator.
+    ABSL_LOG(FATAL) << "StringArray: simple_sds_decompress_duplicate() is not supported for the shared-memory allocator";
   }
-
-  // Decompress the data.
+  else
   {
-    std::vector<char> compressed = sdsl::simple_sds::load_vector<char>(in);
-    ZstdDecompressor decompressor(std::move(compressed));
-
-    this->index[0] = 0;
-    auto iter = v.one_begin();
-    size_type i = 1;
-    while(iter != v.one_end())
+    // Load the index and allocate space for the members.
+    sdsl::sd_vector<> v;
+    size_t string_size = 0; // Total length of the original strings.
     {
-      size_type curr = iter->second;
-      ++iter;
-      size_type length = (iter == v.one_end() ? string_size : iter->second) - curr;
-
-      // First copy.
-      this->index[i] = this->index[i - 1] + length; i++;
-      size_t start = this->strings->size();
-      decompressor.decompress(length, *this->strings);
-      std::string_view view(this->strings->data() + start, length);
-
-      // Transformed copy.
-      this->index[i] = this->index[i - 1] + length; i++;
-      std::string transformed_str = transform(view);
-      this->strings->insert(this->strings->end(), transformed_str.begin(), transformed_str.end());
+      v.simple_sds_load(in);
+      string_size = sdsl::simple_sds::load_value<size_t>(in);
+      this->index = sdsl::int_vector<>(2 * v.ones() + 1, 0, sdsl::bits::length(2 * string_size));
+      this->strings = new std::vector<char, CharAllocatorType>(); this->strings->reserve(2 * string_size);
     }
 
-    // Check that there are no trailing bytes.
-    if(!decompressor.finished())
+    // Decompress the data.
     {
-      std::string msg = "StringArray: Trailing bytes after decompression";
-      throw sdsl::simple_sds::InvalidData(msg);
-    }
-  }
+      std::vector<char> compressed = sdsl::simple_sds::load_vector<char>(in);
+      ZstdDecompressor decompressor(std::move(compressed));
 
-  this->sanityChecks();
+      this->index[0] = 0;
+      auto iter = v.one_begin();
+      size_type i = 1;
+      while(iter != v.one_end())
+      {
+        size_type curr = iter->second;
+        ++iter;
+        size_type length = (iter == v.one_end() ? string_size : iter->second) - curr;
+
+        // First copy.
+        this->index[i] = this->index[i - 1] + length; i++;
+        size_t start = this->strings->size();
+        decompressor.decompress(length, *this->strings);
+        std::string_view view(this->strings->data() + start, length);
+
+        // Transformed copy.
+        this->index[i] = this->index[i - 1] + length; i++;
+        std::string transformed_str = transform(view);
+        this->strings->insert(this->strings->end(), transformed_str.begin(), transformed_str.end());
+      }
+
+      // Check that there are no trailing bytes.
+      if(!decompressor.finished())
+      {
+        std::string msg = "StringArray: Trailing bytes after decompression";
+        throw sdsl::simple_sds::InvalidData(msg);
+      }
+    }
+
+    this->sanityChecks();
+  }
 }
 
 template <typename CharAllocatorType>

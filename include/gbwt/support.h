@@ -543,11 +543,7 @@ public:
 
   constexpr static int DEFAULT_COMPRESSION_LEVEL = 3;
 
-  StringArray(bi::managed_shared_memory* shared_memory = nullptr, std::string object_prefix_in_shared_memory = "") :
-    index(1, 0, 1),
-    strings(nullptr),
-    shared_memory(shared_memory),
-    object_prefix_in_shared_memory(object_prefix_in_shared_memory) {}
+  StringArray(bi::managed_shared_memory* shared_memory = nullptr, std::string object_prefix_in_shared_memory = "");
   StringArray(const std::vector<std::string>& source,
               bi::managed_shared_memory* shared_memory = nullptr,
               std::string object_prefix_in_shared_memory = "");
@@ -646,9 +642,9 @@ public:
   void remove(size_type i);
 
   sdsl::int_vector<0> index;
-  std::vector<char, CharAllocatorType>* strings;  // std::vector<char, SharedMemCharAllocatorType>
-  bi::managed_shared_memory* shared_memory;
-  SharedMemCharAllocatorType* shared_memory_char_allocator;
+  std::vector<char, CharAllocatorType>* strings = nullptr;  // std::vector<char, SharedMemCharAllocatorType>
+  bi::managed_shared_memory* shared_memory = nullptr;
+  SharedMemCharAllocatorType* shared_memory_char_allocator = nullptr;
   std::string object_prefix_in_shared_memory;
   bool is_data_loaded_into_shared_memory = false;
 
