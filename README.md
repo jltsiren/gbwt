@@ -29,12 +29,13 @@ All dependencies should be installed before compiling GBWT. By default, SDSL ins
 
 ### System dependencies
 
-* [libzstd](https://github.com/facebook/zstd) for compressing serialized `StringArray`s.
+* [libzstd](https://github.com/facebook/zstd) for compressing serialized `RecordArray`s and `StringArray`s.
 
 These dependencies are found using `pkg-config`. Update `PKG_CONFIG_PATH` as necessary.
 
 ### GitHub repositories
 
+* [GoogleTest](https://github.com/google/googletest) for the tests.
 * [SDSL](https://github.com/vgteam/sdsl-lite) (vgteam fork) for low-level data structures.
 
 These dependencies should be installed separately (the latest master should always work). Because SDSL is a header-based library, having multiple versions in the same project may cause issues. Hence all submodules of the main project should use the same copy.

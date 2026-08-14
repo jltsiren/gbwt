@@ -173,7 +173,7 @@ public:
   }
 };
 
-TYPED_TEST_CASE(SerializeTest, IndexTypes);
+TYPED_TEST_SUITE(SerializeTest, IndexTypes);
 
 TYPED_TEST(SerializeTest, SDSL)
 {
