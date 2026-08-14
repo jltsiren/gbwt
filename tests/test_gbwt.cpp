@@ -221,9 +221,7 @@ TYPED_TEST(SerializeTest, SimpleSDSVersion)
   for(std::uint32_t version = GBWTHeader::MIN_SERIALIZE_VERSION; version <= GBWTHeader::VERSION; version++)
   {
     std::string filename = TempFile::getName("gbwt");
-    std::ofstream out(filename, std::ios::binary);
-    index.simple_sds_serialize_version(out, version);
-    out.close();
+    sdsl::simple_sds::serialize_to(index, filename, version);
 
     index_type loaded_index;
     sdsl::simple_sds::load_from(loaded_index, filename);

@@ -203,8 +203,7 @@ GBWT::simple_sds_serialize_version(std::ostream& out, std::uint32_t version) con
 {
   if(version < GBWTHeader::MIN_SERIALIZE_VERSION || version > GBWTHeader::VERSION)
   {
-    std::string msg = "GBWT: Cannot serialize version " + std::to_string(version);
-    throw std::runtime_error(msg);
+    throw sdsl::simple_sds::UnsupportedVersion("GBWT", version, GBWTHeader::MIN_SERIALIZE_VERSION, GBWTHeader::VERSION);
   }
 
   GBWTHeader h = this->header;

@@ -433,15 +433,7 @@ void serialize_gbwt(const IndexType& index, const Config& config)
     }
     else
     {
-      std::ofstream out(gbwt_name, std::ios_base::binary);
-      if(!out)
-      {
-        std::cerr << "build_gbwt: Cannot write the index to " << gbwt_name << std::endl;
-        std::exit(EXIT_FAILURE);
-      }
-      out.exceptions(std::ofstream::failbit | std::ofstream::badbit);
-      index.simple_sds_serialize_version(out, config.simple_sds_version);
-      out.close();
+      sdsl::simple_sds::serialize_to(index, gbwt_name, config.simple_sds_version);
     }
   }
 }
