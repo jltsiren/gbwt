@@ -78,7 +78,7 @@ DynamicRecord::clear()
 }
 
 void
-DynamicRecord::swap(DynamicRecord& another)
+DynamicRecord::swap(DynamicRecord& another) noexcept
 {
   if(this != &another)
   {
@@ -771,7 +771,7 @@ DecompressedRecord::DecompressedRecord(const DecompressedRecord& source)
   this->copy(source);
 }
 
-DecompressedRecord::DecompressedRecord(DecompressedRecord&& source)
+DecompressedRecord::DecompressedRecord(DecompressedRecord&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -832,7 +832,7 @@ DecompressedRecord::split(size_type subgraphs, const std::vector<size_type>& com
 }
 
 void
-DecompressedRecord::swap(DecompressedRecord& another)
+DecompressedRecord::swap(DecompressedRecord& another) noexcept
 {
   if(this != &another)
   {
@@ -850,7 +850,7 @@ DecompressedRecord::operator=(const DecompressedRecord& source)
 }
 
 DecompressedRecord&
-DecompressedRecord::operator=(DecompressedRecord&& source)
+DecompressedRecord::operator=(DecompressedRecord&& source) noexcept
 {
   if(this != &source)
   {
@@ -946,7 +946,7 @@ RecordArray::RecordArray(const RecordArray& source)
   this->copy(source);
 }
 
-RecordArray::RecordArray(RecordArray&& source)
+RecordArray::RecordArray(RecordArray&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -1131,7 +1131,7 @@ RecordArray::buildIndex(const std::vector<size_type>& offsets)
 }
 
 void
-RecordArray::swap(RecordArray& another)
+RecordArray::swap(RecordArray& another) noexcept
 {
   if(this != &another)
   {
@@ -1150,7 +1150,7 @@ RecordArray::operator=(const RecordArray& source)
 }
 
 RecordArray&
-RecordArray::operator=(RecordArray&& source)
+RecordArray::operator=(RecordArray&& source) noexcept
 {
   if(this != &source)
   {
@@ -1322,7 +1322,7 @@ DASamples::DASamples(const DASamples& source)
   this->copy(source);
 }
 
-DASamples::DASamples(DASamples&& source)
+DASamples::DASamples(DASamples&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -1600,7 +1600,7 @@ DASamples::split
 }
 
 void
-DASamples::swap(DASamples& another)
+DASamples::swap(DASamples& another) noexcept
 {
   if(this != &another)
   {
@@ -1624,7 +1624,7 @@ DASamples::operator=(const DASamples& source)
 }
 
 DASamples&
-DASamples::operator=(DASamples&& source)
+DASamples::operator=(DASamples&& source) noexcept
 {
   if(this != &source)
   {
@@ -1910,7 +1910,7 @@ StringArray::StringArray(size_type n, const std::function<size_type(size_type)>&
 }
 
 void
-StringArray::swap(StringArray& another)
+StringArray::swap(StringArray& another) noexcept
 {
   this->index.swap(another.index);
   this->strings.swap(another.strings);
@@ -2317,7 +2317,7 @@ Dictionary::Dictionary(const Dictionary& source)
   this->copy(source);
 }
 
-Dictionary::Dictionary(Dictionary&& source)
+Dictionary::Dictionary(Dictionary&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -2370,7 +2370,7 @@ Dictionary::Dictionary(const Dictionary& first, const Dictionary& second)
 }
 
 void
-Dictionary::swap(Dictionary& another)
+Dictionary::swap(Dictionary& another) noexcept
 {
   if(this != &another)
   {
@@ -2387,7 +2387,7 @@ Dictionary::operator=(const Dictionary& source)
 }
 
 Dictionary&
-Dictionary::operator=(Dictionary&& source)
+Dictionary::operator=(Dictionary&& source) noexcept
 {
   if(this != &source)
   {
@@ -2593,7 +2593,7 @@ Dictionary::smaller_by_id(std::string_view a, size_type b) const
 //------------------------------------------------------------------------------
 
 void
-Tags::swap(Tags& another)
+Tags::swap(Tags& another) noexcept
 {
   if(this != &another)
   {

@@ -32,13 +32,13 @@ public:
   DynamicGBWT();
   DynamicGBWT(const DynamicGBWT& source);
   DynamicGBWT(const GBWT& source);
-  DynamicGBWT(DynamicGBWT&& source);
+  DynamicGBWT(DynamicGBWT&& source) noexcept;
   ~DynamicGBWT();
 
-  void swap(DynamicGBWT& another);
+  void swap(DynamicGBWT& another) noexcept;
   DynamicGBWT& operator=(const DynamicGBWT& source);
   DynamicGBWT& operator=(const GBWT& source);
-  DynamicGBWT& operator=(DynamicGBWT&& source);
+  DynamicGBWT& operator=(DynamicGBWT&& source) noexcept;
 
   void resample(size_type sample_interval);
 

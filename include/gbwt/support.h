@@ -88,7 +88,7 @@ struct DynamicRecord
   size_type samples() const { return this->ids.size(); }
 
   void clear();
-  void swap(DynamicRecord& another);
+  void swap(DynamicRecord& another) noexcept;
 
 //------------------------------------------------------------------------------
 
@@ -270,7 +270,7 @@ struct DecompressedRecord
 
   DecompressedRecord();
   DecompressedRecord(const DecompressedRecord& source);
-  DecompressedRecord(DecompressedRecord&& source);
+  DecompressedRecord(DecompressedRecord&& source) noexcept;
   ~DecompressedRecord();
 
   explicit DecompressedRecord(const DynamicRecord& source);
@@ -280,9 +280,9 @@ struct DecompressedRecord
   // The returned records have no incoming edges or samples.
   std::vector<DynamicRecord> split(size_type subgraphs, const std::vector<size_type>& comp_to_subgraph, size_type alphabet_offset) const;
 
-  void swap(DecompressedRecord& another);
+  void swap(DecompressedRecord& another) noexcept;
   DecompressedRecord& operator=(const DecompressedRecord& source);
-  DecompressedRecord& operator=(DecompressedRecord&& source);
+  DecompressedRecord& operator=(DecompressedRecord&& source) noexcept;
 
   size_type size() const { return this->body.size(); }
   bool empty() const { return (this->size() == 0); }
@@ -330,7 +330,7 @@ struct RecordArray
 
   RecordArray();
   RecordArray(const RecordArray& source);
-  RecordArray(RecordArray&& source);
+  RecordArray(RecordArray&& source) noexcept;
   ~RecordArray();
 
   explicit RecordArray(const std::vector<DynamicRecord>& bwt);
@@ -348,9 +348,9 @@ struct RecordArray
   explicit RecordArray(size_type array_size);
   void buildIndex(const std::vector<size_type>& offsets);
 
-  void swap(RecordArray& another);
+  void swap(RecordArray& another) noexcept;
   RecordArray& operator=(const RecordArray& source);
-  RecordArray& operator=(RecordArray&& source);
+  RecordArray& operator=(RecordArray&& source) noexcept;
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
@@ -403,7 +403,7 @@ struct DASamples
 
   DASamples();
   DASamples(const DASamples& source);
-  DASamples(DASamples&& source);
+  DASamples(DASamples&& source) noexcept;
   ~DASamples();
 
   explicit DASamples(const std::vector<DynamicRecord>& bwt);
@@ -422,9 +422,9 @@ struct DASamples
     std::vector<DASamples*>& dasamples
   ) const;
 
-  void swap(DASamples& another);
+  void swap(DASamples& another) noexcept;
   DASamples& operator=(const DASamples& source);
-  DASamples& operator=(DASamples&& source);
+  DASamples& operator=(DASamples&& source) noexcept;
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
@@ -527,11 +527,11 @@ public:
   StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence);
 
   StringArray(const StringArray& source) = default;
-  StringArray(StringArray&& source) = default;
+  StringArray(StringArray&& source) noexcept = default;
   StringArray& operator=(const StringArray& source) = default;
-  StringArray& operator=(StringArray&& source) = default;
+  StringArray& operator=(StringArray&& source) noexcept = default;
 
-  void swap(StringArray& another);
+  void swap(StringArray& another) noexcept;
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
@@ -603,7 +603,7 @@ public:
 
   Dictionary();
   Dictionary(const Dictionary& source);
-  Dictionary(Dictionary&& source);
+  Dictionary(Dictionary&& source) noexcept;
   ~Dictionary();
 
   explicit Dictionary(const std::vector<std::string>& source);
@@ -612,9 +612,9 @@ public:
   // from the second dictionary.
   Dictionary(const Dictionary& first, const Dictionary& second);
 
-  void swap(Dictionary& another);
+  void swap(Dictionary& another) noexcept;
   Dictionary& operator=(const Dictionary& source);
-  Dictionary& operator=(Dictionary&& source);
+  Dictionary& operator=(Dictionary&& source) noexcept;
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
@@ -683,12 +683,12 @@ public:
 
   Tags() = default;
   Tags(const Tags& source) = default;
-  Tags(Tags&& source) = default;
+  Tags(Tags&& source) noexcept = default;
   ~Tags() = default;
 
-  void swap(Tags& another);
+  void swap(Tags& another) noexcept;
   Tags& operator=(const Tags& source) = default;
-  Tags& operator=(Tags&& source) = default;
+  Tags& operator=(Tags&& source) noexcept = default;
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);

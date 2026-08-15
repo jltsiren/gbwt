@@ -40,7 +40,7 @@ DynamicGBWT::DynamicGBWT(const GBWT& source)
   this->copy(source);
 }
 
-DynamicGBWT::DynamicGBWT(DynamicGBWT&& source)
+DynamicGBWT::DynamicGBWT(DynamicGBWT&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -50,7 +50,7 @@ DynamicGBWT::~DynamicGBWT()
 }
 
 void
-DynamicGBWT::swap(DynamicGBWT& another)
+DynamicGBWT::swap(DynamicGBWT& another) noexcept
 {
   if(this != &another)
   {
@@ -76,7 +76,7 @@ DynamicGBWT::operator=(const GBWT& source)
 }
 
 DynamicGBWT&
-DynamicGBWT::operator=(DynamicGBWT&& source)
+DynamicGBWT::operator=(DynamicGBWT&& source) noexcept
 {
   if(this != &source)
   {

@@ -33,7 +33,7 @@ GBWT::GBWT(const DynamicGBWT& source) :
   this->cacheEndmarker();
 }
 
-GBWT::GBWT(GBWT&& source)
+GBWT::GBWT(GBWT&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -43,7 +43,7 @@ GBWT::~GBWT()
 }
 
 void
-GBWT::swap(GBWT& another)
+GBWT::swap(GBWT& another) noexcept
 {
   if(this != &another)
   {
@@ -81,7 +81,7 @@ GBWT::operator=(const DynamicGBWT& source)
 }
 
 GBWT&
-GBWT::operator=(GBWT&& source)
+GBWT::operator=(GBWT&& source) noexcept
 {
   if(this != &source)
   {

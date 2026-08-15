@@ -1,27 +1,3 @@
-/*
-  Copyright (c) 2018, 2019, 2021 Jouni Siren
-
-  Author: Jouni Siren <jouni.siren@iki.fi>
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-*/
-
 #include <gbwt/variants.h>
 #include <gbwt/internal.h>
 
@@ -74,7 +50,7 @@ VariantPaths::VariantPaths(const VariantPaths& source)
   this->copy(source);
 }
 
-VariantPaths::VariantPaths(VariantPaths&& source)
+VariantPaths::VariantPaths(VariantPaths&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -84,7 +60,7 @@ VariantPaths::~VariantPaths()
 }
 
 void
-VariantPaths::swap(VariantPaths& another)
+VariantPaths::swap(VariantPaths& another) noexcept
 {
   if(this != &another)
   {
@@ -115,7 +91,7 @@ VariantPaths::operator=(const VariantPaths& source)
 }
 
 VariantPaths&
-VariantPaths::operator=(VariantPaths&& source)
+VariantPaths::operator=(VariantPaths&& source) noexcept
 {
   if(this != &source)
   {
@@ -669,7 +645,7 @@ PhasingInformation::PhasingInformation(const VariantPaths& variants, size_type f
   this->phasings = std::vector<Phasing>(this->sample_count);
 }
 
-PhasingInformation::PhasingInformation(PhasingInformation&& source)
+PhasingInformation::PhasingInformation(PhasingInformation&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -681,7 +657,7 @@ PhasingInformation::~PhasingInformation()
 }
 
 PhasingInformation&
-PhasingInformation::operator=(PhasingInformation&& source)
+PhasingInformation::operator=(PhasingInformation&& source) noexcept
 {
   if(this != &source)
   {

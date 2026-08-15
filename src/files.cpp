@@ -117,7 +117,7 @@ GBWTHeader::check() const
 }
 
 void
-GBWTHeader::swap(GBWTHeader& another)
+GBWTHeader::swap(GBWTHeader& another) noexcept
 {
   if(this != &another)
   {
@@ -244,7 +244,7 @@ MetadataHeader::check_simple_sds() const
 }
 
 void
-MetadataHeader::swap(MetadataHeader& another)
+MetadataHeader::swap(MetadataHeader& another) noexcept
 {
   if(this != &another)
   {

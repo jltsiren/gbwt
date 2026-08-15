@@ -104,7 +104,7 @@ struct GBWTHeader
   void unset(std::uint64_t flag) { this->flags &= ~flag; }
   bool get(std::uint64_t flag) const { return (this->flags & flag); }
 
-  void swap(GBWTHeader& another);
+  void swap(GBWTHeader& another) noexcept;
 
   bool operator==(const GBWTHeader& another) const;
   bool operator!=(const GBWTHeader& another) const { return !(this->operator==(another)); }
@@ -170,7 +170,7 @@ struct MetadataHeader
   void unset(std::uint64_t flag) { this->flags &= ~flag; }
   bool get(std::uint64_t flag) const { return (this->flags & flag); }
 
-  void swap(MetadataHeader& another);
+  void swap(MetadataHeader& another) noexcept;
 
   bool operator==(const MetadataHeader& another) const;
   bool operator!=(const MetadataHeader& another) const { return !(this->operator==(another)); }

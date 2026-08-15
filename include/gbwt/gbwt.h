@@ -27,7 +27,7 @@ public:
   GBWT();
   GBWT(const GBWT& source);
   GBWT(const DynamicGBWT& source);
-  GBWT(GBWT&& source);
+  GBWT(GBWT&& source) noexcept;
   ~GBWT();
 
   // Merge the sources, assuming that node ids do not overlap.
@@ -43,10 +43,10 @@ public:
   // Drops empty paths. Splits the metadata and ignores the tags.
   std::vector<GBWT> split(size_type subgraphs, const std::function<size_type(node_type)>& mapping) const;
 
-  void swap(GBWT& another);
+  void swap(GBWT& another) noexcept;
   GBWT& operator=(const GBWT& source);
   GBWT& operator=(const DynamicGBWT& source);
-  GBWT& operator=(GBWT&& source);
+  GBWT& operator=(GBWT&& source) noexcept;
 
   void resample(size_type sample_interval);
 

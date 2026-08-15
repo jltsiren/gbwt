@@ -1,28 +1,3 @@
-/*
-  Copyright (c) 2018, 2019, 2021 Jouni Siren
-
-  Author: Jouni Siren <jouni.siren@iki.fi>
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-*/
-
-
 #ifndef GBWT_VARIANTS_H
 #define GBWT_VARIANTS_H
 
@@ -100,12 +75,12 @@ public:
   VariantPaths();
   explicit VariantPaths(size_type reference_size);
   VariantPaths(const VariantPaths& source);
-  VariantPaths(VariantPaths&& source);
+  VariantPaths(VariantPaths&& source) noexcept;
   ~VariantPaths();
 
-  void swap(VariantPaths& another);
+  void swap(VariantPaths& another) noexcept;
   VariantPaths& operator=(const VariantPaths& source);
-  VariantPaths& operator=(VariantPaths&& source);
+  VariantPaths& operator=(VariantPaths&& source) noexcept;
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
@@ -299,10 +274,10 @@ struct PhasingInformation
   // Use an existing permanent file.
   PhasingInformation(const VariantPaths& variants, size_type file);
 
-  PhasingInformation(PhasingInformation&& source);
+  PhasingInformation(PhasingInformation&& source) noexcept;
   ~PhasingInformation();
 
-  PhasingInformation& operator= (PhasingInformation&& source);
+  PhasingInformation& operator= (PhasingInformation&& source) noexcept;
 
   // Closing inactive files can save memory when there are many batches.
   void open();
