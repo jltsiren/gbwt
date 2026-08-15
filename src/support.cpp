@@ -1939,12 +1939,21 @@ StringArray::load(std::istream& in)
   this->sanityChecks();
 }
 
-void
-determine_alphabet(const std::vector<char>& strings, std::vector<std::uint8_t>& char_to_comp, sdsl::int_vector<8>& comp_to_char, size_type& width)
+std::vector<std::uint8_t>
+present_characters(const StringArray& strings, size_t step)
 {
-  char_to_comp = std::vector<std::uint8_t>(256, 0);
-  for(char c : strings) { char_to_comp[static_cast<std::uint8_t>(c)] = 1; }
+  std::vector<std::uint8_t> char_to_comp(256, 0);
+  for(size_type i = 0; i < strings.size(); i += step)
+  {
+    std::string_view str = strings.view(i);
+    for(char c : str) { char_to_comp[static_cast<std::uint8_t>(c)] = 1; }
+  }
+  return char_to_comp;
+}
 
+void
+determine_alphabet(std::vector<std::uint8_t>& char_to_comp, sdsl::int_vector<8>& comp_to_char, size_type& width)
+{
   size_type sigma = 0;
   for(auto c : char_to_comp) { sigma += c; }
   width = sdsl::bits::length(std::max(sigma, size_type(1)) - 1);
@@ -1971,10 +1980,10 @@ StringArray::simple_sds_serialize(std::ostream& out) const
   }
 
   // Determine and serialize the alphabet.
-  std::vector<std::uint8_t> char_to_comp;
+  std::vector<std::uint8_t> char_to_comp = present_characters(*this, 1);
   sdsl::int_vector<8> comp_to_char;
   size_type width = 0;
-  determine_alphabet(this->strings, char_to_comp, comp_to_char, width);
+  determine_alphabet(char_to_comp, comp_to_char, width);
   comp_to_char.simple_sds_serialize(out);
 
   // Compress the strings.
@@ -2025,16 +2034,66 @@ StringArray::simple_sds_size() const
   result += sdsl::sd_vector<>::simple_sds_size(universe, this->size());
 
   // Determine the alphabet.
-  std::vector<std::uint8_t> char_to_comp;
+  std::vector<std::uint8_t> char_to_comp = present_characters(*this, 1);
   sdsl::int_vector<8> comp_to_char;
   size_type width = 0;
-  determine_alphabet(this->strings, char_to_comp, comp_to_char, width);
+  determine_alphabet(char_to_comp, comp_to_char, width);
   result += comp_to_char.simple_sds_size();
 
   // Compress the strings.
   result += sdsl::int_vector<>::simple_sds_size(this->strings.size(), width);
 
   return result;
+}
+
+sdsl::sd_vector<>
+index_even_strings(const StringArray& strings)
+{
+  size_t string_size = 0;
+  for(size_t i = 0; i < strings.size(); i += 2) { string_size += strings.length(i); }
+
+  // While direct sd_vector construction from an iterator can build multisets automatically,
+  // here we have to specify it explicitly in case the total length of the strings is less
+  // than the number of strings.
+  sdsl::sd_vector_builder v_builder(string_size, (strings.size() + 1) / 2, true);
+  size_t offset = 0;
+  for(size_t i = 0; i < strings.size(); i += 2)
+  {
+    v_builder.set_unsafe(offset);
+    offset += strings.length(i);
+  }
+  return sdsl::sd_vector<>(v_builder);
+}
+
+void
+StringArray::simple_sds_serialize_even(std::ostream& out) const
+{
+  // Build and serialize the index for the even strings.
+  size_t string_size;
+  {
+    sdsl::sd_vector<> index = index_even_strings(*this);
+    index.simple_sds_serialize(out);
+    string_size = index.size();
+  }
+
+  // Determine and serialize the alphabet.
+  std::vector<std::uint8_t> char_to_comp = present_characters(*this, 2);
+  sdsl::int_vector<8> comp_to_char;
+  size_type width = 0;
+  determine_alphabet(char_to_comp, comp_to_char, width);
+  comp_to_char.simple_sds_serialize(out);
+
+  // Compress the strings.
+  {
+    sdsl::int_vector<> compressed(string_size, 0, width);
+    size_t offset = 0;
+    for(size_t i = 0; i < this->size(); i += 2)
+    {
+      std::string_view view = this->view(i);
+      for(char c : view) { compressed[offset++] = char_to_comp[static_cast<uint8_t>(c)]; }
+    }
+    compressed.simple_sds_serialize(out);
+  }
 }
 
 void
@@ -2099,23 +2158,11 @@ StringArray::simple_sds_compress(std::ostream& out, int compression_level) const
 void
 StringArray::simple_sds_compress_even(std::ostream& out, int compression_level) const
 {
-  size_t string_size = 0;
-  for(size_t i = 0; i < this->size(); i += 2) { string_size += this->length(i); }
-
   // Build and compress the index and store the total length of the strings to be compressed.
   {
-    // While direct sd_vector construction from an iterator can build multisets automatically,
-    // here we have to specify it explicitly in case the total length of the strings is less
-    // than the number of strings.
-    sdsl::sd_vector_builder v_builder(string_size, (this->size() + 1) / 2, true);
-    size_t offset = 0;
-    for(size_t i = 0; i < this->size(); i += 2)
-    {
-      v_builder.set_unsafe(offset);
-      offset += this->length(i);
-    }
-    sdsl::sd_vector<> v(v_builder);
-    v.simple_sds_serialize(out);
+    sdsl::sd_vector<> index = index_even_strings(*this);
+    index.simple_sds_serialize(out);
+    size_t string_size = index.size();
     sdsl::simple_sds::serialize_value(string_size, out);
   }
 

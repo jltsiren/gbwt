@@ -540,6 +540,9 @@ public:
   void simple_sds_load(std::istream& in);
   size_t simple_sds_size() const;
 
+  // This version only serializes strings at even positions.
+  void simple_sds_serialize_even(std::ostream& out) const;
+
   // This version loads each string twice and transforms the second copy.
   // The transform function should not change the length of the string.
   void simple_sds_load_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform);
