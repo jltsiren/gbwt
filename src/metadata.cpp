@@ -22,7 +22,6 @@
   SOFTWARE.
 */
 
-#include <gbwt/error_handling.h>
 #include <gbwt/internal.h>
 #include <gbwt/metadata.h>
 
@@ -161,31 +160,31 @@ Metadata::sanityChecks() const
 {
   if(!(this->hasPathNames()) && this->path_names.size() > 0)
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("Metadata: Invalid path name flag in the header"));
+    throw (sdsl::simple_sds::InvalidData("Metadata: Invalid path name flag in the header"));
   }
 
   if(this->hasSampleNames())
   {
     if(this->header.sample_count != this->sample_names.size())
     {
-      GBWT_THROW(sdsl::simple_sds::InvalidData("Metadata: Sample / sample name count mismatch"));
+      throw (sdsl::simple_sds::InvalidData("Metadata: Sample / sample name count mismatch"));
     }
   }
   else if(this->sample_names.size() > 0)
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("Metadata: Invalid sample name flag in the header"));
+    throw (sdsl::simple_sds::InvalidData("Metadata: Invalid sample name flag in the header"));
   }
 
   if(this->hasContigNames())
   {
     if(this->header.contig_count != this->contig_names.size())
     {
-      GBWT_THROW(sdsl::simple_sds::InvalidData("Metadata: Contig / contig name count mismatch"));
+      throw (sdsl::simple_sds::InvalidData("Metadata: Contig / contig name count mismatch"));
     }
   }
   else if(this->contig_names.size() > 0)
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("Metadata: Invalid contig name flag in the header"));
+    throw (sdsl::simple_sds::InvalidData("Metadata: Invalid contig name flag in the header"));
   }
 }
 

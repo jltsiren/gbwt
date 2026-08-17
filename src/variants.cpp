@@ -22,7 +22,6 @@
   SOFTWARE.
 */
 
-#include <gbwt/error_handling.h>
 #include <gbwt/variants.h>
 #include <gbwt/internal.h>
 
@@ -205,13 +204,13 @@ VariantPaths::check() const
 {
   if(this->tag != TAG)
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("VariantPaths: Invalid tag"));
+    throw (sdsl::simple_sds::InvalidData("VariantPaths: Invalid tag"));
   }
 
   if(this->version != VERSION)
   {
     std::string msg = "VariantPaths: Expected version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
-    GBWT_THROW(sdsl::simple_sds::InvalidData(msg));
+    throw (sdsl::simple_sds::InvalidData(msg));
   }
 
   std::uint64_t mask = 0;
@@ -222,7 +221,7 @@ VariantPaths::check() const
   }
   if((this->flags & mask) != this->flags)
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("VariantPaths: Invalid flags"));
+    throw (sdsl::simple_sds::InvalidData("VariantPaths: Invalid flags"));
   }
 }
 

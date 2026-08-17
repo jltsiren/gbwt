@@ -29,7 +29,7 @@
 #include <gbwt/internal.h>
 #include <gbwt/utils.h>
 
-#include <gbwt/error_handling.h>
+#include <stdexcept>
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
 #include <boost/interprocess/creation_tags.hpp>
@@ -1325,7 +1325,7 @@ RecordArray::sanityChecks() const
 {
   if(this->index.size() != this->data.size())
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("RecordArray: Index / data size mismatch"));
+    throw (sdsl::simple_sds::InvalidData("RecordArray: Index / data size mismatch"));
   }
 }
 
@@ -1758,15 +1758,15 @@ DASamples::sanityChecks() const
 {
   if(this->record_rank(this->sampled_records.size()) != this->bwt_ranges.ones())
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("DASamples: Sampled record / BWT range count mismatch"));
+    throw (sdsl::simple_sds::InvalidData("DASamples: Sampled record / BWT range count mismatch"));
   }
   if(this->bwt_ranges.size() != this->sampled_offsets.size())
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("DASamples: BWT range / sampled offsets size mismatch"));
+    throw (sdsl::simple_sds::InvalidData("DASamples: BWT range / sampled offsets size mismatch"));
   }
   if(this->sampled_offsets.ones() != this->array.size())
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("DASamples: Sampled offset / sample count mismatch"));
+    throw (sdsl::simple_sds::InvalidData("DASamples: Sampled offset / sample count mismatch"));
   }
 }
 
@@ -1856,7 +1856,7 @@ StringArray<CharAllocatorType>::StringArray(
     check_existence_in_shared_memory();
     if (this->is_data_loaded_into_shared_memory != true)
     {
-      GBWT_THROW(std::runtime_error("StringArray: No strings named " + object_prefix_in_shared_memory + " exist in the given shared memory segment"));
+      throw (std::runtime_error("StringArray: No strings named " + object_prefix_in_shared_memory + " exist in the given shared memory segment"));
     }
     find_strings_from_shared_memory();
     find_index_from_shared_memory();
@@ -1953,7 +1953,7 @@ StringArray<CharAllocatorType>::StringArray(
   // segment, there is nowhere to store actual content.
   if(this->strings == nullptr && chosen > 0)
   {
-    GBWT_THROW(std::runtime_error("StringArray: Cannot store strings in shared memory without a real segment"));
+    throw (std::runtime_error("StringArray: Cannot store strings in shared memory without a real segment"));
   }
   this->index = sdsl::int_vector<0>(chosen + 1, 0, sdsl::bits::length(total_length));
   if(this->strings != nullptr)
@@ -2019,7 +2019,7 @@ StringArray<CharAllocatorType>::StringArray(
   // segment, there is nowhere to store actual content.
   if(this->strings == nullptr && total_length > 0)
   {
-    GBWT_THROW(std::runtime_error("StringArray: Cannot store strings in shared memory without a real segment"));
+    throw (std::runtime_error("StringArray: Cannot store strings in shared memory without a real segment"));
   }
   this->index = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
   if(this->strings != nullptr)
@@ -2343,7 +2343,7 @@ void StringArray<CharAllocatorType>::simple_sds_load_duplicate(std::istream& in,
     // The shared-memory allocator cannot be default-constructed, so this
     // method (which was never used with shared-memory StringArrays) does
     // not support it.
-    GBWT_THROW(std::logic_error("StringArray: simple_sds_load_duplicate() is not supported for the shared-memory allocator"));
+    throw (std::logic_error("StringArray: simple_sds_load_duplicate() is not supported for the shared-memory allocator"));
   }
   else
 #endif
@@ -2449,7 +2449,7 @@ void StringArray<CharAllocatorType>::simple_sds_decompress(std::istream& in)
     // ZstdDecompressor only decompresses into a plain std::vector<char>, so
     // this method (which was never used with shared-memory StringArrays)
     // does not support the shared-memory allocator.
-    GBWT_THROW(std::logic_error("StringArray: simple_sds_decompress() is not supported for the shared-memory allocator"));
+    throw (std::logic_error("StringArray: simple_sds_decompress() is not supported for the shared-memory allocator"));
   }
   else
 #endif
@@ -2477,7 +2477,7 @@ void StringArray<CharAllocatorType>::simple_sds_decompress(std::istream& in)
       if(!decompressor.finished())
       {
         std::string msg = "StringArray: Trailing bytes after decompression";
-        GBWT_THROW(sdsl::simple_sds::InvalidData(msg));
+        throw (sdsl::simple_sds::InvalidData(msg));
       }
     }
 
@@ -2494,7 +2494,7 @@ void StringArray<CharAllocatorType>::simple_sds_decompress_duplicate(std::istrea
     // ZstdDecompressor only decompresses into a plain std::vector<char>, so
     // this method (which was never used with shared-memory StringArrays)
     // does not support the shared-memory allocator.
-    GBWT_THROW(std::logic_error("StringArray: simple_sds_decompress_duplicate() is not supported for the shared-memory allocator"));
+    throw (std::logic_error("StringArray: simple_sds_decompress_duplicate() is not supported for the shared-memory allocator"));
   }
   else
 #endif
@@ -2539,7 +2539,7 @@ void StringArray<CharAllocatorType>::simple_sds_decompress_duplicate(std::istrea
       if(!decompressor.finished())
       {
         std::string msg = "StringArray: Trailing bytes after decompression";
-        GBWT_THROW(sdsl::simple_sds::InvalidData(msg));
+        throw (sdsl::simple_sds::InvalidData(msg));
       }
     }
 
@@ -2765,7 +2765,7 @@ void StringArray<CharAllocatorType>::sanityChecks() const
 {
   if(this->index.size() == 0 || this->index[0] != 0 || this->index[this->index.size() - 1] != this->strings->size())
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("StringArray: Offsets and strings do not match"));
+    throw (sdsl::simple_sds::InvalidData("StringArray: Offsets and strings do not match"));
   }
 }
 
@@ -2940,7 +2940,7 @@ Dictionary::sanityChecks() const
 {
   if(this->sorted_ids.size() != this->strings.size())
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("Dictionary: Size mismatch between strings and sorted ids"));
+    throw (sdsl::simple_sds::InvalidData("Dictionary: Size mismatch between strings and sorted ids"));
   }
 }
 
@@ -3125,7 +3125,7 @@ Tags::build(const StringArray<CharAllocatorType>& source)
 {
   if(source.size() % 2 != 0)
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("Tags: Key without a value"));
+    throw (sdsl::simple_sds::InvalidData("Tags: Key without a value"));
   }
 
   this->tags.clear();
@@ -3138,7 +3138,7 @@ Tags::build(const StringArray<CharAllocatorType>& source)
 
   if(this->tags.size() != source.size() / 2)
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("Tags: Duplicate keys"));
+    throw (sdsl::simple_sds::InvalidData("Tags: Duplicate keys"));
   }
 }
 

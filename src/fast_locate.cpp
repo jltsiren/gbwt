@@ -22,7 +22,6 @@
   SOFTWARE.
 */
 
-#include <gbwt/error_handling.h>
 #include <gbwt/fast_locate.h>
 #include <gbwt/internal.h>
 
@@ -80,13 +79,13 @@ FastLocate::Header::check() const
 {
   if(this->tag != TAG)
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("FastLocate: Invalid tag"));
+    throw (sdsl::simple_sds::InvalidData("FastLocate: Invalid tag"));
   }
 
   if(this->version != VERSION)
   {
     std::string msg = "FastLocate: Expected version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
-    GBWT_THROW(sdsl::simple_sds::InvalidData(msg));
+    throw (sdsl::simple_sds::InvalidData(msg));
   }
 
   std::uint64_t mask = 0;
@@ -97,7 +96,7 @@ FastLocate::Header::check() const
   }
   if((this->flags & mask) != this->flags)
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("FastLocate: Invalid flags"));
+    throw (sdsl::simple_sds::InvalidData("FastLocate: Invalid flags"));
   }
 }
 

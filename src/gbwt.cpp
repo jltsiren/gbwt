@@ -23,7 +23,6 @@
   SOFTWARE.
 */
 
-#include <gbwt/error_handling.h>
 #include <gbwt/gbwt.h>
 
 #include <gbwt/dynamic_gbwt.h>
@@ -178,7 +177,7 @@ GBWT::load(std::istream& in)
   else { this->bwt.load(in); }
   if(this->bwt.size() != this->effective())
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("GBWT: BWT record count / alphabet size mismatch"));
+    throw (sdsl::simple_sds::InvalidData("GBWT: BWT record count / alphabet size mismatch"));
   }
 
   // Cache the endmarker before the potential resampling.
@@ -196,7 +195,7 @@ GBWT::load(std::istream& in)
   else { this->da_samples.load(in); }
   if(this->da_samples.records() != this->effective())
   {
-    GBWT_THROW(sdsl::simple_sds::InvalidData("GBWT: Sample record count / alphabet size mismatch"));
+    throw (sdsl::simple_sds::InvalidData("GBWT: Sample record count / alphabet size mismatch"));
   }
 
   // Read the metadata.
@@ -205,7 +204,7 @@ GBWT::load(std::istream& in)
     bool loaded_metadata = sdsl::simple_sds::load_option(this->metadata, in);
     if(loaded_metadata != this->hasMetadata())
     {
-      GBWT_THROW(sdsl::simple_sds::InvalidData("GBWT: Invalid metadata flag in the header"));
+      throw (sdsl::simple_sds::InvalidData("GBWT: Invalid metadata flag in the header"));
     }
   }
   else if(this->hasMetadata()) { this->metadata.load(in); }
@@ -214,7 +213,7 @@ GBWT::load(std::istream& in)
     size_type expected_paths = (this->bidirectional() ? this->sequences() / 2 : this->sequences());
     if(this->metadata.paths() != expected_paths)
     {
-      GBWT_THROW(sdsl::simple_sds::InvalidData("GBWT: Path name / sequence count mismatch"));
+      throw (sdsl::simple_sds::InvalidData("GBWT: Path name / sequence count mismatch"));
     }
   }
 }
