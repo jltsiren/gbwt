@@ -181,7 +181,7 @@ DynamicGBWT::load(std::istream& in)
     else { array.load(in); }
     if(array.size() != this->effective())
     {
-      throw (sdsl::simple_sds::InvalidData("DynamicGBWT: BWT record count / alphabet size mismatch"));
+      throw sdsl::simple_sds::InvalidData("DynamicGBWT: BWT record count / alphabet size mismatch");
     }
     array.forEach([&](size_type comp, const CompressedRecord& record)
     {
@@ -214,7 +214,7 @@ DynamicGBWT::load(std::istream& in)
     {
       if(samples.records() != this->effective())
       {
-        throw (sdsl::simple_sds::InvalidData("DynamicGBWT: Sample record count / alphabet size mismatch"));
+        throw sdsl::simple_sds::InvalidData("DynamicGBWT: Sample record count / alphabet size mismatch");
       }
       SampleIterator sample_iter(samples);
       for(SampleRangeIterator range_iter(samples); !(range_iter.end()); ++range_iter)
@@ -236,7 +236,7 @@ DynamicGBWT::load(std::istream& in)
     bool loaded_metadata = sdsl::simple_sds::load_option(this->metadata, in);
     if(loaded_metadata != this->hasMetadata())
     {
-      throw (sdsl::simple_sds::InvalidData("DynamicGBWT: Invalid metadata flag in the header"));
+      throw sdsl::simple_sds::InvalidData("DynamicGBWT: Invalid metadata flag in the header");
     }
   }
   else if(this->hasMetadata()) { this->metadata.load(in); }
@@ -245,7 +245,7 @@ DynamicGBWT::load(std::istream& in)
     size_type expected_paths = (this->bidirectional() ? this->sequences() / 2 : this->sequences());
     if(this->metadata.paths() != expected_paths)
     {
-      throw (sdsl::simple_sds::InvalidData("DynamicGBWT: Path name / sequence count mismatch"));
+      throw sdsl::simple_sds::InvalidData("DynamicGBWT: Path name / sequence count mismatch");
     }
   }
 

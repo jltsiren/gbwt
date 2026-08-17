@@ -79,13 +79,13 @@ FastLocate::Header::check() const
 {
   if(this->tag != TAG)
   {
-    throw (sdsl::simple_sds::InvalidData("FastLocate: Invalid tag"));
+    throw sdsl::simple_sds::InvalidData("FastLocate: Invalid tag");
   }
 
   if(this->version != VERSION)
   {
     std::string msg = "FastLocate: Expected version " + std::to_string(VERSION) + ", got version " + std::to_string(this->version);
-    throw (sdsl::simple_sds::InvalidData(msg));
+    throw sdsl::simple_sds::InvalidData(msg);
   }
 
   std::uint64_t mask = 0;
@@ -96,7 +96,7 @@ FastLocate::Header::check() const
   }
   if((this->flags & mask) != this->flags)
   {
-    throw (sdsl::simple_sds::InvalidData("FastLocate: Invalid flags"));
+    throw sdsl::simple_sds::InvalidData("FastLocate: Invalid flags");
   }
 }
 

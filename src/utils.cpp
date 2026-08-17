@@ -361,7 +361,7 @@ ZstdCompressor::compress(std::string_view data)
 {
   if(this->context == nullptr)
   {
-    throw (std::runtime_error("ZstdCompressor: compress() called after finish()"));
+    throw std::runtime_error("ZstdCompressor: compress() called after finish()");
   }
 
   while(!data.empty())
@@ -378,7 +378,7 @@ ZstdCompressor::compressDirect(std::string_view data)
 {
   if(this->context == nullptr)
   {
-    throw (std::runtime_error("ZstdCompressor: compressDirect() called after finish()"));
+    throw std::runtime_error("ZstdCompressor: compressDirect() called after finish()");
   }
 
   this->flushInput();
@@ -391,7 +391,7 @@ ZstdCompressor::finish()
 {
   if(this->context == nullptr)
   {
-    throw (std::runtime_error("ZstdCompressor: finish() called after finish()"));
+    throw std::runtime_error("ZstdCompressor: finish() called after finish()");
   }
 
   this->flushInput();
@@ -402,7 +402,7 @@ ZstdCompressor::finish()
     if(ZSTD_isError(ret))
     {
       std::string msg = "ZstdCompressor: ZSTD_endStream() failed: " + std::string(ZSTD_getErrorName(ret));
-      throw (std::runtime_error(msg));
+      throw std::runtime_error(msg);
     }
     this->flushOutput();
     finished = (ret == 0);
@@ -428,7 +428,7 @@ ZstdCompressor::compress(ZSTD_inBuffer& buffer)
     if(ZSTD_isError(ret))
     {
       std::string msg = "ZstdCompressor: ZSTD_compressStream() failed: " + std::string(ZSTD_getErrorName(ret));
-      throw (std::runtime_error(msg));
+      throw std::runtime_error(msg);
     }
     this->flushOutput();
   }
@@ -483,7 +483,7 @@ ZstdDecompressor::decompress(size_t bytes, std::vector<char>& output)
     else
     {
       std::string msg = "ZstdDecompressor: Unexpected end of input data";
-      throw (sdsl::simple_sds::InvalidData(msg));
+      throw sdsl::simple_sds::InvalidData(msg);
     }
   }
 }
@@ -502,7 +502,7 @@ ZstdDecompressor::fillOutputBuffer()
   if(ZSTD_isError(ret))
   {
     std::string msg = "ZstdDecompressor: ZSTD_decompressStream() failed: " + std::string(ZSTD_getErrorName(ret));
-    throw (sdsl::simple_sds::InvalidData(msg));
+    throw sdsl::simple_sds::InvalidData(msg);
   }
 }
 
