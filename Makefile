@@ -7,18 +7,9 @@ BUILD_OBJ=obj
 SOURCE_DIR=src
 
 # --- Optional build-time behaviors, overridable on the command line (e.g.
-# `make GBWT_USE_EXCEPTIONS=0`). Defaults match GBWT's traditional behavior.
-# See include/gbwt/error_handling.h and include/gbwt/support.h (StringArray)
-# for what each one changes.
+# `make GBWT_USE_OPENMP=0`). Defaults match GBWT's traditional behavior.
+# See include/gbwt/support.h (StringArray) for what each one changes.
 
-# Report fatal errors by throwing C++ exceptions (1) or not (0). Building
-# with 0 is needed to embed GBWT in exceptions-free code, such as Google's
-# DeepVariant, which builds with Bazel and -fno-exceptions.
-GBWT_USE_EXCEPTIONS=1
-# When GBWT_USE_EXCEPTIONS=0, report fatal errors via Abseil's
-# ABSL_LOG(FATAL) (1) instead of stderr + std::abort() (0). No effect when
-# GBWT_USE_EXCEPTIONS=1.
-GBWT_USE_ABSEIL_LOGGING=0
 # Build with OpenMP parallelism (1) or without it (0).
 GBWT_USE_OPENMP=1
 # Enable StringArray's shared-memory-backed storage, which needs
@@ -36,12 +27,6 @@ ifeq ($(GBWT_ENABLE_SHARED_MEMORY), 1)
 endif
 
 DEFINES=
-ifeq ($(GBWT_USE_EXCEPTIONS), 0)
-    DEFINES += -DGBWT_NO_EXCEPTIONS
-    ifeq ($(GBWT_USE_ABSEIL_LOGGING), 1)
-        DEFINES += -DGBWT_USE_ABSEIL_LOGGING
-    endif
-endif
 
 # Multithreading with OpenMP.
 ifeq ($(GBWT_USE_OPENMP), 1)
@@ -64,16 +49,6 @@ ifeq ($(shell pkg-config --exists libzstd && echo 1), 1)
     LIBS += $(shell pkg-config --libs libzstd)
 else
     $(error Could not find libzstd. Please update PKG_CONFIG_PATH to include zstd development files)
-endif
-
-ifeq ($(GBWT_USE_ABSEIL_LOGGING), 1)
-    ifeq ($(shell pkg-config --exists absl_log absl_log_internal_message && echo 1), 1)
-        $(info Found Abseil logging.)
-        INCLUDES += $(shell pkg-config --cflags absl_log absl_log_internal_message)
-        LIBS += $(shell pkg-config --libs absl_log absl_log_internal_message)
-    else
-        $(error GBWT_USE_ABSEIL_LOGGING=1 but could not find Abseil logging via pkg-config. Please update PKG_CONFIG_PATH)
-    endif
 endif
 
 ifeq ($(GBWT_ENABLE_SHARED_MEMORY), 1)
