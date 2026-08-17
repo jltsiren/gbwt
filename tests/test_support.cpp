@@ -585,12 +585,9 @@ TEST_F(StringArraySharedMemoryTest, AttachOnPlainAllocatorThrows)
     << "attach() on the plain allocator should fail instead of silently succeeding";
 }
 
-// The plain constructor (as opposed to attach()) must never throw, whether
-// or not a real segment is given and whether or not anything has been
-// published under the given name: it is a lazy, empty placeholder that a
-// later publish (or a later attach via simple_sds_load_duplicate() etc.)
-// can fill in.
-TEST_F(StringArraySharedMemoryTest, DefaultConstructorNeverThrows)
+// Unlike attach(), the lazy (non-attach) shared-memory constructor must
+// never throw, regardless of `shared_memory` or `object_prefix_in_shared_memory`.
+TEST_F(StringArraySharedMemoryTest, LazyConstructorNeverThrows)
 {
   StringArray<SharedMemCharAllocatorType> no_segment;
   EXPECT_TRUE(no_segment.empty()) << "A StringArray with no segment should be empty";
@@ -600,10 +597,10 @@ TEST_F(StringArraySharedMemoryTest, DefaultConstructorNeverThrows)
   EXPECT_TRUE(unpublished_name.empty()) << "A StringArray naming an unpublished object should be empty, not throw";
 }
 
-// The plain constructor never checks for existing data, even when a real
+// The lazy constructor never checks for existing data, even when a real
 // segment already has something published under the given name: only
 // attach() (or a load call) actually looks.
-TEST_F(StringArraySharedMemoryTest, DefaultConstructorIgnoresExistingPublication)
+TEST_F(StringArraySharedMemoryTest, LazyConstructorIgnoresExistingPublication)
 {
   std::vector<std::string> source { "first", "second" };
   bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);

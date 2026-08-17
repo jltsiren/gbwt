@@ -548,9 +548,8 @@ public:
   constexpr static int DEFAULT_COMPRESSION_LEVEL = 3;
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  // Never throws: with `shared_memory` null, or with nothing published yet
-  // under `object_prefix_in_shared_memory`, this is simply an empty array.
-  // Use `attach()` instead to require that published data already exists.
+  // Always empty: never checks whether something is already published
+  // under this name, even if it is. Use `attach()` for that.
   StringArray(SharedMemoryPointer<CharAllocatorType> shared_memory = SharedMemoryPointer<CharAllocatorType>(), std::string object_prefix_in_shared_memory = "");
   StringArray(const std::vector<std::string>& source,
               SharedMemoryPointer<CharAllocatorType> shared_memory = SharedMemoryPointer<CharAllocatorType>(),
