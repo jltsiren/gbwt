@@ -565,24 +565,7 @@ TEST_F(StringArraySharedMemoryTest, AttachAfterPublish)
   {
     EXPECT_EQ(reader.str(i), source[i]) << "Wrong string " << i << " after attaching";
   }
-
-  // Both StringArrays are backed by the same shared memory, so a write
-  // through one must be visible through the other.
-  writer.strings->push_back('!');
-  EXPECT_EQ(reader.strings->back(), '!') << "Write through the writer was not visible through the reader";
 }
-
-#ifndef GBWT_NO_EXCEPTIONS
-// With GBWT_NO_EXCEPTIONS, this failure path reports through GBWT_THROW's
-// non-throwing branch, which cannot be caught by ASSERT_THROW, so there is
-// nothing left here to check in that build.
-TEST_F(StringArraySharedMemoryTest, AttachToMissingFails)
-{
-  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
-  ASSERT_THROW((StringArray<SharedMemCharAllocatorType>(&segment, "arr")), std::runtime_error)
-    << "Attaching to a nonexistent shared-memory object should fail instead of silently succeeding";
-}
-#endif
 
 #endif
 

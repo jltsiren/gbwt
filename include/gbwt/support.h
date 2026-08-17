@@ -530,144 +530,60 @@ struct MergeParameters
 //------------------------------------------------------------------------------
 
 /*
-  Allocator-agnostic interface to an array of strings. Two kinds of storage
-  implement it: `StringArray<std::allocator<char>>`, whose character data is
-  an ordinary heap vector, and (when GBWT_ENABLE_SHARED_MEMORY is defined)
-  `StringArray<SharedMemCharAllocatorType>`, whose character data lives in a
-  boost::interprocess-managed shared memory segment so that another process
-  can attach to the same strings without copying them. A caller that just
-  wants to read and write strings, and does not care which kind backs a
-  particular array, can hold a `BaseStringArray` (typically via
-  `std::unique_ptr`) instead of committing to one `StringArray<>`
-  instantiation.
+  An array of strings stored in a single character vector, with starting offsets
+  stored in an integer vector. This can be serialized and loaded much faster than
+  an array of actual strings. In addition to standard SDSL and Simple-SDS
+  serialization, a `StringArray` can also be serialized in a Simple-SDS format
+  with zstd-compressed strings.
 
-  `index` holds `size() + 1` starting offsets into the string data, the last
-  one being the total character count, and `data` points to the first
-  character of the (concatenated) string data, however a concrete subclass
-  actually stores it. Neither depends on the character allocator, so both
-  live here rather than in a templated subclass; every subclass keeps `data`
-  in sync with its own storage whenever that storage is (re)allocated or
-  refilled. That lets all of the read-only operations below -- the ones nearly
-  every caller wants -- be ordinary inherited methods, with no virtual call,
-  regardless of which subclass they end up reading from. Only the operations
-  that allocate or mutate the underlying storage need to be virtual.
+  Serialization/deserialization failures throw `std::runtime_error` or its
+  subclasses. In particular, sanity checks throw `sdsl::simple_sds::InvalidData`.
 */
-class BaseStringArray
+template <typename CharAllocatorType = std::allocator<char>>  // Default type is std::vector<char>
+class StringArray
 {
 public:
   typedef gbwt::size_type size_type;
 
   constexpr static int DEFAULT_COMPRESSION_LEVEL = 3;
 
-  virtual ~BaseStringArray() = default;
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
+  StringArray(bi::managed_shared_memory* shared_memory = nullptr, std::string object_prefix_in_shared_memory = "");
+  StringArray(const std::vector<std::string>& source,
+              bi::managed_shared_memory* shared_memory = nullptr,
+              std::string object_prefix_in_shared_memory = "");
 
-  size_type size() const { return this->index.size() - 1; }
-  bool empty() const { return (this->size() == 0); }
-  size_type length() const { return this->index[this->size()]; }
-  size_type length(size_type i) const { return (this->index[i + 1] - this->index[i]); }
-  size_type length(size_type start, size_type limit) const { return (this->index[limit] - this->index[start]); }
+  // Create an array of `2 * source.size()` strings from the given map,
+  // alternating between keys and values in iteration order.
+  StringArray(const std::map<std::string, std::string>& source,
+              bi::managed_shared_memory* shared_memory = nullptr,
+              std::string object_prefix_in_shared_memory = "");
 
-  std::string str(size_type i) const
-  {
-    return std::string(this->data + this->index[i], this->data + this->index[i + 1]);
-  }
+  // Create an array of n strings using the given function to get the sequence.
+  // This version can be used when the sequences are already stored somewhere else.
+  StringArray(size_type n,
+              const std::function<std::string_view(size_type)>& sequence,
+              bi::managed_shared_memory* shared_memory = nullptr,
+              std::string object_prefix_in_shared_memory = "");
 
-  std::string_view view(size_type i) const
-  {
-    return std::string_view(this->data + this->index[i], this->length(i));
-  }
+  // Create an array of up to n strings using the given functions to get the sequence
+  // and for choosing which strings to include.
+  // This version can be used when the sequences are already stored somewhere else.
+  StringArray(size_type n,
+              const std::function<std::string_view(size_type)>& sequence,
+              const std::function<bool(size_type)>& choose,
+              bi::managed_shared_memory* shared_memory = nullptr,
+              std::string object_prefix_in_shared_memory = "");
 
-  size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
-
-  void simple_sds_serialize(std::ostream& out) const;
-  size_t simple_sds_size() const;
-
-  // Simple-SDS serialization with zstd-compressed strings.
-  void simple_sds_compress(std::ostream& out, int compression_level = DEFAULT_COMPRESSION_LEVEL) const;
-
-  // Simple-SDS serialization with zstd-compressed strings.
-  // This version only serializes strings at even positions.
-  void simple_sds_compress_even(std::ostream& out, int compression_level = DEFAULT_COMPRESSION_LEVEL) const;
-
-  virtual void remove(size_type i) = 0;
-  virtual void load(std::istream& in) = 0;
-  virtual void simple_sds_load(std::istream& in) = 0;
-
-  // This version loads each string twice and transforms the second copy.
-  // The transform function should not change the length of the string.
-  virtual void simple_sds_load_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform) = 0;
-
-  // Simple-SDS deserialization with zstd-compressed strings.
-  virtual void simple_sds_decompress(std::istream& in) = 0;
-
-  // Simple-SDS deserialization with zstd-compressed strings.
-  // This version loads each string twice and transforms the second copy.
-  // The transform function should not change the length of the string.
-  virtual void simple_sds_decompress_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform) = 0;
-
-  // Returns an independent copy backed by the same kind of storage as this
-  // array. For a shared-memory-backed array, "independent" means a new
-  // handle attached to the same underlying segment content, matching that
-  // type's copy constructor semantics (see
-  // StringArray<SharedMemCharAllocatorType>): the content itself is not
-  // duplicated, since every attached handle is meant to see the same data.
-  virtual std::unique_ptr<BaseStringArray> clone() const = 0;
-
-  // Compares strings by content and order, so two arrays are equal
-  // regardless of whether their underlying storage is a plain vector or a
-  // shared memory segment.
-  bool operator==(const BaseStringArray& another) const;
-  bool operator!=(const BaseStringArray& another) const { return !(this->operator==(another)); }
-
-  sdsl::int_vector<0> index;
-
-protected:
-  const char* data = nullptr;
-};
-
-/*
-  Storage and mutation shared, verbatim, by every `StringArray` instantiation:
-  `StringArray<CharAllocatorType>` (whichever CharAllocatorType it names)
-  derives from `StringArrayStorage<CharAllocatorType>`, which implements the
-  parts of `BaseStringArray` that need a pointer to the character vector,
-  however that vector is allocated. What differs between a plain and a
-  shared-memory `StringArray` is how `strings` itself is allocated, torn
-  down, and (de)serialized, which is left to each `StringArray`
-  specialization to implement.
-*/
-template <typename CharAllocatorType>
-class StringArrayStorage : public BaseStringArray
-{
-public:
-  void remove(size_type i) override;
-
-  std::vector<char, CharAllocatorType>* strings = nullptr;  // std::vector<char, SharedMemCharAllocatorType>
-
-protected:
-  // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
-  void sanityChecks() const;
-
-  // Brings the base class's `data` pointer back in sync with `strings`.
-  // Call after (re)allocating or refilling `strings`, and before returning
-  // control to any caller that might read through str()/view()/etc.
-  void refresh_data_pointer() { this->data = (this->strings == nullptr ? nullptr : this->strings->data()); }
-};
-
-/*
-  An array of strings stored in a single character vector, with starting
-  offsets stored in an integer vector (see `BaseStringArray`). This can be
-  serialized and loaded much faster than an array of actual strings. In
-  addition to standard SDSL and Simple-SDS serialization, a `StringArray`
-  can also be serialized in a Simple-SDS format with zstd-compressed
-  strings.
-
-  Serialization/deserialization failures throw `std::runtime_error` or its
-  subclasses. In particular, sanity checks throw `sdsl::simple_sds::InvalidData`.
-*/
-template <typename CharAllocatorType = std::allocator<char>>  // Default type is std::vector<char>
-class StringArray : public StringArrayStorage<CharAllocatorType>
-{
-public:
+  // Create an array of n strings using the given functions to get the length and the sequence.
+  // This version is appropriate when the sequences are created on the fly but their
+  // lengths are known in advance.
+  StringArray(size_type n,
+              const std::function<size_type(size_type)>& length,
+              const std::function<std::string(size_type)>& sequence,
+              bi::managed_shared_memory* shared_memory = nullptr,
+              std::string object_prefix_in_shared_memory = "");
+#else
   StringArray();
   StringArray(const std::vector<std::string>& source);
 
@@ -688,138 +604,92 @@ public:
   // This version is appropriate when the sequences are created on the fly but their
   // lengths are known in advance.
   StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence);
+#endif
 
-  // Copy constructor
-  StringArray(const StringArray& another);
-  ~StringArray() override;
+  ~StringArray();
+
+  template<typename CharAllocatorTypeOther>
+  void swap(StringArray<CharAllocatorTypeOther>& another);
+
+  size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
+  void load(std::istream& in);
+
+  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_load(std::istream& in);
+  size_t simple_sds_size() const;
+
+  // This version loads each string twice and transforms the second copy.
+  // The transform function should not change the length of the string.
+  void simple_sds_load_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform);
+
+  // Simple-SDS serialization with zstd-compressed strings.
+  void simple_sds_compress(std::ostream& out, int compression_level = DEFAULT_COMPRESSION_LEVEL) const;
+
+  // Simple-SDS serialization with zstd-compressed strings.
+  // This version only serializes strings at even positions.
+  void simple_sds_compress_even(std::ostream& out, int compression_level = DEFAULT_COMPRESSION_LEVEL) const;
+
+  // Simple-SDS deserialization with zstd-compressed strings.
+  void simple_sds_decompress(std::istream& in);
+
+  // Simple-SDS deserialization with zstd-compressed strings.
+  // This version loads each string twice and transforms the second copy.
+  // The transform function should not change the length of the string.
+  void simple_sds_decompress_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform);
 
   // Copy assignment operator
   StringArray& operator=(const StringArray& another);
+  // Copy constructor
+  StringArray(const StringArray& another);
   // Move assignment operator
   StringArray& operator=(StringArray&& another);
 
-  void swap(StringArray& another);
+  template<typename CharAllocatorTypeOther>
+  bool operator==(const StringArray<CharAllocatorTypeOther>& another) const;
 
-  void load(std::istream& in) override;
-  void simple_sds_load(std::istream& in) override;
-  void simple_sds_load_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform) override;
-  void simple_sds_decompress(std::istream& in) override;
-  void simple_sds_decompress_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform) override;
+  template<typename CharAllocatorTypeOther>
+  bool operator!=(const StringArray<CharAllocatorTypeOther>& another) const;
 
-  std::unique_ptr<BaseStringArray> clone() const override { return std::make_unique<StringArray>(*this); }
-};
+  size_type size() const { return this->index.size() - 1; }
+  bool empty() const { return (this->size() == 0); }
+  size_type length() const { return this->strings->size(); }
+  size_type length(size_type i) const { return (this->index[i + 1] - this->index[i]); }
+  size_type length(size_type start, size_t limit) const { return (this->index[limit] - this->index[start]); }
 
+  std::string str(size_type i) const
+  {
+    return std::string(this->strings->data() + this->index[i], this->strings->data() + this->index[i + 1]);
+  }
+
+   std::string_view view(size_type i) const
+  {
+    return std::string_view(this->strings->data() + this->index[i], this->length(i));
+  }
+
+  void remove(size_type i);
+
+  sdsl::int_vector<0> index;
+  std::vector<char, CharAllocatorType>* strings = nullptr;  // std::vector<char, SharedMemCharAllocatorType>
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-/*
-  The shared-memory specialization of `StringArray`. Every constructor
-  requires a real `shared_memory` segment (there is no default of nullptr,
-  unlike the general case): a shared-memory `StringArray` that was allowed to
-  exist without a segment would have nowhere to put its content, which used
-  to be a state this class had to check for at every access instead of ruling
-  out at construction time.
-*/
-template <>
-class StringArray<SharedMemCharAllocatorType> : public StringArrayStorage<SharedMemCharAllocatorType>
-{
-public:
-  // Attaches to strings already published in `shared_memory` under
-  // `object_prefix_in_shared_memory`. Unlike the other constructors, this
-  // one has no source content of its own to publish, so attaching to
-  // existing content is the only thing it can do; it throws
-  // `std::runtime_error` if no such content exists.
-  StringArray(bi::managed_shared_memory* shared_memory, std::string object_prefix_in_shared_memory = "");
-
-  StringArray(const std::vector<std::string>& source,
-              bi::managed_shared_memory* shared_memory,
-              std::string object_prefix_in_shared_memory = "");
-
-  // Create an array of `2 * source.size()` strings from the given map,
-  // alternating between keys and values in iteration order.
-  StringArray(const std::map<std::string, std::string>& source,
-              bi::managed_shared_memory* shared_memory,
-              std::string object_prefix_in_shared_memory = "");
-
-  // Create an array of n strings using the given function to get the sequence.
-  // This version can be used when the sequences are already stored somewhere else.
-  StringArray(size_type n,
-              const std::function<std::string_view(size_type)>& sequence,
-              bi::managed_shared_memory* shared_memory,
-              std::string object_prefix_in_shared_memory = "");
-
-  // Create an array of up to n strings using the given functions to get the sequence
-  // and for choosing which strings to include.
-  // This version can be used when the sequences are already stored somewhere else.
-  StringArray(size_type n,
-              const std::function<std::string_view(size_type)>& sequence,
-              const std::function<bool(size_type)>& choose,
-              bi::managed_shared_memory* shared_memory,
-              std::string object_prefix_in_shared_memory = "");
-
-  // Create an array of n strings using the given functions to get the length and the sequence.
-  // This version is appropriate when the sequences are created on the fly but their
-  // lengths are known in advance.
-  StringArray(size_type n,
-              const std::function<size_type(size_type)>& length,
-              const std::function<std::string(size_type)>& sequence,
-              bi::managed_shared_memory* shared_memory,
-              std::string object_prefix_in_shared_memory = "");
-
-  // Copy constructor: attaches to the same shared-memory content as
-  // `another`, rather than duplicating it, since that content is meant to be
-  // shared by every handle attached to it.
-  StringArray(const StringArray& another);
-  ~StringArray() override = default; // Shared memory owns `strings`; there is nothing to delete here.
-
-  StringArray& operator=(const StringArray& another);
-  StringArray& operator=(StringArray&& another);
-
-  void swap(StringArray& another);
-
-  void load(std::istream& in) override;
-  void simple_sds_load(std::istream& in) override;
-
-  // The shared-memory allocator cannot be default-constructed, which these
-  // "duplicate"/decompress paths need in order to build content off to the
-  // side before deciding what to keep. They were never used with
-  // shared-memory StringArrays, so this specialization does not support them.
-  void simple_sds_load_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform) override;
-  void simple_sds_decompress(std::istream& in) override;
-  void simple_sds_decompress_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform) override;
-
-  std::unique_ptr<BaseStringArray> clone() const override { return std::make_unique<StringArray>(*this); }
-
-  bi::managed_shared_memory* shared_memory;
+  bi::managed_shared_memory* shared_memory = nullptr;
+  SharedMemCharAllocatorType* shared_memory_char_allocator = nullptr;
   std::string object_prefix_in_shared_memory;
+  bool is_data_loaded_into_shared_memory = false;
+
+  void construct_index_in_shared_memory();
+  void find_index_from_shared_memory();
+  void find_strings_from_shared_memory();
+  void construct_strings_in_shared_memory();
+  void check_existence_in_shared_memory();
+  // Marks the "_loaded" flag check_existence_in_shared_memory() reads as
+  // true; call only after the strings and index have both been published.
+  void mark_published_in_shared_memory();
+#endif
 
 private:
-  SharedMemCharAllocatorType* shared_memory_char_allocator = nullptr;
-
-  // Set once, by whichever constructor built this object, to whether that
-  // constructor found (and attached to) content someone else had already
-  // published under this name, rather than building and publishing it
-  // itself. load()/simple_sds_load() consult this instead of re-deriving it,
-  // since by the time they might run, this object's own construction may
-  // itself have published fresh (if empty) content under this same name.
-  bool attached_to_existing_content = false;
-
-  // True if `object_prefix_in_shared_memory` already names published
-  // strings+index content in `shared_memory`, in which case this attaches
-  // `this->strings` and `this->index` to it. False if the caller must build
-  // fresh content into `strings`/`index` itself and then call
-  // `publish_content()`.
-  bool attach_if_published();
-
-  // Allocates an empty `strings` vector in `shared_memory` for the caller to
-  // fill in. Call before writing content when `attach_if_published()`
-  // returned false.
-  void construct_strings_in_shared_memory();
-
-  // Publishes `this->index` into `shared_memory` and marks the named content
-  // as available for other `StringArray`s to attach to. Call once after
-  // freshly building content into `strings`/`index`.
-  void publish_content();
+  // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
+  void sanityChecks() const;
 };
-#endif
 
 //------------------------------------------------------------------------------
 
