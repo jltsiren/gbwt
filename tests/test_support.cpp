@@ -576,6 +576,15 @@ TEST_F(StringArraySharedMemoryTest, AttachToMissingNameFails)
     << "Attaching to a name nothing was published under should fail instead of silently succeeding";
 }
 
+// attach() only makes sense for the shared-memory allocator: for any other
+// allocator, there is nothing to attach to, so it must fail loudly rather
+// than silently returning an empty array.
+TEST_F(StringArraySharedMemoryTest, AttachOnPlainAllocatorThrows)
+{
+  ASSERT_THROW(StringArray<>::attach(NotSharedMemory(), "arr"), std::logic_error)
+    << "attach() on the plain allocator should fail instead of silently succeeding";
+}
+
 // The plain constructor (as opposed to attach()) must never throw, whether
 // or not a real segment is given and whether or not anything has been
 // published under the given name: it is a lazy, empty placeholder that a
@@ -591,9 +600,25 @@ TEST_F(StringArraySharedMemoryTest, DefaultConstructorNeverThrows)
   EXPECT_TRUE(unpublished_name.empty()) << "A StringArray naming an unpublished object should be empty, not throw";
 }
 
+// The plain constructor never checks for existing data, even when a real
+// segment already has something published under the given name: only
+// attach() (or a load call) actually looks.
+TEST_F(StringArraySharedMemoryTest, DefaultConstructorIgnoresExistingPublication)
+{
+  std::vector<std::string> source { "first", "second" };
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  StringArray<SharedMemCharAllocatorType> writer(source, &segment, "arr");
+  ASSERT_EQ(writer.size(), source.size()) << "Writer has the wrong size";
+
+  StringArray<SharedMemCharAllocatorType> lazy(&segment, "arr");
+  EXPECT_TRUE(lazy.empty()) << "The plain constructor should stay empty even though \"arr\" is already published";
+}
+
 // Two independent handles to the same segment stand in for two separate
-// processes: the second should attach to the first's published data
-// instead of decompressing (and re-publishing) its own copy.
+// processes: the second must attach to the first's published data instead
+// of decompressing its own copy under the same name, since republishing
+// under a name that already exists would throw (see managed_shared_memory's
+// construct<>() semantics).
 TEST_F(StringArraySharedMemoryTest, SimpleSDSLoadDuplicateThenAttach)
 {
   std::vector<std::string> source { "first", "second", "third", "fourth" };

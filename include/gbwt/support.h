@@ -589,7 +589,8 @@ public:
 
   // Attaches to strings a prior call (in this process or another) already
   // published under this name in this segment. Throws `std::runtime_error`
-  // if nothing is published there yet.
+  // if nothing is published there yet, or `std::logic_error` for any
+  // CharAllocatorType other than SharedMemCharAllocatorType.
   static StringArray attach(SharedMemoryPointer<CharAllocatorType> shared_memory, const std::string& object_prefix_in_shared_memory);
 #else
   StringArray();

@@ -1848,10 +1848,8 @@ StringArray<CharAllocatorType>::StringArray(
   this->strings = nullptr;
   if constexpr
     (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
-    // Remember where the real data will eventually live, without publishing
-    // or looking for anything under that name yet: this constructor always
-    // succeeds and is always empty. Use attach() to require that published
-    // data already exists.
+    // Always empty: does not check whether something is already published
+    // under this name, even if it is. Use attach() for that.
     this->shared_memory = shared_memory;
     this->object_prefix_in_shared_memory = object_prefix_in_shared_memory;
   }else{
@@ -1868,9 +1866,9 @@ StringArray<CharAllocatorType>::attach(
     SharedMemoryPointer<CharAllocatorType> shared_memory,
     const std::string& object_prefix_in_shared_memory)
 {
-  StringArray result;
   if constexpr
     (std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value) {
+    StringArray result;
     result.shared_memory = shared_memory;
     result.object_prefix_in_shared_memory = object_prefix_in_shared_memory;
     result.check_existence_in_shared_memory();
@@ -1880,8 +1878,11 @@ StringArray<CharAllocatorType>::attach(
     }
     result.find_strings_from_shared_memory();
     result.find_index_from_shared_memory();
+    return result;
+  }else{
+    // There is nothing to attach to without shared memory in the first place.
+    throw std::logic_error("StringArray: attach() is not supported for the plain allocator");
   }
-  return result;
 }
 
 template <typename CharAllocatorType>
