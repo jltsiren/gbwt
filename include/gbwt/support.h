@@ -548,22 +548,25 @@ public:
   constexpr static int DEFAULT_COMPRESSION_LEVEL = 3;
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  StringArray(bi::managed_shared_memory* shared_memory = nullptr, std::string object_prefix_in_shared_memory = "");
+  // Never throws: with `shared_memory` null, or with nothing published yet
+  // under `object_prefix_in_shared_memory`, this is simply an empty array.
+  // Use `attach()` instead to require that published data already exists.
+  StringArray(SharedMemoryPointer<CharAllocatorType> shared_memory = SharedMemoryPointer<CharAllocatorType>(), std::string object_prefix_in_shared_memory = "");
   StringArray(const std::vector<std::string>& source,
-              bi::managed_shared_memory* shared_memory = nullptr,
+              SharedMemoryPointer<CharAllocatorType> shared_memory = SharedMemoryPointer<CharAllocatorType>(),
               std::string object_prefix_in_shared_memory = "");
 
   // Create an array of `2 * source.size()` strings from the given map,
   // alternating between keys and values in iteration order.
   StringArray(const std::map<std::string, std::string>& source,
-              bi::managed_shared_memory* shared_memory = nullptr,
+              SharedMemoryPointer<CharAllocatorType> shared_memory = SharedMemoryPointer<CharAllocatorType>(),
               std::string object_prefix_in_shared_memory = "");
 
   // Create an array of n strings using the given function to get the sequence.
   // This version can be used when the sequences are already stored somewhere else.
   StringArray(size_type n,
               const std::function<std::string_view(size_type)>& sequence,
-              bi::managed_shared_memory* shared_memory = nullptr,
+              SharedMemoryPointer<CharAllocatorType> shared_memory = SharedMemoryPointer<CharAllocatorType>(),
               std::string object_prefix_in_shared_memory = "");
 
   // Create an array of up to n strings using the given functions to get the sequence
@@ -572,7 +575,7 @@ public:
   StringArray(size_type n,
               const std::function<std::string_view(size_type)>& sequence,
               const std::function<bool(size_type)>& choose,
-              bi::managed_shared_memory* shared_memory = nullptr,
+              SharedMemoryPointer<CharAllocatorType> shared_memory = SharedMemoryPointer<CharAllocatorType>(),
               std::string object_prefix_in_shared_memory = "");
 
   // Create an array of n strings using the given functions to get the length and the sequence.
@@ -581,8 +584,13 @@ public:
   StringArray(size_type n,
               const std::function<size_type(size_type)>& length,
               const std::function<std::string(size_type)>& sequence,
-              bi::managed_shared_memory* shared_memory = nullptr,
+              SharedMemoryPointer<CharAllocatorType> shared_memory = SharedMemoryPointer<CharAllocatorType>(),
               std::string object_prefix_in_shared_memory = "");
+
+  // Attaches to strings a prior call (in this process or another) already
+  // published under this name in this segment. Throws `std::runtime_error`
+  // if nothing is published there yet.
+  static StringArray attach(SharedMemoryPointer<CharAllocatorType> shared_memory, const std::string& object_prefix_in_shared_memory);
 #else
   StringArray();
   StringArray(const std::vector<std::string>& source);

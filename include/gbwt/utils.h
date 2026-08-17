@@ -39,6 +39,7 @@
 #include <iostream>
 #include <limits>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include <sdsl/int_vector.hpp>
@@ -81,6 +82,24 @@ inline double omp_get_wtime()
 namespace gbwt
 {
 typedef boost::interprocess::allocator<char, boost::interprocess::managed_shared_memory::segment_manager> SharedMemCharAllocatorType;
+
+// Has no conversion from `boost::interprocess::managed_shared_memory*`.
+// Standing in for that pointer type in a constructor parameter list, for any
+// CharAllocatorType other than SharedMemCharAllocatorType, makes passing a
+// real segment to that constructor a compile error instead of a silently
+// ignored argument.
+struct NotSharedMemory {};
+
+// The type a shared-memory-segment constructor parameter should have for a
+// given CharAllocatorType: a real segment pointer for SharedMemCharAllocatorType,
+// or NotSharedMemory (which nothing but NotSharedMemory itself converts to)
+// for every other allocator.
+template<typename CharAllocatorType>
+using SharedMemoryPointer = typename std::conditional<
+  std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value,
+  boost::interprocess::managed_shared_memory*,
+  NotSharedMemory
+>::type;
 }
 #endif
 

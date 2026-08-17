@@ -559,12 +559,114 @@ TEST_F(StringArraySharedMemoryTest, AttachAfterPublish)
   StringArray<SharedMemCharAllocatorType> writer(source, &segment, "arr");
   ASSERT_EQ(writer.size(), source.size()) << "Writer has the wrong size";
 
-  StringArray<SharedMemCharAllocatorType> reader(&segment, "arr");
+  StringArray<SharedMemCharAllocatorType> reader = StringArray<SharedMemCharAllocatorType>::attach(&segment, "arr");
   ASSERT_EQ(reader.size(), source.size()) << "Reader did not attach to the published data";
   for(size_type i = 0; i < source.size(); i++)
   {
     EXPECT_EQ(reader.str(i), source[i]) << "Wrong string " << i << " after attaching";
   }
+}
+
+// attach() must fail instead of silently returning an empty array when
+// nothing has been published under the given name yet.
+TEST_F(StringArraySharedMemoryTest, AttachToMissingNameFails)
+{
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  ASSERT_THROW(StringArray<SharedMemCharAllocatorType>::attach(&segment, "arr"), std::runtime_error)
+    << "Attaching to a name nothing was published under should fail instead of silently succeeding";
+}
+
+// The plain constructor (as opposed to attach()) must never throw, whether
+// or not a real segment is given and whether or not anything has been
+// published under the given name: it is a lazy, empty placeholder that a
+// later publish (or a later attach via simple_sds_load_duplicate() etc.)
+// can fill in.
+TEST_F(StringArraySharedMemoryTest, DefaultConstructorNeverThrows)
+{
+  StringArray<SharedMemCharAllocatorType> no_segment;
+  EXPECT_TRUE(no_segment.empty()) << "A StringArray with no segment should be empty";
+
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  StringArray<SharedMemCharAllocatorType> unpublished_name(&segment, "never_published");
+  EXPECT_TRUE(unpublished_name.empty()) << "A StringArray naming an unpublished object should be empty, not throw";
+}
+
+// Two independent handles to the same segment stand in for two separate
+// processes: the second should attach to the first's published data
+// instead of decompressing (and re-publishing) its own copy.
+TEST_F(StringArraySharedMemoryTest, SimpleSDSLoadDuplicateThenAttach)
+{
+  std::vector<std::string> source { "first", "second", "third", "fourth" };
+  StringArray<> truth = duplicate_array(source);
+
+  std::string filename = TempFile::getName("string-array");
+  sdsl::simple_sds::serialize_to(StringArray<>(source), filename);
+
+  bi::managed_shared_memory writer_segment(bi::create_only, this->segment_name.c_str(), 1024 * 1024);
+  StringArray<SharedMemCharAllocatorType> writer(&writer_segment, "arr");
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    writer.simple_sds_load_duplicate(in, reverse_string);
+  }
+  ASSERT_EQ(writer.size(), truth.size()) << "Writer has the wrong size after loading";
+  for(size_type i = 0; i < truth.size(); i++)
+  {
+    EXPECT_EQ(writer.str(i), truth.str(i)) << "Writer has the wrong string " << i << " after loading";
+  }
+
+  bi::managed_shared_memory reader_segment(bi::open_only, this->segment_name.c_str());
+  StringArray<SharedMemCharAllocatorType> reader(&reader_segment, "arr");
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    reader.simple_sds_load_duplicate(in, reverse_string);
+  }
+  ASSERT_EQ(reader.size(), truth.size()) << "Reader did not attach to the published data";
+  for(size_type i = 0; i < truth.size(); i++)
+  {
+    EXPECT_EQ(reader.str(i), truth.str(i)) << "Reader has the wrong string " << i << " after attaching";
+  }
+
+  TempFile::remove(filename);
+}
+
+// As SimpleSDSLoadDuplicateThenAttach, but for the zstd-compressed format
+// and simple_sds_decompress_duplicate().
+TEST_F(StringArraySharedMemoryTest, ZstdDecompressDuplicateThenAttach)
+{
+  std::vector<std::string> source { "first", "second", "third", "fourth" };
+  StringArray<> truth = duplicate_array(source);
+
+  std::string filename = TempFile::getName("string-array");
+  {
+    std::ofstream out(filename, std::ios_base::binary);
+    truth.simple_sds_compress_even(out);
+  }
+
+  bi::managed_shared_memory writer_segment(bi::create_only, this->segment_name.c_str(), 1024 * 1024);
+  StringArray<SharedMemCharAllocatorType> writer(&writer_segment, "arr");
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    writer.simple_sds_decompress_duplicate(in, reverse_string);
+  }
+  ASSERT_EQ(writer.size(), truth.size()) << "Writer has the wrong size after decompressing";
+  for(size_type i = 0; i < truth.size(); i++)
+  {
+    EXPECT_EQ(writer.str(i), truth.str(i)) << "Writer has the wrong string " << i << " after decompressing";
+  }
+
+  bi::managed_shared_memory reader_segment(bi::open_only, this->segment_name.c_str());
+  StringArray<SharedMemCharAllocatorType> reader(&reader_segment, "arr");
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    reader.simple_sds_decompress_duplicate(in, reverse_string);
+  }
+  ASSERT_EQ(reader.size(), truth.size()) << "Reader did not attach to the published data";
+  for(size_type i = 0; i < truth.size(); i++)
+  {
+    EXPECT_EQ(reader.str(i), truth.str(i)) << "Reader has the wrong string " << i << " after attaching";
+  }
+
+  TempFile::remove(filename);
 }
 
 #endif
