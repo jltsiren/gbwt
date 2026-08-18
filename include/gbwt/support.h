@@ -562,14 +562,8 @@ public:
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
   /*
-    Constructors and attach() for characters that live in a Boost managed
-    shared memory segment. Each takes the segment to work in and the prefix
-    the objects holding the strings are named with inside it, so that a later
-    call, in this process or another, can find the same strings again.
-
-    Only the instantiation for SharedMemCharAllocatorType has these. For any
-    other allocator they are not candidates at all, so naming one is an
-    unsatisfied-constraint error where it is named.
+    Constructors for shared memory.
+    Each takes the segment to work in and the prefix for object names.
   */
 
   // Attaches to the strings already published under this prefix, or stays
@@ -716,22 +710,21 @@ private:
 
   /*
     Fill in an empty array from a source. The map version alternates between
-    keys and values in iteration order; the others are the constructors of the
-    same shape.
+    keys and values in iteration order.
   */
   void build_from(const std::map<std::string, std::string>& source);
   void build_from(size_type n, const std::function<std::string_view(size_type)>& sequence, const std::function<bool(size_type)>& choose);
   void build_from(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence);
 
-  // The stored characters, empty when nothing stores them yet.
+  // The stored characters. Empty when nothing stores them yet.
   std::string_view characters() const
   {
     return (this->strings == nullptr ? std::string_view() : std::string_view(this->strings->data(), this->strings->size()));
   }
 
-  // Makes somewhere for the characters to go if there isn't one. Throws
-  // `std::runtime_error` if they belong in shared memory and there is no
-  // segment to put them in.
+  // Makes somewhere for the characters to go if there isn't storage
+  // allocated. Throws `std::runtime_error` if they belong in shared
+  // memory and there is no segment to put them in.
   void ensure_strings();
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)

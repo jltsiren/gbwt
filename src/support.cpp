@@ -1817,8 +1817,7 @@ MergeParameters::setMergeJobs(size_type n)
 
 /*
   The bodies shared by the ordinary constructors and the shared-memory ones.
-  They fill in an empty array; a shared-memory constructor runs one of them
-  between attaching to an existing publication and publishing its own.
+  They fill in an empty array.
 */
 
 template <typename Allocator>
@@ -2584,7 +2583,6 @@ void StringArray<Allocator>::construct_index_in_shared_memory()
       this->shared_memory->construct<uint64_t>(index_size_name.c_str())();
   memcpy(index_data, this->index.data(), capacity_bytes);
   *index_width = this->index.width();
-  // int_vector's shared-memory constructor takes an element count, not a bit count.
   *index_size = this->index.size();
 }
 
