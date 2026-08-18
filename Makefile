@@ -1,11 +1,7 @@
 SDSL_DIR=../sdsl-lite
 include $(SDSL_DIR)/Make.helper
 
-# GBWT's headers constrain members with C++20 requires-clauses (see
-# StoresCharsInSharedMemory in include/gbwt/utils.h), so anything that
-# includes them has to be compiled as C++20 or later. sdsl-lite's generated
-# Make.helper picks the standard for its own build and names an older one, so
-# replace whatever it asked for rather than appending to it.
+# We need C++20, so replace whatever standard sdsl-lite's Make.helper asked for.
 GBWT_STD_FLAG=-std=c++20
 MY_CXX_FLAGS:=$(filter-out -std=%,$(MY_CXX_FLAGS)) $(GBWT_STD_FLAG)
 
@@ -14,18 +10,11 @@ BUILD_LIB=lib
 BUILD_OBJ=obj
 SOURCE_DIR=src
 
-# --- Optional build-time behaviors, overridable on the command line (e.g.
-# `make GBWT_USE_OPENMP=0`). Defaults match GBWT's traditional behavior.
-# See include/gbwt/support.h (StringArray) for what each one changes.
-
 # Build with OpenMP parallelism (1) or without it (0).
 GBWT_USE_OPENMP=1
 # Enable StringArray's shared-memory-backed storage, which needs
-# Boost.Interprocess and sdsl-lite's own SDSL_ENABLE_SHARED_MEMORY int_vector
-# constructor (see SDSL_ENABLE_SHARED_MEMORY in $(SDSL_DIR)/Make.helper,
-# which sdsl-lite's CMake build generates). Defaults to on if both are
-# available, off otherwise; set explicitly to override the autodetection
-# either way.
+# Boost.Interprocess and sdsl-lite built with shared memory support. On by
+# default when both are available; set it explicitly to override that.
 GBWT_ENABLE_SHARED_MEMORY=$(shell if echo '\#include <boost/interprocess/managed_shared_memory.hpp>' | $(MY_CXX) $(GBWT_STD_FLAG) -E -x c++ - >/dev/null 2>&1 && [ "$(SDSL_ENABLE_SHARED_MEMORY)" = "ON" ]; then echo 1; else echo 0; fi)
 
 ifeq ($(GBWT_ENABLE_SHARED_MEMORY), 1)
@@ -34,15 +23,11 @@ ifeq ($(GBWT_ENABLE_SHARED_MEMORY), 1)
     endif
 endif
 
-DEFINES=
-
 # Multithreading with OpenMP.
 ifeq ($(GBWT_USE_OPENMP), 1)
     PARALLEL_FLAGS=-fopenmp -pthread -DGBWT_USE_OPENMP
 else
-    # Without OpenMP, the "#pragma omp ..." directives sprinkled through the
-    # source are inert (silently ignored by the compiler), but -Wall turns on
-    # -Wunknown-pragmas, which would otherwise warn about every one of them.
+    # Turn off the warnings about the OpenMP pragmas being unknown.
     PARALLEL_FLAGS=-pthread -Wno-unknown-pragmas
 endif
 
@@ -60,10 +45,7 @@ else
 endif
 
 ifeq ($(GBWT_ENABLE_SHARED_MEMORY), 1)
-    # GBWT_ENABLE_SHARED_MEMORY and SDSL_ENABLE_SHARED_MEMORY are not passed
-    # as -D flags: see the CONFIG_HEADER rule below for why.
-    # Boost.Interprocess is header-only, but its named shared memory objects
-    # need librt on Linux (not on macOS, where the equivalent is in libc).
+    # Boost.Interprocess needs librt when we are not on a Mac.
     ifneq ($(shell uname -s), Darwin)
         LIBS += -lrt
     endif
@@ -102,16 +84,8 @@ ifeq ($(shell uname -s), Darwin)
     endif
 endif
 
-CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(DEFINES) $(MY_CXX_OPT_FLAGS) $(INCLUDES)
+CXX_FLAGS=$(MY_CXX_FLAGS) $(PARALLEL_FLAGS) $(MY_CXX_OPT_FLAGS) $(INCLUDES)
 
-# A -D flag naming GBWT_ENABLE_SHARED_MEMORY only reaches GBWT's own .cpp
-# compiles, not a downstream consumer's (e.g. gbwtgraph's) compiles of these
-# same headers, so a consumer would have no reliable way to know whether GBWT
-# was actually built with it -- and StringArray's shared-memory-only members
-# and constructors (see support.h) differ in shape depending on it. Baking
-# the resolved value into an actual header instead lets any translation unit
-# that includes GBWT's headers see it, whether or not its own build system
-# knows to pass a matching flag.
 CONFIG_HEADER=include/gbwt/config.h
 HEADERS=$(sort $(wildcard include/gbwt/*.h) $(CONFIG_HEADER))
 LIBOBJS=$(addprefix $(BUILD_OBJ)/,algorithms.o bwtmerge.o cached_gbwt.o dynamic_gbwt.o fast_locate.o files.o gbwt.o internal.o metadata.o support.o test.o utils.o variants.o)
@@ -123,7 +97,10 @@ OBSOLETE=build_gbwt build_ri merge_gbwt benchmark metadata_tool remove_seq
 .PHONY: all clean directories test .FORCE
 .FORCE:
 
-all: directories $(LIBRARY) $(PROGRAMS)
+# Make.helper is an order-only prerequisite of the things that need it, so
+# that its rule always running doesn't make them look out of date every time.
+# The library itself doesn't need it; the tests do.
+all: directories $(LIBRARY) $(PROGRAMS) | Make.helper
 
 directories: $(BUILD_BIN) $(BUILD_LIB) $(BUILD_OBJ)
 
@@ -139,11 +116,9 @@ $(BUILD_OBJ):
 $(BUILD_OBJ)/%.o:$(SOURCE_DIR)/%.cpp $(HEADERS) | $(BUILD_OBJ)
 	$(MY_CXX) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -c -o $@ $<
 
-# Unlike Make.helper below, this is only overwritten when its content
-# actually changes (via the .tmp/cmp/mv dance), since every compile that
-# includes a GBWT header depends on it: touching it on every invocation
-# would force a full rebuild of GBWT and everything downstream of it every
-# single time, instead of only when a relevant flag actually changed.
+# A header for the optional features, so that anything including GBWT's
+# headers sees what GBWT was built with. Only touched when it would change,
+# since everything depends on it.
 $(CONFIG_HEADER): .FORCE
 	@mkdir -p $(dir $(CONFIG_HEADER))
 	@echo "// Generated by GBWT's Makefile; do not edit, and do not commit to git." > $@.tmp
@@ -157,39 +132,27 @@ $(CONFIG_HEADER): .FORCE
 	@cmp -s $@.tmp $@ || cp $@.tmp $@
 	@rm -f $@.tmp
 
-# Generated for tests/Makefile to include, so it builds against the exact
-# same defines/flags/libraries this Makefile resolved for $(LIBRARY) --
-# including autodetected and command-line-overridden ones -- instead of
-# separately re-deriving them and potentially disagreeing with what the
-# library was actually built with. Regenerated on every invocation (via the
-# .FORCE prerequisite) to stay in sync with whatever this `make` command
-# line resolved; not meant to be edited or committed to git.
+# Communicates the build settings to the tests' Makefile.
 Make.helper: .FORCE
 	@echo "# Generated by GBWT's Makefile; do not edit, and do not commit to git." > $@
 	@echo "MY_CXX=$(MY_CXX)" >> $@
 	@echo "MY_CC=$(MY_CC)" >> $@
 	@echo "MY_CXX_FLAGS=$(MY_CXX_FLAGS)" >> $@
 	@echo "MY_CXX_OPT_FLAGS=$(MY_CXX_OPT_FLAGS)" >> $@
-	@echo "GBWT_DEFINES=$(DEFINES)" >> $@
 	@echo "GBWT_PARALLEL_FLAGS=$(PARALLEL_FLAGS)" >> $@
 	@echo "GBWT_INCLUDES=$(INCLUDES)" >> $@
 	@echo "GBWT_LIBS=$(LIBS)" >> $@
 
-# Make.helper is an order-only prerequisite: it must exist and be current
-# before we link, but its own rule always running shouldn't itself force
-# $(LIBRARY) to be considered out of date (and relinked) on every `make`.
-$(LIBRARY): $(LIBOBJS) | Make.helper $(BUILD_LIB)
+$(LIBRARY): $(LIBOBJS) | $(BUILD_LIB)
 	ar rcs $@ $(LIBOBJS)
 
 $(BUILD_BIN)/%:$(BUILD_OBJ)/%.o $(LIBRARY) | $(BUILD_BIN)
 	$(MY_CXX) $(LDFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(CXX_FLAGS) -o $@ $< $(LIBRARY) $(LIBS)
 
-test:$(LIBRARY)
+test:$(LIBRARY) | Make.helper
 	cd tests && $(MAKE) test
 
 clean:
 	rm -rf $(BUILD_BIN) $(BUILD_LIB) $(BUILD_OBJ)
-	# tests/Makefile includes Make.helper at parse time, so it must still
-	# exist when we recurse into tests/; remove it only afterwards.
 	cd tests && $(MAKE) clean
 	rm -f *.o *.a $(OBSOLETE) Make.helper $(CONFIG_HEADER)
