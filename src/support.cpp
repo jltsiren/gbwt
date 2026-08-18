@@ -2152,8 +2152,19 @@ void StringArray<CharAllocatorType>::swap(StringArray& another)
 }
 
 template <typename CharAllocatorType>
+void StringArray<CharAllocatorType>::require_stored_characters() const
+{
+  if(this->strings == nullptr)
+  {
+    throw std::runtime_error("StringArray: The strings are not stored anywhere; a shared memory segment is needed first");
+  }
+}
+
+template <typename CharAllocatorType>
 size_type StringArray<CharAllocatorType>::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
 {
+  this->require_stored_characters();
+
   sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
   size_type written_bytes = 0;
 
@@ -2170,17 +2181,43 @@ template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::load(std::istream& in)
 {
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  if (this->is_data_loaded_into_shared_memory == false)
-#endif
+  if constexpr(StoresCharsInSharedMemory<CharAllocatorType>)
   {
+    this->check_existence_in_shared_memory();
+    if(this->is_data_loaded_into_shared_memory)
+    {
+      // Somebody already published these strings, so use theirs and just
+      // consume the bytes they were built from off the stream.
+      this->find_strings_from_shared_memory();
+      this->find_index_from_shared_memory();
+      {std::vector<char> characters; loadVector(characters, in);}
+      {sdsl::int_vector<0> offsets; offsets.load(in);}
+      this->sanityChecks();
+      return;
+    }
+    this->construct_strings_in_shared_memory();
     if(this->strings == nullptr)
     {
       throw std::runtime_error("StringArray: Cannot load strings into shared memory without a real segment");
     }
-    loadVector(*this->strings, in);
-    this->index.load(in);
   }
+  else
+#endif
+  {
+    if(this->strings == nullptr) { this->strings = new std::vector<char, CharAllocatorType>(); }
+  }
+
+  loadVector(*this->strings, in);
+  this->index.load(in);
   this->sanityChecks();
+
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
+  if constexpr(StoresCharsInSharedMemory<CharAllocatorType>)
+  {
+    this->construct_index_in_shared_memory();
+    this->mark_published_in_shared_memory();
+  }
+#endif
 }
 
 template <typename CharAllocatorType>
@@ -2209,6 +2246,8 @@ determine_alphabet(const std::vector<char, CharAllocatorType>& strings, std::vec
 template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::simple_sds_serialize(std::ostream& out) const
 {
+  this->require_stored_characters();
+
   // Compress the index without the past-the-end sentinel.
   {
     sdsl::sd_vector<> v(this->index.begin(), this->index.end() - 1);
@@ -2304,6 +2343,8 @@ void StringArray<CharAllocatorType>::simple_sds_load(std::istream& in)
 template <typename CharAllocatorType>
 size_t StringArray<CharAllocatorType>::simple_sds_size() const
 {
+  this->require_stored_characters();
+
   size_t result = 0;
 
   // Compress the index without the past-the-end sentinel.
@@ -2403,6 +2444,8 @@ void StringArray<CharAllocatorType>::simple_sds_load_duplicate(std::istream& in,
 template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::simple_sds_compress(std::ostream& out, int compression_level) const
 {
+  this->require_stored_characters();
+
   // Compress the index without the past-the-end sentinel.
   {
     sdsl::sd_vector<> v(this->index.begin(), this->index.end() - 1);
@@ -2425,6 +2468,8 @@ void StringArray<CharAllocatorType>::simple_sds_compress(std::ostream& out, int 
 template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::simple_sds_compress_even(std::ostream& out, int compression_level) const
 {
+  this->require_stored_characters();
+
   size_t string_size = 0;
   for(size_t i = 0; i < this->size(); i += 2) { string_size += this->length(i); }
 
@@ -2702,6 +2747,7 @@ void StringArray<CharAllocatorType>::mark_published_in_shared_memory()
 
 template <typename CharAllocatorType>
 void StringArray<CharAllocatorType>::remove(size_type i)
+  requires (!StoresCharsInSharedMemory<CharAllocatorType>)
 {
   if(i >= this->size()) { return; }
 

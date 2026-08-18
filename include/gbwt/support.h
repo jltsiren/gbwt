@@ -704,8 +704,11 @@ public:
     from one allocator to another without copying them.
   */
 
+  // Explicit because copying out of shared memory is exactly what this
+  // feature exists to avoid: it should not happen because an array crossed
+  // an interface expecting the other allocator.
   template<typename CharAllocatorTypeOther>
-  StringArray(const StringArray<CharAllocatorTypeOther>& another)
+  explicit StringArray(const StringArray<CharAllocatorTypeOther>& another)
     requires (!StoresCharsInSharedMemory<CharAllocatorType>);
 
   template<typename CharAllocatorTypeOther>
@@ -735,7 +738,11 @@ public:
     return std::string_view(this->strings->data() + this->index[i], this->length(i));
   }
 
-  void remove(size_type i);
+  // Rewrites the characters and the offsets in place, so it is absent when
+  // they live in shared memory: other processes may be reading them, and the
+  // published offsets would end up describing the old layout.
+  void remove(size_type i)
+    requires (!StoresCharsInSharedMemory<CharAllocatorType>);
 
   sdsl::int_vector<0> index;
 
@@ -749,6 +756,11 @@ public:
 private:
   // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
   void sanityChecks() const;
+
+  // Throws `std::runtime_error` unless there is a characters vector to work
+  // with, which is what every operation that reads or writes the characters
+  // themselves needs (see `strings`).
+  void require_stored_characters() const;
 
   // Replaces this array's content with a copy of `another`'s.
   //

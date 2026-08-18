@@ -575,6 +575,8 @@ template<typename ArrayType>
 concept HasSimpleSdsDecompress = requires(ArrayType& array, std::istream& in) { array.simple_sds_decompress(in); };
 template<typename ArrayType, typename OtherArrayType>
 concept HasSwapWith = requires(ArrayType& array, OtherArrayType& another) { array.swap(another); };
+template<typename ArrayType>
+concept HasRemove = requires(ArrayType& array) { array.remove(0); };
 
 static_assert(HasAttach<StringArray<SharedMemCharAllocatorType>>,
               "The shared-memory allocator should have attach()");
@@ -585,6 +587,11 @@ static_assert(HasSimpleSdsDecompress<StringArray<>>,
               "The plain allocator should have simple_sds_decompress()");
 static_assert(!HasSimpleSdsDecompress<StringArray<SharedMemCharAllocatorType>>,
               "The shared-memory allocator should not have simple_sds_decompress()");
+
+static_assert(HasRemove<StringArray<>>,
+              "The plain allocator should have remove()");
+static_assert(!HasRemove<StringArray<SharedMemCharAllocatorType>>,
+              "The shared-memory allocator should not have remove()");
 
 // Exchanging representations only makes sense between arrays that free their
 // characters the same way.
@@ -723,6 +730,50 @@ TEST_F(StringArraySharedMemoryTest, ZstdDecompressDuplicateThenAttach)
   {
     EXPECT_EQ(reader.str(i), truth.str(i)) << "Reader has the wrong string " << i << " after attaching";
   }
+
+  TempFile::remove(filename);
+}
+
+//------------------------------------------------------------------------------
+
+// The SDSL format's loader publishes into the segment like the Simple-SDS one
+// does, so a second handle finds the strings instead of loading its own copy.
+TEST_F(StringArraySharedMemoryTest, SDSLLoadThenAttach)
+{
+  std::vector<std::string> source { "first", "second", "third" };
+  StringArray<> truth(source);
+
+  std::string filename = TempFile::getName("string-array");
+  {
+    std::ofstream out(filename, std::ios_base::binary);
+    truth.serialize(out);
+  }
+
+  bi::managed_shared_memory writer_segment(bi::create_only, this->segment_name.c_str(), 1024 * 1024);
+  StringArray<SharedMemCharAllocatorType> writer(&writer_segment, "arr");
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    writer.load(in);
+  }
+  EXPECT_EQ(writer, truth) << "Writer did not load the strings into shared memory";
+
+  bi::managed_shared_memory reader_segment(bi::open_only, this->segment_name.c_str());
+  StringArray<SharedMemCharAllocatorType> reader(&reader_segment, "arr");
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    reader.load(in);
+    EXPECT_TRUE(in.good() || in.eof()) << "Attaching should still have consumed the serialized bytes";
+  }
+  EXPECT_EQ(reader, truth) << "Reader did not attach to the published strings";
+
+  // The two handles map the same segment at different addresses, so the
+  // strings are the same object only if they sit at the same offset in it.
+  auto offset_in = [](const void* pointer, const bi::managed_shared_memory& segment) -> std::ptrdiff_t
+  {
+    return static_cast<const char*>(pointer) - static_cast<const char*>(segment.get_address());
+  };
+  EXPECT_EQ(offset_in(reader.strings, reader_segment), offset_in(writer.strings, writer_segment))
+    << "Reader loaded its own copy instead of attaching";
 
   TempFile::remove(filename);
 }
