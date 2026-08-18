@@ -729,6 +729,23 @@ TEST_F(StringArraySharedMemoryTest, ZstdDecompressDuplicateThenAttach)
 
 //------------------------------------------------------------------------------
 
+// An array with no segment has nowhere to put loaded characters either, so
+// loading into one must say so instead of dereferencing a null vector.
+TEST_F(StringArraySharedMemoryTest, LoadIntoSegmentlessSharedFails)
+{
+  std::string filename = TempFile::getName("string-array");
+  sdsl::simple_sds::serialize_to(StringArray<>(std::vector<std::string> { "first", "second" }), filename);
+
+  StringArray<SharedMemCharAllocatorType> no_segment;
+  std::ifstream in(filename, std::ios_base::binary);
+  ASSERT_THROW(no_segment.simple_sds_load(in), std::runtime_error)
+    << "Loading into a shared-memory array with no segment should fail";
+
+  TempFile::remove(filename);
+}
+
+//------------------------------------------------------------------------------
+
 // Copying between the two allocators is the only way to get characters from
 // one kind of storage to the other, so the tests below cover each direction
 // and each way it can fail. They are here rather than with the other

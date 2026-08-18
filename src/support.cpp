@@ -2173,6 +2173,10 @@ void StringArray<CharAllocatorType>::load(std::istream& in)
   if (this->is_data_loaded_into_shared_memory == false)
 #endif
   {
+    if(this->strings == nullptr)
+    {
+      throw std::runtime_error("StringArray: Cannot load strings into shared memory without a real segment");
+    }
     loadVector(*this->strings, in);
     this->index.load(in);
   }
@@ -2248,6 +2252,10 @@ void StringArray<CharAllocatorType>::simple_sds_load(std::istream& in)
       return;
     }
     this->construct_strings_in_shared_memory();
+    if(this->strings == nullptr)
+    {
+      throw std::runtime_error("StringArray: Cannot load strings into shared memory without a real segment");
+    }
   }
   else
 #endif
@@ -2334,6 +2342,10 @@ void StringArray<CharAllocatorType>::simple_sds_load_duplicate(std::istream& in,
       return;
     }
     this->construct_strings_in_shared_memory();
+    if(this->strings == nullptr)
+    {
+      throw std::runtime_error("StringArray: Cannot load strings into shared memory without a real segment");
+    }
   }
   else
 #endif
@@ -2499,6 +2511,10 @@ void StringArray<CharAllocatorType>::simple_sds_decompress_duplicate(std::istrea
       return;
     }
     this->construct_strings_in_shared_memory();
+    if(this->strings == nullptr)
+    {
+      throw std::runtime_error("StringArray: Cannot load strings into shared memory without a real segment");
+    }
   }
   else
 #endif
