@@ -111,7 +111,7 @@ DynamicRecord::clear()
 }
 
 void
-DynamicRecord::swap(DynamicRecord& another)
+DynamicRecord::swap(DynamicRecord& another) noexcept
 {
   if(this != &another)
   {
@@ -804,7 +804,7 @@ DecompressedRecord::DecompressedRecord(const DecompressedRecord& source)
   this->copy(source);
 }
 
-DecompressedRecord::DecompressedRecord(DecompressedRecord&& source)
+DecompressedRecord::DecompressedRecord(DecompressedRecord&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -865,7 +865,7 @@ DecompressedRecord::split(size_type subgraphs, const std::vector<size_type>& com
 }
 
 void
-DecompressedRecord::swap(DecompressedRecord& another)
+DecompressedRecord::swap(DecompressedRecord& another) noexcept
 {
   if(this != &another)
   {
@@ -883,7 +883,7 @@ DecompressedRecord::operator=(const DecompressedRecord& source)
 }
 
 DecompressedRecord&
-DecompressedRecord::operator=(DecompressedRecord&& source)
+DecompressedRecord::operator=(DecompressedRecord&& source) noexcept
 {
   if(this != &source)
   {
@@ -979,7 +979,7 @@ RecordArray::RecordArray(const RecordArray& source)
   this->copy(source);
 }
 
-RecordArray::RecordArray(RecordArray&& source)
+RecordArray::RecordArray(RecordArray&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -1164,7 +1164,7 @@ RecordArray::buildIndex(const std::vector<size_type>& offsets)
 }
 
 void
-RecordArray::swap(RecordArray& another)
+RecordArray::swap(RecordArray& another) noexcept
 {
   if(this != &another)
   {
@@ -1183,7 +1183,7 @@ RecordArray::operator=(const RecordArray& source)
 }
 
 RecordArray&
-RecordArray::operator=(RecordArray&& source)
+RecordArray::operator=(RecordArray&& source) noexcept
 {
   if(this != &source)
   {
@@ -1256,6 +1256,44 @@ RecordArray::simple_sds_size() const
   return this->index.simple_sds_size() + sdsl::simple_sds::vector_size(this->data);
 }
 
+void
+RecordArray::simple_sds_compress(std::ostream& out, int compression_level) const
+{
+  this->index.simple_sds_serialize(out);
+  {
+    ZstdCompressor compressor(compression_level);
+    compressor.compressDirect(std::string_view(reinterpret_cast<const char*>(this->data.data()), this->data.size()));
+    compressor.finish();
+    sdsl::simple_sds::serialize_vector(compressor.outputData(), out);
+  }
+}
+
+void
+RecordArray::simple_sds_decompress(std::istream& in)
+{
+  this->index.simple_sds_load(in);
+  this->records = this->index.ones();
+  sdsl::util::init_support(this->select, &(this->index));
+
+  // TODO: This would also be a bit more efficient if we could read directly from the input stream.
+  {
+    std::vector<char> compressed = sdsl::simple_sds::load_vector<char>(in);
+    ZstdDecompressor decompressor(std::move(compressed));
+    this->data = std::vector<byte_type>();
+    this->data.reserve(this->index.size());
+    decompressor.decompress(this->index.size(), this->data);
+
+    // Check that there are no trailing bytes.
+    if(!decompressor.finished())
+    {
+      std::string msg = "RecordArray: Trailing bytes after decompression";
+      throw sdsl::simple_sds::InvalidData(msg);
+    }
+  }
+
+  this->sanityChecks();
+}
+
 size_type
 RecordArray::size(size_type record) const
 {
@@ -1317,7 +1355,7 @@ DASamples::DASamples(const DASamples& source)
   this->copy(source);
 }
 
-DASamples::DASamples(DASamples&& source)
+DASamples::DASamples(DASamples&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -1595,7 +1633,7 @@ DASamples::split
 }
 
 void
-DASamples::swap(DASamples& another)
+DASamples::swap(DASamples& another) noexcept
 {
   if(this != &another)
   {
@@ -1619,7 +1657,7 @@ DASamples::operator=(const DASamples& source)
 }
 
 DASamples&
-DASamples::operator=(DASamples&& source)
+DASamples::operator=(DASamples&& source) noexcept
 {
   if(this != &source)
   {
@@ -2096,7 +2134,7 @@ StringArray<Allocator>::~StringArray()
 }
 
 template <typename Allocator>
-void StringArray<Allocator>::swap(StringArray& another)
+void StringArray<Allocator>::swap(StringArray& another) noexcept
 {
   std::swap(this->index, another.index);
   std::swap(this->strings, another.strings);
@@ -2184,12 +2222,22 @@ void StringArray<Allocator>::load(std::istream& in)
 #endif
 }
 
-void
-determine_alphabet(std::string_view strings, std::vector<std::uint8_t>& char_to_comp, sdsl::int_vector<8>& comp_to_char, size_type& width)
+template <typename Allocator>
+std::vector<std::uint8_t>
+present_characters(const StringArray<Allocator>& strings, size_t step)
 {
-  char_to_comp = std::vector<std::uint8_t>(256, 0);
-  for(char c : strings) { char_to_comp[static_cast<std::uint8_t>(c)] = 1; }
+  std::vector<std::uint8_t> char_to_comp(256, 0);
+  for(size_type i = 0; i < strings.size(); i += step)
+  {
+    std::string_view str = strings.view(i);
+    for(char c : str) { char_to_comp[static_cast<std::uint8_t>(c)] = 1; }
+  }
+  return char_to_comp;
+}
 
+void
+determine_alphabet(std::vector<std::uint8_t>& char_to_comp, sdsl::int_vector<8>& comp_to_char, size_type& width)
+{
   size_type sigma = 0;
   for(auto c : char_to_comp) { sigma += c; }
   width = sdsl::bits::length(std::max(sigma, size_type(1)) - 1);
@@ -2217,10 +2265,10 @@ void StringArray<Allocator>::simple_sds_serialize(std::ostream& out) const
   }
 
   // Determine and serialize the alphabet.
-  std::vector<std::uint8_t> char_to_comp;
+  std::vector<std::uint8_t> char_to_comp = present_characters(*this, 1);
   sdsl::int_vector<8> comp_to_char;
   size_type width = 0;
-  determine_alphabet(this->characters(), char_to_comp, comp_to_char, width);
+  determine_alphabet(char_to_comp, comp_to_char, width);
   comp_to_char.simple_sds_serialize(out);
 
   // Compress the strings.
@@ -2298,16 +2346,67 @@ size_t StringArray<Allocator>::simple_sds_size() const
   result += sdsl::sd_vector<>::simple_sds_size(universe, this->size());
 
   // Determine the alphabet.
-  std::vector<std::uint8_t> char_to_comp;
+  std::vector<std::uint8_t> char_to_comp = present_characters(*this, 1);
   sdsl::int_vector<8> comp_to_char;
   size_type width = 0;
-  determine_alphabet(this->characters(), char_to_comp, comp_to_char, width);
+  determine_alphabet(char_to_comp, comp_to_char, width);
   result += comp_to_char.simple_sds_size();
 
   // Compress the strings.
   result += sdsl::int_vector<>::simple_sds_size(this->length(), width);
 
   return result;
+}
+
+template <typename Allocator>
+sdsl::sd_vector<>
+index_even_strings(const StringArray<Allocator>& strings)
+{
+  size_t string_size = 0;
+  for(size_t i = 0; i < strings.size(); i += 2) { string_size += strings.length(i); }
+
+  // While direct sd_vector construction from an iterator can build multisets automatically,
+  // here we have to specify it explicitly in case the total length of the strings is less
+  // than the number of strings.
+  sdsl::sd_vector_builder v_builder(string_size, (strings.size() + 1) / 2, true);
+  size_t offset = 0;
+  for(size_t i = 0; i < strings.size(); i += 2)
+  {
+    v_builder.set_unsafe(offset);
+    offset += strings.length(i);
+  }
+  return sdsl::sd_vector<>(v_builder);
+}
+
+template <typename Allocator>
+void StringArray<Allocator>::simple_sds_serialize_even(std::ostream& out) const
+{
+  // Build and serialize the index for the even strings.
+  size_t string_size;
+  {
+    sdsl::sd_vector<> index = index_even_strings(*this);
+    index.simple_sds_serialize(out);
+    string_size = index.size();
+  }
+
+  // Determine and serialize the alphabet.
+  std::vector<std::uint8_t> char_to_comp = present_characters(*this, 2);
+  sdsl::int_vector<8> comp_to_char;
+  size_type width = 0;
+  determine_alphabet(char_to_comp, comp_to_char, width);
+  comp_to_char.simple_sds_serialize(out);
+
+  // Compress the strings.
+  {
+    sdsl::int_vector<> compressed(string_size, 0, width);
+    size_t offset = 0;
+    for(size_t i = 0; i < this->size(); i += 2)
+    {
+      std::string_view view = this->view(i);
+      for(char c : view) { compressed[offset++] = char_to_comp[static_cast<uint8_t>(c)]; }
+    }
+    compressed.simple_sds_serialize(out);
+  }
 }
 
 template <typename Allocator>
@@ -2330,8 +2429,7 @@ void StringArray<Allocator>::simple_sds_load_duplicate(std::istream& in, const s
   }
 #endif
 
-  // Loading replaces the old content, and loading twice must not leak the
-  // vector the first load left behind.
+  // Loading replaces the old content.
   this->ensure_strings();
   this->strings->clear();
 
@@ -2398,24 +2496,11 @@ void StringArray<Allocator>::simple_sds_compress(std::ostream& out, int compress
 template <typename Allocator>
 void StringArray<Allocator>::simple_sds_compress_even(std::ostream& out, int compression_level) const
 {
-
-  size_t string_size = 0;
-  for(size_t i = 0; i < this->size(); i += 2) { string_size += this->length(i); }
-
   // Build and compress the index and store the total length of the strings to be compressed.
   {
-    // While direct sd_vector construction from an iterator can build multisets automatically,
-    // here we have to specify it explicitly in case the total length of the strings is less
-    // than the number of strings.
-    sdsl::sd_vector_builder v_builder(string_size, (this->size() + 1) / 2, true);
-    size_t offset = 0;
-    for(size_t i = 0; i < this->size(); i += 2)
-    {
-      v_builder.set_unsafe(offset);
-      offset += this->length(i);
-    }
-    sdsl::sd_vector<> v(v_builder);
-    v.simple_sds_serialize(out);
+    sdsl::sd_vector<> index = index_even_strings(*this);
+    index.simple_sds_serialize(out);
+    size_t string_size = index.size();
     sdsl::simple_sds::serialize_value(string_size, out);
   }
 
@@ -2506,8 +2591,7 @@ void StringArray<Allocator>::simple_sds_decompress_duplicate(std::istream& in, c
   }
 #endif
 
-  // Loading replaces the old content, and loading twice must not leak the
-  // vector the first load left behind.
+  // Loading replaces the old content.
   this->ensure_strings();
   this->strings->clear();
 
@@ -2725,10 +2809,17 @@ StringArray<Allocator>& StringArray<Allocator>::operator=(
   return *this;
 }
 
+// Move constructor
+template <typename Allocator>
+StringArray<Allocator>::StringArray(StringArray<Allocator>&& another) noexcept
+{
+  this->swap(another);
+}
+
 // Move assignment operator
 template <typename Allocator>
 StringArray<Allocator>& StringArray<Allocator>::operator=(
-    StringArray<Allocator>&& another)
+    StringArray<Allocator>&& another) noexcept
 {
   if(this != &another) { this->swap(another); }
   return *this;
@@ -2845,7 +2936,7 @@ Dictionary::Dictionary(const Dictionary& source)
   this->copy(source);
 }
 
-Dictionary::Dictionary(Dictionary&& source)
+Dictionary::Dictionary(Dictionary&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -2898,7 +2989,7 @@ Dictionary::Dictionary(const Dictionary& first, const Dictionary& second)
 }
 
 void
-Dictionary::swap(Dictionary& another)
+Dictionary::swap(Dictionary& another) noexcept
 {
   if(this != &another)
   {
@@ -2915,7 +3006,7 @@ Dictionary::operator=(const Dictionary& source)
 }
 
 Dictionary&
-Dictionary::operator=(Dictionary&& source)
+Dictionary::operator=(Dictionary&& source) noexcept
 {
   if(this != &source)
   {
@@ -3121,7 +3212,7 @@ Dictionary::smaller_by_id(std::string_view a, size_type b) const
 //------------------------------------------------------------------------------
 
 void
-Tags::swap(Tags& another)
+Tags::swap(Tags& another) noexcept
 {
   if(this != &another)
   {

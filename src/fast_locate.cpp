@@ -1,27 +1,3 @@
-/*
-  Copyright (c) 2020, 2021, 2022 Jouni Siren
-
-  Author: Jouni Siren <jouni.siren@iki.fi>
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
-
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
-
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
-*/
-
 #include <gbwt/fast_locate.h>
 #include <gbwt/internal.h>
 
@@ -112,7 +88,7 @@ FastLocate::FastLocate(const FastLocate& source)
   this->copy(source);
 }
 
-FastLocate::FastLocate(FastLocate&& source)
+FastLocate::FastLocate(FastLocate&& source) noexcept
 {
   *this = std::move(source);
 }
@@ -122,7 +98,7 @@ FastLocate::~FastLocate()
 }
 
 void
-FastLocate::swap(FastLocate& another)
+FastLocate::swap(FastLocate& another) noexcept
 {
   if(this != &another)
   {
@@ -143,7 +119,7 @@ FastLocate::operator=(const FastLocate& source)
 }
 
 FastLocate&
-FastLocate::operator=(FastLocate&& source)
+FastLocate::operator=(FastLocate&& source) noexcept
 {
   if(this != &source)
   {

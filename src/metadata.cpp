@@ -111,7 +111,7 @@ Metadata::simple_sds_size() const
 }
 
 void
-Metadata::swap(Metadata& another)
+Metadata::swap(Metadata& another) noexcept
 {
   if(this != &another)
   {

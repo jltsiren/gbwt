@@ -15,23 +15,27 @@ namespace gbwt
 /*
   GBWT file header.
 
+  Version 6:
+  - BWT is compressed using Zstandard.
+  - Versions 1 to 5 can still be read.
+
   Version 5:
   - Uses metadata version 2.
   - Includes tags.
   - SDSL and simple-sds formats.
-  - Compatible with versions 1 to 4.
+  - Versions 1 to 4 can still be read.
 
   Version 4:
   - Uses metadata version 1.
-  - Compatible with versions 1 to 3.
+  - Versions 1 to 3 can still be read.
 
   Version 3:
   - Includes a flag for metadata.
-  - Compatible with versions 1 and 2.
+  - Versions 1 and 2 can still be read.
 
   Version 2:
   - Includes a flag for a bidirectional index.
-  - Compatible with version 1.
+  - Version 1 can still be read.
 
   Version 1:
   - The first proper version.
@@ -63,20 +67,27 @@ struct GBWTHeader
 
   // Symbolic names for versions that may be relevant when examining files,
   // even when the version is current or obsolete.
-  constexpr static std::uint32_t TAGS_VERSION       = 5;
+  constexpr static std::uint32_t ZSTD_VERSION = 6; // The current version with Zstandard compression.
 
   // Flag masks for old compatible versions.
-  constexpr static std::uint32_t META2_VERSION      = 4;
-  constexpr static std::uint64_t META2_FLAG_MASK    = 0x0003;
+  constexpr static std::uint32_t TAGS_VERSION = 5;
+  constexpr static std::uint64_t TAGS_FLAG_MASK = 0x0007;
 
-  constexpr static std::uint32_t META_VERSION       = 3;
-  constexpr static std::uint64_t META_FLAG_MASK     = 0x0003;
+  constexpr static std::uint32_t META2_VERSION = 4;
+  constexpr static std::uint64_t META2_FLAG_MASK = 0x0003;
 
-  constexpr static std::uint32_t BD_VERSION         = 2;
-  constexpr static std::uint64_t BD_FLAG_MASK       = 0x0001;
+  constexpr static std::uint32_t META_VERSION = 3;
+  constexpr static std::uint64_t META_FLAG_MASK = 0x0003;
 
-  constexpr static std::uint32_t OLD_VERSION        = 1;
-  constexpr static std::uint64_t OLD_FLAG_MASK      = 0x0000;
+  constexpr static std::uint32_t BD_VERSION = 2;
+  constexpr static std::uint64_t BD_FLAG_MASK = 0x0001;
+
+  constexpr static std::uint32_t OLD_VERSION = 1;
+  constexpr static std::uint64_t OLD_FLAG_MASK = 0x0000;
+
+  constexpr static std::uint32_t MIN_VERSION = OLD_VERSION; // The oldest version we can read.
+  constexpr static std::uint32_t MIN_SERIALIZE_VERSION = TAGS_VERSION; // The oldest version we can write.
+  constexpr static std::uint32_t DEFAULT_VERSION = TAGS_VERSION; // The version we write by default.
 
   GBWTHeader();
 
@@ -93,7 +104,7 @@ struct GBWTHeader
   void unset(std::uint64_t flag) { this->flags &= ~flag; }
   bool get(std::uint64_t flag) const { return (this->flags & flag); }
 
-  void swap(GBWTHeader& another);
+  void swap(GBWTHeader& another) noexcept;
 
   bool operator==(const GBWTHeader& another) const;
   bool operator!=(const GBWTHeader& another) const { return !(this->operator==(another)); }
@@ -159,7 +170,7 @@ struct MetadataHeader
   void unset(std::uint64_t flag) { this->flags &= ~flag; }
   bool get(std::uint64_t flag) const { return (this->flags & flag); }
 
-  void swap(MetadataHeader& another);
+  void swap(MetadataHeader& another) noexcept;
 
   bool operator==(const MetadataHeader& another) const;
   bool operator!=(const MetadataHeader& another) const { return !(this->operator==(another)); }

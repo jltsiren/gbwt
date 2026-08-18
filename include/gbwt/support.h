@@ -107,7 +107,7 @@ struct DynamicRecord
   size_type samples() const { return this->ids.size(); }
 
   void clear();
-  void swap(DynamicRecord& another);
+  void swap(DynamicRecord& another) noexcept;
 
 //------------------------------------------------------------------------------
 
@@ -289,7 +289,7 @@ struct DecompressedRecord
 
   DecompressedRecord();
   DecompressedRecord(const DecompressedRecord& source);
-  DecompressedRecord(DecompressedRecord&& source);
+  DecompressedRecord(DecompressedRecord&& source) noexcept;
   ~DecompressedRecord();
 
   explicit DecompressedRecord(const DynamicRecord& source);
@@ -299,9 +299,9 @@ struct DecompressedRecord
   // The returned records have no incoming edges or samples.
   std::vector<DynamicRecord> split(size_type subgraphs, const std::vector<size_type>& comp_to_subgraph, size_type alphabet_offset) const;
 
-  void swap(DecompressedRecord& another);
+  void swap(DecompressedRecord& another) noexcept;
   DecompressedRecord& operator=(const DecompressedRecord& source);
-  DecompressedRecord& operator=(DecompressedRecord&& source);
+  DecompressedRecord& operator=(DecompressedRecord&& source) noexcept;
 
   size_type size() const { return this->body.size(); }
   bool empty() const { return (this->size() == 0); }
@@ -349,7 +349,7 @@ struct RecordArray
 
   RecordArray();
   RecordArray(const RecordArray& source);
-  RecordArray(RecordArray&& source);
+  RecordArray(RecordArray&& source) noexcept;
   ~RecordArray();
 
   explicit RecordArray(const std::vector<DynamicRecord>& bwt);
@@ -367,9 +367,9 @@ struct RecordArray
   explicit RecordArray(size_type array_size);
   void buildIndex(const std::vector<size_type>& offsets);
 
-  void swap(RecordArray& another);
+  void swap(RecordArray& another) noexcept;
   RecordArray& operator=(const RecordArray& source);
-  RecordArray& operator=(RecordArray&& source);
+  RecordArray& operator=(RecordArray&& source) noexcept;
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
@@ -377,6 +377,12 @@ struct RecordArray
   void simple_sds_serialize(std::ostream& out) const;
   void simple_sds_load(std::istream& in);
   size_t simple_sds_size() const;
+
+  // Simple-SDS serialization with zstd-compressed data.
+  void simple_sds_compress(std::ostream& out, int compression_level = ZstdCompressor::DEFAULT_COMPRESSION_LEVEL) const;
+
+  // Simple-SDS deserialization with zstd-compressed data.
+  void simple_sds_decompress(std::istream& in);
 
   size_type size() const { return this->records; }
   bool empty() const { return (this->size() == 0); }
@@ -416,7 +422,7 @@ struct DASamples
 
   DASamples();
   DASamples(const DASamples& source);
-  DASamples(DASamples&& source);
+  DASamples(DASamples&& source) noexcept;
   ~DASamples();
 
   explicit DASamples(const std::vector<DynamicRecord>& bwt);
@@ -435,9 +441,9 @@ struct DASamples
     std::vector<DASamples*>& dasamples
   ) const;
 
-  void swap(DASamples& another);
+  void swap(DASamples& another) noexcept;
   DASamples& operator=(const DASamples& source);
-  DASamples& operator=(DASamples&& source);
+  DASamples& operator=(DASamples&& source) noexcept;
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
@@ -522,8 +528,6 @@ public:
 
   // Make instantiations friends with each other for cross-allocator operations
   template<typename OtherAllocator> friend class StringArray;
-
-  constexpr static int DEFAULT_COMPRESSION_LEVEL = 3;
 
   // An empty array, storing its characters nowhere in particular yet.
   StringArray() : index(1, 0, 1) {}
@@ -617,7 +621,7 @@ public:
   // Exchanges content with another array of the same type, without copying it.
   // Arrays with different allocators cannot exchange the storage the
   // characters are in, so assign between those instead.
-  void swap(StringArray& another);
+  void swap(StringArray& another) noexcept;
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
@@ -626,16 +630,19 @@ public:
   void simple_sds_load(std::istream& in);
   size_t simple_sds_size() const;
 
+  // This version only serializes strings at even positions.
+  void simple_sds_serialize_even(std::ostream& out) const;
+
   // This version loads each string twice and transforms the second copy.
   // The transform function should not change the length of the string.
   void simple_sds_load_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform);
 
   // Simple-SDS serialization with zstd-compressed strings.
-  void simple_sds_compress(std::ostream& out, int compression_level = DEFAULT_COMPRESSION_LEVEL) const;
+  void simple_sds_compress(std::ostream& out, int compression_level = ZstdCompressor::DEFAULT_COMPRESSION_LEVEL) const;
 
   // Simple-SDS serialization with zstd-compressed strings.
   // This version only serializes strings at even positions.
-  void simple_sds_compress_even(std::ostream& out, int compression_level = DEFAULT_COMPRESSION_LEVEL) const;
+  void simple_sds_compress_even(std::ostream& out, int compression_level = ZstdCompressor::DEFAULT_COMPRESSION_LEVEL) const;
 
   // Simple-SDS deserialization with zstd-compressed strings.
   void simple_sds_decompress(std::istream& in);
@@ -649,8 +656,10 @@ public:
   StringArray(const StringArray& another);
   // Copy assignment operator
   StringArray& operator=(const StringArray& another);
+  // Move constructor
+  StringArray(StringArray&& another) noexcept;
   // Move assignment operator
-  StringArray& operator=(StringArray&& another);
+  StringArray& operator=(StringArray&& another) noexcept;
 
   // Copying between different allocators.
 
@@ -785,7 +794,7 @@ public:
 
   Dictionary();
   Dictionary(const Dictionary& source);
-  Dictionary(Dictionary&& source);
+  Dictionary(Dictionary&& source) noexcept;
   ~Dictionary();
 
   explicit Dictionary(const std::vector<std::string>& source);
@@ -794,9 +803,9 @@ public:
   // from the second dictionary.
   Dictionary(const Dictionary& first, const Dictionary& second);
 
-  void swap(Dictionary& another);
+  void swap(Dictionary& another) noexcept;
   Dictionary& operator=(const Dictionary& source);
-  Dictionary& operator=(Dictionary&& source);
+  Dictionary& operator=(Dictionary&& source) noexcept;
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
@@ -865,12 +874,12 @@ public:
 
   Tags() = default;
   Tags(const Tags& source) = default;
-  Tags(Tags&& source) = default;
+  Tags(Tags&& source) noexcept = default;
   ~Tags() = default;
 
-  void swap(Tags& another);
+  void swap(Tags& another) noexcept;
   Tags& operator=(const Tags& source) = default;
-  Tags& operator=(Tags&& source) = default;
+  Tags& operator=(Tags&& source) noexcept = default;
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);

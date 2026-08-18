@@ -27,7 +27,7 @@ public:
   GBWT();
   GBWT(const GBWT& source);
   GBWT(const DynamicGBWT& source);
-  GBWT(GBWT&& source);
+  GBWT(GBWT&& source) noexcept;
   ~GBWT();
 
   // Merge the sources, assuming that node ids do not overlap.
@@ -43,17 +43,22 @@ public:
   // Drops empty paths. Splits the metadata and ignores the tags.
   std::vector<GBWT> split(size_type subgraphs, const std::function<size_type(node_type)>& mapping) const;
 
-  void swap(GBWT& another);
+  void swap(GBWT& another) noexcept;
   GBWT& operator=(const GBWT& source);
   GBWT& operator=(const DynamicGBWT& source);
-  GBWT& operator=(GBWT&& source);
+  GBWT& operator=(GBWT&& source) noexcept;
 
   void resample(size_type sample_interval);
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
 
-  void simple_sds_serialize(std::ostream& out) const;
+  void simple_sds_serialize(std::ostream& out) const
+  {
+    this->simple_sds_serialize_version(out, GBWTHeader::DEFAULT_VERSION);
+  }
+
+  void simple_sds_serialize_version(std::ostream& out, std::uint32_t version) const;
   void simple_sds_load(std::istream& in);
   size_t simple_sds_size() const;
 

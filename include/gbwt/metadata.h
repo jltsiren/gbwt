@@ -90,7 +90,7 @@ public:
   void simple_sds_load(std::istream& in);
   size_t simple_sds_size() const;
 
-  void swap(Metadata& another);
+  void swap(Metadata& another) noexcept;
 
   bool operator==(const Metadata& another) const;
   bool operator!=(const Metadata& another) const { return !(this->operator==(another)); }
