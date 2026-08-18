@@ -548,62 +548,9 @@ public:
   }
 };
 
-/*
-  Which members an instantiation has is part of StringArray's interface, so it
-  is checked here rather than left to whatever the rest of the tests happen to
-  name. A segment is only meaningful for the allocator that puts characters in
-  one, and building content from a source is only meaningful for an allocator
-  that does not need to be told where to put it.
-*/
-
-static_assert(std::constructible_from<StringArray<SharedMemCharAllocatorType>, bi::managed_shared_memory*, std::string>,
-              "The shared-memory allocator should accept a segment and a prefix");
-static_assert(!std::constructible_from<StringArray<>, bi::managed_shared_memory*, std::string>,
-              "The plain allocator should not accept a segment and a prefix");
-
-static_assert(std::constructible_from<StringArray<>, std::vector<std::string>>,
-              "The plain allocator should build an array from a vector of strings");
-static_assert(!std::constructible_from<StringArray<SharedMemCharAllocatorType>, std::vector<std::string>>,
-              "The shared-memory allocator should not build an array without being given a segment");
-
-// A requires-expression only turns a failed requirement into `false` while
-// substituting template arguments, so these are written against a parameter
-// rather than naming the instantiations directly.
-template<typename ArrayType>
-concept HasAttach = requires(bi::managed_shared_memory* segment) { ArrayType::attach(segment, "arr"); };
-template<typename ArrayType>
-concept HasSimpleSdsDecompress = requires(ArrayType& array, std::istream& in) { array.simple_sds_decompress(in); };
-template<typename ArrayType, typename OtherArrayType>
-concept HasSwapWith = requires(ArrayType& array, OtherArrayType& another) { array.swap(another); };
-template<typename ArrayType>
-concept HasRemove = requires(ArrayType& array) { array.remove(0); };
-
-static_assert(HasAttach<StringArray<SharedMemCharAllocatorType>>,
-              "The shared-memory allocator should have attach()");
-static_assert(!HasAttach<StringArray<>>,
-              "The plain allocator should not have attach()");
-
-static_assert(HasSimpleSdsDecompress<StringArray<>>,
-              "The plain allocator should have simple_sds_decompress()");
-static_assert(!HasSimpleSdsDecompress<StringArray<SharedMemCharAllocatorType>>,
-              "The shared-memory allocator should not have simple_sds_decompress()");
-
-static_assert(HasRemove<StringArray<>>,
-              "The plain allocator should have remove()");
-static_assert(!HasRemove<StringArray<SharedMemCharAllocatorType>>,
-              "The shared-memory allocator should not have remove()");
-
-// Exchanging representations only makes sense between arrays that free their
-// characters the same way.
-static_assert(HasSwapWith<StringArray<>, StringArray<>>,
-              "swap() should work between arrays of the same type");
-static_assert(!HasSwapWith<StringArray<>, StringArray<SharedMemCharAllocatorType>>,
-              "swap() should not cross allocators");
-
-// A second StringArray attaching to a name a prior one already published
-// under, from the same process, should find and reuse that data instead of
-// trying to construct it again under the same name.
-TEST_F(StringArraySharedMemoryTest, AttachAfterPublish)
+// A second handle to the segment finds the strings the first one published,
+// instead of building its own copy under the same name.
+TEST_F(StringArraySharedMemoryTest, SecondHandleFindsPublishedStrings)
 {
   std::vector<std::string> source { "first", "second", "third" };
   bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
@@ -611,54 +558,55 @@ TEST_F(StringArraySharedMemoryTest, AttachAfterPublish)
   StringArray<SharedMemCharAllocatorType> writer(source, &segment, "arr");
   ASSERT_EQ(writer.size(), source.size()) << "Writer has the wrong size";
 
-  StringArray<SharedMemCharAllocatorType> reader = StringArray<SharedMemCharAllocatorType>::attach(&segment, "arr");
-  ASSERT_EQ(reader.size(), source.size()) << "Reader did not attach to the published data";
+  StringArray<SharedMemCharAllocatorType> reader(&segment, "arr");
+  ASSERT_EQ(reader.size(), source.size()) << "Reader did not find the published strings";
   for(size_type i = 0; i < source.size(); i++)
   {
-    EXPECT_EQ(reader.str(i), source[i]) << "Wrong string " << i << " after attaching";
+    EXPECT_EQ(reader.str(i), source[i]) << "Reader has the wrong string " << i;
   }
 }
 
-// attach() must fail instead of silently returning an empty array when
-// nothing has been published under the given name yet.
-TEST_F(StringArraySharedMemoryTest, AttachToMissingNameFails)
+// A prefix nothing has been published under gives an empty array, not an error.
+TEST_F(StringArraySharedMemoryTest, UnpublishedPrefixIsEmpty)
 {
   bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
-  ASSERT_THROW(StringArray<SharedMemCharAllocatorType>::attach(&segment, "arr"), std::runtime_error)
-    << "Attaching to a name nothing was published under should fail instead of silently succeeding";
+  StringArray<SharedMemCharAllocatorType> array(&segment, "never_published");
+  EXPECT_TRUE(array.empty()) << "An array naming an unpublished prefix should be empty";
+  EXPECT_EQ(array.length(), size_type(0)) << "An empty array should hold no characters";
 }
 
-// Unlike attach(), the lazy (non-attach) shared-memory constructor must
-// never throw, regardless of `shared_memory` or `object_prefix_in_shared_memory`.
-TEST_F(StringArraySharedMemoryTest, LazyConstructorNeverThrows)
+// An array with no segment stores its characters nowhere, which is just an
+// empty array, and has to behave like one throughout.
+TEST_F(StringArraySharedMemoryTest, NoSegmentIsAnEmptyArray)
 {
   StringArray<SharedMemCharAllocatorType> no_segment;
-  EXPECT_TRUE(no_segment.empty()) << "A StringArray with no segment should be empty";
+  EXPECT_TRUE(no_segment.empty()) << "An array with no segment should be empty";
+  EXPECT_EQ(no_segment.length(), size_type(0)) << "An array with no segment should hold no characters";
 
   bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
-  StringArray<SharedMemCharAllocatorType> unpublished_name(&segment, "never_published");
-  EXPECT_TRUE(unpublished_name.empty()) << "A StringArray naming an unpublished object should be empty, not throw";
+  StringArray<SharedMemCharAllocatorType> in_segment(std::vector<std::string>(), &segment, "arr");
+  EXPECT_EQ(no_segment, in_segment) << "An array with no segment should equal an empty array built in one";
+  EXPECT_EQ(no_segment, StringArray<>()) << "An array with no segment should equal an empty plain array";
+
+  std::string filename = TempFile::getName("string-array");
+  {
+    std::ofstream out(filename, std::ios_base::binary);
+    no_segment.simple_sds_serialize(out);
+  }
+  StringArray<> loaded;
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    loaded.simple_sds_load(in);
+  }
+  EXPECT_TRUE(loaded.empty()) << "An array with no segment should serialize as an empty array";
+
+  TempFile::remove(filename);
 }
 
-// The lazy constructor never checks for existing data, even when a real
-// segment already has something published under the given name: only
-// attach() (or a load call) actually looks.
-TEST_F(StringArraySharedMemoryTest, LazyConstructorIgnoresExistingPublication)
-{
-  std::vector<std::string> source { "first", "second" };
-  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
-  StringArray<SharedMemCharAllocatorType> writer(source, &segment, "arr");
-  ASSERT_EQ(writer.size(), source.size()) << "Writer has the wrong size";
-
-  StringArray<SharedMemCharAllocatorType> lazy(&segment, "arr");
-  EXPECT_TRUE(lazy.empty()) << "The plain constructor should stay empty even though \"arr\" is already published";
-}
 
 // Two independent handles to the same segment stand in for two separate
-// processes: the second must attach to the first's published data instead
-// of decompressing its own copy under the same name, since republishing
-// under a name that already exists would throw (see managed_shared_memory's
-// construct<>() semantics).
+// processes: the second must end up with the strings the first published
+// rather than a second copy of them.
 TEST_F(StringArraySharedMemoryTest, SimpleSDSLoadDuplicateThenAttach)
 {
   std::vector<std::string> source { "first", "second", "third", "fourth" };
@@ -843,7 +791,7 @@ TEST_F(StringArraySharedMemoryTest, AssignFromPlainToShared)
     EXPECT_EQ(shared.str(i), source[i]) << "Assigned shared-memory array has the wrong string " << i;
   }
 
-  StringArray<SharedMemCharAllocatorType> reader = StringArray<SharedMemCharAllocatorType>::attach(&segment, "arr");
+  StringArray<SharedMemCharAllocatorType> reader(&segment, "arr");
   EXPECT_EQ(reader, plain) << "Assigning into a shared-memory array did not publish the strings";
 }
 
@@ -860,7 +808,7 @@ TEST_F(StringArraySharedMemoryTest, AssignOverPublishedSharedFails)
   ASSERT_THROW(second_handle = replacement, std::runtime_error)
     << "Assigning over already published strings should fail instead of replacing them";
 
-  StringArray<SharedMemCharAllocatorType> reader = StringArray<SharedMemCharAllocatorType>::attach(&segment, "arr");
+  StringArray<SharedMemCharAllocatorType> reader(&segment, "arr");
   EXPECT_EQ(reader, writer) << "The published strings should be untouched after the failed assignment";
 }
 

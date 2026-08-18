@@ -63,7 +63,9 @@
 namespace gbwt
 {
 
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
 namespace bi = boost::interprocess;
+#endif
 
 //------------------------------------------------------------------------------
 
@@ -1837,21 +1839,9 @@ MergeParameters::setMergeJobs(size_type n)
 }
 
 //------------------------------------------------------------------------------
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>::StringArray() :
-  index(1, 0, 1)
-{
-  if constexpr(!StoresCharsInSharedMemory<CharAllocatorType>)
-  {
-    this->strings = new std::vector<char, CharAllocatorType>();
-  }
-  // Characters in shared memory need a segment to live in, and this
-  // constructor is not given one, so `strings` stays null.
-}
-
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>::StringArray(const std::vector<std::string>& source)
-  requires (!StoresCharsInSharedMemory<CharAllocatorType>)
+template <typename Allocator>
+StringArray<Allocator>::StringArray(const std::vector<std::string>& source)
+  requires (!SharedMemory<Allocator>)
 {
   *this = StringArray(source.size(), [&source](size_type i) -> std::string_view
   {
@@ -1863,21 +1853,48 @@ StringArray<CharAllocatorType>::StringArray(const std::vector<std::string>& sour
   });
 }
 
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>::StringArray(const std::map<std::string, std::string>& source)
-  requires (!StoresCharsInSharedMemory<CharAllocatorType>)
+template <typename Allocator>
+void StringArray<Allocator>::set_from(const std::map<std::string, std::string>& source)
 {
-  std::vector<std::string> linearized;
+  size_type total_length = 0;
   for(auto iter = source.begin(); iter != source.end(); ++iter)
   {
-    linearized.push_back(iter->first); linearized.push_back(iter->second);
+    total_length += iter->first.size();
+    total_length += iter->second.size();
   }
-  *this = StringArray(linearized);
+  size_type n = source.size() * 2;
+  this->index = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
+  if(total_length == 0) { return; }
+
+  this->create_strings();
+  this->strings->reserve(total_length);
+
+  size_type offset = 0, total = 0;
+  for(auto iter = source.begin(); iter != source.end(); ++iter)
+  {
+    this->index[offset] = total;
+    this->strings->insert(this->strings->end(), iter->first.begin(), iter->first.end());
+    total += iter->first.size();
+    offset++;
+
+    this->index[offset] = total;
+    this->strings->insert(this->strings->end(), iter->second.begin(), iter->second.end());
+    total += iter->second.size();
+    offset++;
+  }
+  this->index[n] = total;
 }
 
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>::StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence)
-  requires (!StoresCharsInSharedMemory<CharAllocatorType>)
+template <typename Allocator>
+StringArray<Allocator>::StringArray(const std::map<std::string, std::string>& source)
+  requires (!SharedMemory<Allocator>)
+{
+  this->set_from(source);
+}
+
+template <typename Allocator>
+StringArray<Allocator>::StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence)
+  requires (!SharedMemory<Allocator>)
 {
   *this = StringArray(n, sequence,
   [](size_type) -> bool
@@ -1886,21 +1903,22 @@ StringArray<CharAllocatorType>::StringArray(size_type n, const std::function<std
   });
 }
 
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>::StringArray(
+template <typename Allocator>
+StringArray<Allocator>::StringArray(
     size_type n,
     const std::function<std::string_view(size_type)>& sequence,
     const std::function<bool(size_type)>& choose)
-  requires (!StoresCharsInSharedMemory<CharAllocatorType>)
+  requires (!SharedMemory<Allocator>)
 {
-  this->strings = new std::vector<char, CharAllocatorType>();
-
   size_type chosen = 0, total_length = 0;
   for(size_type i = 0; i < n; i++)
   {
     if(choose(i)) { chosen++; total_length += sequence(i).size(); }
   }
   this->index = sdsl::int_vector<0>(chosen + 1, 0, sdsl::bits::length(total_length));
+  if(total_length == 0) { return; }
+
+  this->create_strings();
   this->strings->reserve(total_length);
 
   size_type curr = 0, total = 0;
@@ -1916,18 +1934,19 @@ StringArray<CharAllocatorType>::StringArray(
 }
 
 // This has a separate implementation, because we cannot take a view of a temporary string.
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>::StringArray(
+template <typename Allocator>
+StringArray<Allocator>::StringArray(
     size_type n,
     const std::function<size_type(size_type)>& length,
     const std::function<std::string(size_type)>& sequence)
-  requires (!StoresCharsInSharedMemory<CharAllocatorType>)
+  requires (!SharedMemory<Allocator>)
 {
-  this->strings = new std::vector<char, CharAllocatorType>();
-
   size_type total_length = 0;
   for(size_type i = 0; i < n; i++) { total_length += length(i); }
   this->index = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
+  if(total_length == 0) { return; }
+
+  this->create_strings();
   this->strings->reserve(total_length);
 
   size_type total = 0;
@@ -1945,41 +1964,29 @@ StringArray<CharAllocatorType>::StringArray(
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
 
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>::StringArray(
+template <typename Allocator>
+StringArray<Allocator>::StringArray(
     bi::managed_shared_memory* shared_memory,
     std::string object_prefix_in_shared_memory)
-  requires StoresCharsInSharedMemory<CharAllocatorType>
+  requires SharedMemory<Allocator>
   : index(1, 0, 1),
     shared_memory(shared_memory),
     object_prefix_in_shared_memory(object_prefix_in_shared_memory)
 {
-}
-
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>
-StringArray<CharAllocatorType>::attach(
-    bi::managed_shared_memory* shared_memory,
-    const std::string& object_prefix_in_shared_memory)
-  requires StoresCharsInSharedMemory<CharAllocatorType>
-{
-  StringArray result(shared_memory, object_prefix_in_shared_memory);
-  result.check_existence_in_shared_memory();
-  if(!result.is_data_loaded_into_shared_memory)
+  this->check_existence_in_shared_memory();
+  if(this->is_data_loaded_into_shared_memory)
   {
-    throw std::runtime_error("StringArray: No strings named " + object_prefix_in_shared_memory + " exist in the given shared memory segment");
+    this->find_strings_from_shared_memory();
+    this->find_index_from_shared_memory();
   }
-  result.find_strings_from_shared_memory();
-  result.find_index_from_shared_memory();
-  return result;
 }
 
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>::StringArray(
+template <typename Allocator>
+StringArray<Allocator>::StringArray(
     const std::vector<std::string>& source,
     bi::managed_shared_memory* shared_memory,
     std::string object_prefix_in_shared_memory)
-  requires StoresCharsInSharedMemory<CharAllocatorType>
+  requires SharedMemory<Allocator>
 {
   *this = StringArray(source.size(), [&source](size_type i) -> std::string_view
   {
@@ -1991,44 +1998,12 @@ StringArray<CharAllocatorType>::StringArray(
   }, shared_memory, object_prefix_in_shared_memory);
 }
 
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>::StringArray(
+template <typename Allocator>
+StringArray<Allocator>::StringArray(
     const std::map<std::string, std::string>& source,
     bi::managed_shared_memory* shared_memory,
     std::string object_prefix_in_shared_memory)
-  requires StoresCharsInSharedMemory<CharAllocatorType>
-{
-  std::vector<std::string> linearized;
-  for(auto iter = source.begin(); iter != source.end(); ++iter)
-  {
-    linearized.push_back(iter->first); linearized.push_back(iter->second);
-  }
-  *this = StringArray(linearized, shared_memory, object_prefix_in_shared_memory);
-}
-
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>::StringArray(
-    size_type n,
-    const std::function<std::string_view(size_type)>& sequence,
-    bi::managed_shared_memory* shared_memory,
-    std::string object_prefix_in_shared_memory)
-  requires StoresCharsInSharedMemory<CharAllocatorType>
-{
-  *this = StringArray(n, sequence,
-  [](size_type) -> bool
-  {
-    return true;
-  }, shared_memory, object_prefix_in_shared_memory);
-}
-
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>::StringArray(
-    size_type n,
-    const std::function<std::string_view(size_type)>& sequence,
-    const std::function<bool(size_type)>& choose,
-    bi::managed_shared_memory* shared_memory,
-    std::string object_prefix_in_shared_memory)
-  requires StoresCharsInSharedMemory<CharAllocatorType>
+  requires SharedMemory<Allocator>
   : shared_memory(shared_memory),
     object_prefix_in_shared_memory(object_prefix_in_shared_memory)
 {
@@ -2041,20 +2016,56 @@ StringArray<CharAllocatorType>::StringArray(
     this->find_index_from_shared_memory();
     return;
   }
-  this->construct_strings_in_shared_memory();
 
+  this->set_from(source);
+  this->construct_index_in_shared_memory();
+  this->mark_published_in_shared_memory();
+}
+
+template <typename Allocator>
+StringArray<Allocator>::StringArray(
+    size_type n,
+    const std::function<std::string_view(size_type)>& sequence,
+    bi::managed_shared_memory* shared_memory,
+    std::string object_prefix_in_shared_memory)
+  requires SharedMemory<Allocator>
+{
+  *this = StringArray(n, sequence,
+  [](size_type) -> bool
+  {
+    return true;
+  }, shared_memory, object_prefix_in_shared_memory);
+}
+
+template <typename Allocator>
+StringArray<Allocator>::StringArray(
+    size_type n,
+    const std::function<std::string_view(size_type)>& sequence,
+    const std::function<bool(size_type)>& choose,
+    bi::managed_shared_memory* shared_memory,
+    std::string object_prefix_in_shared_memory)
+  requires SharedMemory<Allocator>
+  : shared_memory(shared_memory),
+    object_prefix_in_shared_memory(object_prefix_in_shared_memory)
+{
+  this->check_existence_in_shared_memory();
+  if(this->is_data_loaded_into_shared_memory)
+  {
+    // Somebody already published these strings under this name, so use
+    // theirs rather than building our own copy.
+    this->find_strings_from_shared_memory();
+    this->find_index_from_shared_memory();
+    return;
+  }
   size_type chosen = 0, total_length = 0;
   for(size_type i = 0; i < n; i++)
   {
     if(choose(i)) { chosen++; total_length += sequence(i).size(); }
   }
-  if(this->strings == nullptr && chosen > 0)
-  {
-    throw std::runtime_error("StringArray: Cannot store strings in shared memory without a real segment");
-  }
   this->index = sdsl::int_vector<0>(chosen + 1, 0, sdsl::bits::length(total_length));
-  if(this->strings != nullptr)
+  if(total_length > 0)
   {
+    this->create_strings();
     this->strings->reserve(total_length);
 
     size_type curr = 0, total = 0;
@@ -2074,14 +2085,14 @@ StringArray<CharAllocatorType>::StringArray(
 }
 
 // This has a separate implementation, because we cannot take a view of a temporary string.
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>::StringArray(
+template <typename Allocator>
+StringArray<Allocator>::StringArray(
     size_type n,
     const std::function<size_type(size_type)>& length,
     const std::function<std::string(size_type)>& sequence,
     bi::managed_shared_memory* shared_memory,
     std::string object_prefix_in_shared_memory)
-  requires StoresCharsInSharedMemory<CharAllocatorType>
+  requires SharedMemory<Allocator>
   : shared_memory(shared_memory),
     object_prefix_in_shared_memory(object_prefix_in_shared_memory)
 {
@@ -2094,17 +2105,12 @@ StringArray<CharAllocatorType>::StringArray(
     this->find_index_from_shared_memory();
     return;
   }
-  this->construct_strings_in_shared_memory();
-
   size_type total_length = 0;
   for(size_type i = 0; i < n; i++) { total_length += length(i); }
-  if(this->strings == nullptr && total_length > 0)
-  {
-    throw std::runtime_error("StringArray: Cannot store strings in shared memory without a real segment");
-  }
   this->index = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
-  if(this->strings != nullptr)
+  if(total_length > 0)
   {
+    this->create_strings();
     this->strings->reserve(total_length);
 
     size_type total = 0;
@@ -2126,10 +2132,10 @@ StringArray<CharAllocatorType>::StringArray(
 
 //------------------------------------------------------------------------------
 
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>::~StringArray()
+template <typename Allocator>
+StringArray<Allocator>::~StringArray()
 {
-  if constexpr(!StoresCharsInSharedMemory<CharAllocatorType>)
+  if constexpr(!SharedMemory<Allocator>)
   {
     delete this->strings;
   }
@@ -2137,8 +2143,8 @@ StringArray<CharAllocatorType>::~StringArray()
   // handle so that other processes can keep reading them.
 }
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::swap(StringArray& another)
+template <typename Allocator>
+void StringArray<Allocator>::swap(StringArray& another)
 {
   std::swap(this->index, another.index);
   std::swap(this->strings, another.strings);
@@ -2151,43 +2157,63 @@ void StringArray<CharAllocatorType>::swap(StringArray& another)
 #endif
 }
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::require_stored_characters() const
+template <typename Allocator>
+void StringArray<Allocator>::create_strings()
 {
-  if(this->strings == nullptr)
+  if(this->strings != nullptr) { return; }
+
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
+  if constexpr(SharedMemory<Allocator>)
   {
-    throw std::runtime_error("StringArray: The strings are not stored anywhere; a shared memory segment is needed first");
+    this->construct_strings_in_shared_memory();
+    if(this->strings == nullptr)
+    {
+      throw std::runtime_error("StringArray: Cannot store characters in shared memory without a segment");
+    }
+  }
+  else
+#endif
+  {
+    this->strings = new std::vector<char, Allocator>();
   }
 }
 
-template <typename CharAllocatorType>
-size_type StringArray<CharAllocatorType>::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
+template <typename Allocator>
+size_type StringArray<Allocator>::serialize(std::ostream& out, sdsl::structure_tree_node* v, std::string name) const
 {
-  this->require_stored_characters();
 
   sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
   size_type written_bytes = 0;
 
   // SDSL serialization format stores the strings before the index in order to be
   // compatible with the old implementation in GBWTGraph.
-  written_bytes += serializeVector(*this->strings, out, child, "strings");
+  if(this->strings == nullptr)
+  {
+    written_bytes += serializeVector(std::vector<char>(), out, child, "strings");
+  }
+  else
+  {
+    written_bytes += serializeVector(*this->strings, out, child, "strings");
+  }
   this->index.serialize(out, child, "index");
 
   sdsl::structure_tree::add_size(child, written_bytes);
   return written_bytes;
 }
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::load(std::istream& in)
+template <typename Allocator>
+void StringArray<Allocator>::load(std::istream& in)
 {
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  if constexpr(StoresCharsInSharedMemory<CharAllocatorType>)
+  if constexpr(SharedMemory<Allocator>)
   {
     this->check_existence_in_shared_memory();
     if(this->is_data_loaded_into_shared_memory)
     {
       // Somebody already published these strings, so use theirs and just
       // consume the bytes they were built from off the stream.
+      // TODO: This wants a simple_sds_skip() (and equivalents) so we can pass
+      // over the data without building it.
       this->find_strings_from_shared_memory();
       this->find_index_from_shared_memory();
       {std::vector<char> characters; loadVector(characters, in);}
@@ -2204,15 +2230,16 @@ void StringArray<CharAllocatorType>::load(std::istream& in)
   else
 #endif
   {
-    if(this->strings == nullptr) { this->strings = new std::vector<char, CharAllocatorType>(); }
+    if(this->strings == nullptr) { this->strings = new std::vector<char, Allocator>(); }
   }
 
+  this->create_strings();
   loadVector(*this->strings, in);
   this->index.load(in);
   this->sanityChecks();
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  if constexpr(StoresCharsInSharedMemory<CharAllocatorType>)
+  if constexpr(SharedMemory<Allocator>)
   {
     this->construct_index_in_shared_memory();
     this->mark_published_in_shared_memory();
@@ -2220,9 +2247,8 @@ void StringArray<CharAllocatorType>::load(std::istream& in)
 #endif
 }
 
-template <typename CharAllocatorType>
 void
-determine_alphabet(const std::vector<char, CharAllocatorType>& strings, std::vector<std::uint8_t>& char_to_comp, sdsl::int_vector<8>& comp_to_char, size_type& width)
+determine_alphabet(std::string_view strings, std::vector<std::uint8_t>& char_to_comp, sdsl::int_vector<8>& comp_to_char, size_type& width)
 {
   char_to_comp = std::vector<std::uint8_t>(256, 0);
   for(char c : strings) { char_to_comp[static_cast<std::uint8_t>(c)] = 1; }
@@ -2243,10 +2269,9 @@ determine_alphabet(const std::vector<char, CharAllocatorType>& strings, std::vec
   }
 }
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::simple_sds_serialize(std::ostream& out) const
+template <typename Allocator>
+void StringArray<Allocator>::simple_sds_serialize(std::ostream& out) const
 {
-  this->require_stored_characters();
 
   // Compress the index without the past-the-end sentinel.
   {
@@ -2258,31 +2283,34 @@ void StringArray<CharAllocatorType>::simple_sds_serialize(std::ostream& out) con
   std::vector<std::uint8_t> char_to_comp;
   sdsl::int_vector<8> comp_to_char;
   size_type width = 0;
-  determine_alphabet(*this->strings, char_to_comp, comp_to_char, width);
+  determine_alphabet(this->characters(), char_to_comp, comp_to_char, width);
   comp_to_char.simple_sds_serialize(out);
 
   // Compress the strings.
   {
-    sdsl::int_vector<> compressed(this->strings->size(), 0, width);
-    for(size_type i = 0; i < this->strings->size(); i++)
+    std::string_view characters = this->characters();
+    sdsl::int_vector<> compressed(characters.size(), 0, width);
+    for(size_type i = 0; i < characters.size(); i++)
     {
-      compressed[i] = char_to_comp[static_cast<uint8_t>((*this->strings)[i])];
+      compressed[i] = char_to_comp[static_cast<uint8_t>(characters[i])];
     }
     compressed.simple_sds_serialize(out);
   }
 }
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::simple_sds_load(std::istream& in)
+template <typename Allocator>
+void StringArray<Allocator>::simple_sds_load(std::istream& in)
 {
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  if constexpr(StoresCharsInSharedMemory<CharAllocatorType>)
+  if constexpr(SharedMemory<Allocator>)
   {
     this->check_existence_in_shared_memory();
     if(this->is_data_loaded_into_shared_memory)
     {
       // Somebody already published these strings, so use theirs and just
       // consume the bytes they were built from off the stream.
+      // TODO: This wants a simple_sds_skip() (and equivalents) so we can pass
+      // over the data without building it.
       this->find_strings_from_shared_memory();
       this->find_index_from_shared_memory();
       {sdsl::sd_vector<> v; v.simple_sds_load(in);}
@@ -2290,20 +2318,12 @@ void StringArray<CharAllocatorType>::simple_sds_load(std::istream& in)
       {sdsl::int_vector<> compressed; compressed.simple_sds_load(in);}
       return;
     }
-    this->construct_strings_in_shared_memory();
-    if(this->strings == nullptr)
-    {
-      throw std::runtime_error("StringArray: Cannot load strings into shared memory without a real segment");
-    }
   }
-  else
 #endif
-  {
-    // Loading replaces the old content; reuse the vector this array already
-    // owns so that loading twice does not leak the first one.
-    if(this->strings == nullptr) { this->strings = new std::vector<char, CharAllocatorType>(); }
-    this->strings->clear();
-  }
+
+  // Loading replaces the old content.
+  this->create_strings();
+  this->strings->clear();
 
   // Load the index. We cannot decompress it yet because we do not know the width of the sentinel
   // value `strings.size()`.
@@ -2321,15 +2341,15 @@ void StringArray<CharAllocatorType>::simple_sds_load(std::istream& in)
   }
 
   // Decompress the index.
-  this->index = sdsl::int_vector<>(v.ones() + 1, 0, sdsl::bits::length(this->strings->size()));
+  this->index = sdsl::int_vector<>(v.ones() + 1, 0, sdsl::bits::length(this->length()));
   size_t i = 0;
   for(auto iter = v.one_begin(); iter != v.one_end(); ++iter, i++) { this->index[i] = iter->second; }
-  this->index[this->size()] = this->strings->size();
+  this->index[this->size()] = this->length();
 
   this->sanityChecks();
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  if constexpr(StoresCharsInSharedMemory<CharAllocatorType>)
+  if constexpr(SharedMemory<Allocator>)
   {
     if(!this->is_data_loaded_into_shared_memory)
     {
@@ -2340,10 +2360,9 @@ void StringArray<CharAllocatorType>::simple_sds_load(std::istream& in)
 #endif
 }
 
-template <typename CharAllocatorType>
-size_t StringArray<CharAllocatorType>::simple_sds_size() const
+template <typename Allocator>
+size_t StringArray<Allocator>::simple_sds_size() const
 {
-  this->require_stored_characters();
 
   size_t result = 0;
 
@@ -2355,26 +2374,28 @@ size_t StringArray<CharAllocatorType>::simple_sds_size() const
   std::vector<std::uint8_t> char_to_comp;
   sdsl::int_vector<8> comp_to_char;
   size_type width = 0;
-  determine_alphabet(*this->strings, char_to_comp, comp_to_char, width);
+  determine_alphabet(this->characters(), char_to_comp, comp_to_char, width);
   result += comp_to_char.simple_sds_size();
 
   // Compress the strings.
-  result += sdsl::int_vector<>::simple_sds_size(this->strings->size(), width);
+  result += sdsl::int_vector<>::simple_sds_size(this->length(), width);
 
   return result;
 }
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::simple_sds_load_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform)
+template <typename Allocator>
+void StringArray<Allocator>::simple_sds_load_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform)
 {
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  if constexpr(StoresCharsInSharedMemory<CharAllocatorType>)
+  if constexpr(SharedMemory<Allocator>)
   {
     this->check_existence_in_shared_memory();
     if(this->is_data_loaded_into_shared_memory)
     {
       // Somebody already published these strings, so use theirs and just
       // consume the bytes they were built from off the stream.
+      // TODO: This wants a simple_sds_skip() (and equivalents) so we can pass
+      // over the data without building it.
       this->find_strings_from_shared_memory();
       this->find_index_from_shared_memory();
       {sdsl::sd_vector<> v; v.simple_sds_load(in);}
@@ -2382,20 +2403,13 @@ void StringArray<CharAllocatorType>::simple_sds_load_duplicate(std::istream& in,
       {sdsl::int_vector<> compressed; compressed.simple_sds_load(in);}
       return;
     }
-    this->construct_strings_in_shared_memory();
-    if(this->strings == nullptr)
-    {
-      throw std::runtime_error("StringArray: Cannot load strings into shared memory without a real segment");
-    }
   }
-  else
 #endif
-  {
-    // Loading replaces the old content; reuse the vector this array already
-    // owns so that loading twice does not leak the first one.
-    if(this->strings == nullptr) { this->strings = new std::vector<char, CharAllocatorType>(); }
-    this->strings->clear();
-  }
+
+  // Loading replaces the old content, and loading twice must not leak the
+  // vector the first load left behind.
+  this->create_strings();
+  this->strings->clear();
 
   // Load the data.
   sdsl::sd_vector<> v; v.simple_sds_load(in);
@@ -2430,7 +2444,7 @@ void StringArray<CharAllocatorType>::simple_sds_load_duplicate(std::istream& in,
   this->sanityChecks();
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  if constexpr(StoresCharsInSharedMemory<CharAllocatorType>)
+  if constexpr(SharedMemory<Allocator>)
   {
     if(!this->is_data_loaded_into_shared_memory)
     {
@@ -2441,10 +2455,9 @@ void StringArray<CharAllocatorType>::simple_sds_load_duplicate(std::istream& in,
 #endif
 }
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::simple_sds_compress(std::ostream& out, int compression_level) const
+template <typename Allocator>
+void StringArray<Allocator>::simple_sds_compress(std::ostream& out, int compression_level) const
 {
-  this->require_stored_characters();
 
   // Compress the index without the past-the-end sentinel.
   {
@@ -2453,22 +2466,21 @@ void StringArray<CharAllocatorType>::simple_sds_compress(std::ostream& out, int 
   }
 
   // We store the length of the underlying strings vector for decompression.
-  sdsl::simple_sds::serialize_value(this->strings->size(), out);
+  sdsl::simple_sds::serialize_value(this->length(), out);
 
   // TODO: This could be a bit more efficient if we write directly to the output stream.
   // But we need to know the compressed size first.
   {
     ZstdCompressor compressor(compression_level);
-    compressor.compressDirect(std::string_view(this->strings->data(), this->strings->size()));
+    compressor.compressDirect(this->characters());
     compressor.finish();
     sdsl::simple_sds::serialize_vector(compressor.outputData(), out);
   }
 }
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::simple_sds_compress_even(std::ostream& out, int compression_level) const
+template <typename Allocator>
+void StringArray<Allocator>::simple_sds_compress_even(std::ostream& out, int compression_level) const
 {
-  this->require_stored_characters();
 
   size_t string_size = 0;
   for(size_t i = 0; i < this->size(); i += 2) { string_size += this->length(i); }
@@ -2502,9 +2514,8 @@ void StringArray<CharAllocatorType>::simple_sds_compress_even(std::ostream& out,
   }
 }
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::simple_sds_decompress(std::istream& in)
-  requires (!StoresCharsInSharedMemory<CharAllocatorType>)
+template <typename Allocator>
+void StringArray<Allocator>::simple_sds_decompress(std::istream& in)
 {
   // Load the index.
   size_t string_size = 0;
@@ -2521,7 +2532,7 @@ void StringArray<CharAllocatorType>::simple_sds_decompress(std::istream& in)
   {
     std::vector<char> compressed = sdsl::simple_sds::load_vector<char>(in);
     ZstdDecompressor decompressor(std::move(compressed));
-    if(this->strings == nullptr) { this->strings = new std::vector<char, CharAllocatorType>(); }
+    this->create_strings();
     this->strings->clear();
     this->strings->reserve(string_size);
     decompressor.decompress(string_size, *this->strings);
@@ -2537,17 +2548,19 @@ void StringArray<CharAllocatorType>::simple_sds_decompress(std::istream& in)
   this->sanityChecks();
 }
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::simple_sds_decompress_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform)
+template <typename Allocator>
+void StringArray<Allocator>::simple_sds_decompress_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform)
 {
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  if constexpr(StoresCharsInSharedMemory<CharAllocatorType>)
+  if constexpr(SharedMemory<Allocator>)
   {
     this->check_existence_in_shared_memory();
     if(this->is_data_loaded_into_shared_memory)
     {
       // Somebody already published these strings, so use theirs and just
       // consume the bytes they were built from off the stream.
+      // TODO: This wants a simple_sds_skip() (and equivalents) so we can pass
+      // over the data without building it.
       this->find_strings_from_shared_memory();
       this->find_index_from_shared_memory();
       {sdsl::sd_vector<> v; v.simple_sds_load(in);}
@@ -2555,20 +2568,13 @@ void StringArray<CharAllocatorType>::simple_sds_decompress_duplicate(std::istrea
       {std::vector<char> compressed = sdsl::simple_sds::load_vector<char>(in);}
       return;
     }
-    this->construct_strings_in_shared_memory();
-    if(this->strings == nullptr)
-    {
-      throw std::runtime_error("StringArray: Cannot load strings into shared memory without a real segment");
-    }
   }
-  else
 #endif
-  {
-    // Loading replaces the old content; reuse the vector this array already
-    // owns so that loading twice does not leak the first one.
-    if(this->strings == nullptr) { this->strings = new std::vector<char, CharAllocatorType>(); }
-    this->strings->clear();
-  }
+
+  // Loading replaces the old content, and loading twice must not leak the
+  // vector the first load left behind.
+  this->create_strings();
+  this->strings->clear();
 
   // Load the index and allocate space for the members.
   sdsl::sd_vector<> v;
@@ -2597,18 +2603,7 @@ void StringArray<CharAllocatorType>::simple_sds_decompress_duplicate(std::istrea
       // First copy.
       this->index[i] = this->index[i - 1] + length; i++;
       size_t start = this->strings->size();
-      if constexpr(StoresCharsInSharedMemory<CharAllocatorType>)
-      {
-        // ZstdDecompressor only decompresses into a plain std::vector<char>,
-        // so a shared-memory-backed `strings` needs a temporary buffer.
-        std::vector<char> temp;
-        decompressor.decompress(length, temp);
-        this->strings->insert(this->strings->end(), temp.begin(), temp.end());
-      }
-      else
-      {
-        decompressor.decompress(length, *this->strings);
-      }
+      decompressor.decompress(length, *this->strings);
       std::string_view view(this->strings->data() + start, length);
 
       // Transformed copy.
@@ -2628,7 +2623,7 @@ void StringArray<CharAllocatorType>::simple_sds_decompress_duplicate(std::istrea
   this->sanityChecks();
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  if constexpr(StoresCharsInSharedMemory<CharAllocatorType>)
+  if constexpr(SharedMemory<Allocator>)
   {
     if(!this->is_data_loaded_into_shared_memory)
     {
@@ -2641,18 +2636,9 @@ void StringArray<CharAllocatorType>::simple_sds_decompress_duplicate(std::istrea
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
 
-/*
-  The helpers below name three objects in the segment per array: the strings
-  vector itself, the bits of the index, and a flag saying that both are
-  complete. All three are derived from the array's prefix, so an array built
-  in one process and an array attaching in another agree on them by using the
-  same prefix. Each is a no-op without a segment, which lets the constructors
-  build an array with no content at all instead of special-casing that.
-*/
-
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::construct_index_in_shared_memory()
-  requires StoresCharsInSharedMemory<CharAllocatorType>
+template <typename Allocator>
+void StringArray<Allocator>::construct_index_in_shared_memory()
+  requires SharedMemory<Allocator>
 {
   if(this->shared_memory == nullptr) { return; }
 
@@ -2673,9 +2659,9 @@ void StringArray<CharAllocatorType>::construct_index_in_shared_memory()
   *index_size = this->index.size();
 }
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::find_index_from_shared_memory()
-  requires StoresCharsInSharedMemory<CharAllocatorType>
+template <typename Allocator>
+void StringArray<Allocator>::find_index_from_shared_memory()
+  requires SharedMemory<Allocator>
 {
   if(this->shared_memory == nullptr) { return; }
 
@@ -2695,34 +2681,34 @@ void StringArray<CharAllocatorType>::find_index_from_shared_memory()
                                    loaded_from_shared_memory);
 }
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::find_strings_from_shared_memory()
-  requires StoresCharsInSharedMemory<CharAllocatorType>
+template <typename Allocator>
+void StringArray<Allocator>::find_strings_from_shared_memory()
+  requires SharedMemory<Allocator>
 {
   if(this->shared_memory == nullptr) { return; }
 
   std::string strings_name = this->object_prefix_in_shared_memory + "_strings";
   this->strings =
-      this->shared_memory->find<std::vector<char, CharAllocatorType>>(strings_name.c_str()).first;
+      this->shared_memory->find<std::vector<char, Allocator>>(strings_name.c_str()).first;
 }
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::construct_strings_in_shared_memory()
-  requires StoresCharsInSharedMemory<CharAllocatorType>
+template <typename Allocator>
+void StringArray<Allocator>::construct_strings_in_shared_memory()
+  requires SharedMemory<Allocator>
 {
   if(this->shared_memory == nullptr) { return; }
 
   std::string strings_name = this->object_prefix_in_shared_memory + "_strings";
   // The vector allocates its characters through the segment manager, so it
   // has to be handed an allocator bound to this segment.
-  CharAllocatorType allocator(this->shared_memory->get_segment_manager());
+  Allocator allocator(this->shared_memory->get_segment_manager());
   this->strings =
-      this->shared_memory->construct<std::vector<char, CharAllocatorType>>(strings_name.c_str())(allocator);
+      this->shared_memory->construct<std::vector<char, Allocator>>(strings_name.c_str())(allocator);
 }
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::check_existence_in_shared_memory()
-  requires StoresCharsInSharedMemory<CharAllocatorType>
+template <typename Allocator>
+void StringArray<Allocator>::check_existence_in_shared_memory()
+  requires SharedMemory<Allocator>
 {
   if(this->shared_memory == nullptr) { return; }
 
@@ -2731,9 +2717,9 @@ void StringArray<CharAllocatorType>::check_existence_in_shared_memory()
   this->is_data_loaded_into_shared_memory = *flag;
 }
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::mark_published_in_shared_memory()
-  requires StoresCharsInSharedMemory<CharAllocatorType>
+template <typename Allocator>
+void StringArray<Allocator>::mark_published_in_shared_memory()
+  requires SharedMemory<Allocator>
 {
   if(this->shared_memory == nullptr) { return; }
 
@@ -2745,21 +2731,24 @@ void StringArray<CharAllocatorType>::mark_published_in_shared_memory()
 
 #endif // GBWT_ENABLE_SHARED_MEMORY
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::remove(size_type i)
-  requires (!StoresCharsInSharedMemory<CharAllocatorType>)
+template <typename Allocator>
+void StringArray<Allocator>::remove(size_type i)
+  requires (!SharedMemory<Allocator>)
 {
   if(i >= this->size()) { return; }
 
   // Update strings.
   size_type tail = this->index[i];
   size_type diff = this->index[i + 1] - tail;
-  while(tail + diff < this->strings->size())
+  if(this->strings != nullptr)
   {
-    (*this->strings)[tail] = (*this->strings)[tail + diff];
-    tail++;
+    while(tail + diff < this->strings->size())
+    {
+      (*this->strings)[tail] = (*this->strings)[tail + diff];
+      tail++;
+    }
+    this->strings->resize(tail);
   }
-  this->strings->resize(tail);
 
   // Update index.
   for(size_type j = i; j + 1 < this->index.size(); j++)
@@ -2770,122 +2759,127 @@ void StringArray<CharAllocatorType>::remove(size_type i)
   sdsl::util::bit_compress(this->index);
 }
 
-template <typename CharAllocatorType>
-template <typename CharAllocatorTypeOther>
-void StringArray<CharAllocatorType>::copy_content_from(const StringArray<CharAllocatorTypeOther>& another)
+// Copy constructor
+template <typename Allocator>
+StringArray<Allocator>::StringArray(const StringArray<Allocator>& another)
 {
-  if constexpr(std::same_as<CharAllocatorType, CharAllocatorTypeOther>)
-  {
-    if(this == &another) { return; }
-  }
+  *this = another;
+}
 
-  // Nothing can be handed over between two different allocators, so the
-  // characters are read out of the source's own storage and copied. A source
-  // with no storage yet reads as empty.
-  const char* source_data = (another.strings == nullptr ? nullptr : another.strings->data());
-  size_type source_length = another.length();
+// Copy assignment operator
+template <typename Allocator>
+StringArray<Allocator>& StringArray<Allocator>::operator=(
+    const StringArray<Allocator>& another)
+{
+  if(this == &another) { return *this; }
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  if constexpr(StoresCharsInSharedMemory<CharAllocatorType> && StoresCharsInSharedMemory<CharAllocatorTypeOther>)
+  if constexpr(SharedMemory<Allocator>)
   {
     // Both sides keep their characters in a segment, so become a second
-    // handle on what the source published rather than copying anything. Any
-    // objects this array published itself stay in its old segment, where
-    // other processes may still be reading them.
+    // handle on what the source published rather than copying anything.
     this->shared_memory = another.shared_memory;
     this->object_prefix_in_shared_memory = another.object_prefix_in_shared_memory;
     this->is_data_loaded_into_shared_memory = another.is_data_loaded_into_shared_memory;
     this->index = another.index;
     this->strings = another.strings;
+    return *this;
   }
-  else if constexpr(StoresCharsInSharedMemory<CharAllocatorType>)
+#endif
+
+  std::string_view source = another.characters();
+  if(!source.empty())
+  {
+    this->create_strings();
+    this->strings->assign(source.begin(), source.end());
+  }
+  else if(this->strings != nullptr) { this->strings->clear(); }
+  this->index = another.index;
+  return *this;
+}
+
+// Move assignment operator
+template <typename Allocator>
+StringArray<Allocator>& StringArray<Allocator>::operator=(
+    StringArray<Allocator>&& another)
+{
+  if(this != &another) { this->swap(another); }
+  return *this;
+}
+
+template <typename Allocator>
+template <typename OtherAllocator>
+StringArray<Allocator>::StringArray(const StringArray<OtherAllocator>& another)
+  requires (!SharedMemory<Allocator> && !std::same_as<OtherAllocator, Allocator>)
+{
+  *this = another;
+}
+
+template <typename Allocator>
+template <typename OtherAllocator>
+StringArray<Allocator>& StringArray<Allocator>::operator=(
+    const StringArray<OtherAllocator>& another)
+  requires (!std::same_as<OtherAllocator, Allocator>)
+{
+  // Two different allocators cannot hand characters over, so they get copied
+  // out of the source's own storage.
+  std::string_view source = another.characters();
+
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
+  if constexpr(SharedMemory<Allocator>)
   {
     if(this->shared_memory == nullptr)
     {
-      throw std::runtime_error("StringArray: Cannot store strings in shared memory without a real segment");
+      throw std::runtime_error("StringArray: Cannot store characters in shared memory without a segment");
     }
     this->check_existence_in_shared_memory();
     if(this->is_data_loaded_into_shared_memory)
     {
       throw std::runtime_error("StringArray: Strings named " + this->object_prefix_in_shared_memory + " are already published in the given shared memory segment");
     }
-    this->construct_strings_in_shared_memory();
-    this->strings->assign(source_data, source_data + source_length);
+    if(!source.empty())
+    {
+      this->create_strings();
+      this->strings->assign(source.begin(), source.end());
+    }
     this->index = another.index;
     this->construct_index_in_shared_memory();
     this->mark_published_in_shared_memory();
+    return *this;
   }
-  else
 #endif
+
+  if(!source.empty())
   {
-    if(this->strings == nullptr) { this->strings = new std::vector<char, CharAllocatorType>(); }
-    this->strings->assign(source_data, source_data + source_length);
-    this->index = another.index;
+    this->create_strings();
+    this->strings->assign(source.begin(), source.end());
   }
-}
-
-// Copy constructor
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>::StringArray(const StringArray<CharAllocatorType>& another)
-{
-  this->copy_content_from(another);
-}
-
-// Copy assignment operator
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>& StringArray<CharAllocatorType>::operator=(
-    const StringArray<CharAllocatorType>& another)
-{
-  this->copy_content_from(another);
+  else if(this->strings != nullptr) { this->strings->clear(); }
+  this->index = another.index;
   return *this;
 }
 
-// Move assignment operator
-template <typename CharAllocatorType>
-StringArray<CharAllocatorType>& StringArray<CharAllocatorType>::operator=(
-    StringArray<CharAllocatorType>&& another)
+template <typename Allocator>
+template <typename OtherAllocator>
+bool StringArray<Allocator>::operator==(const StringArray<OtherAllocator>& another) const
 {
-  if(this != &another) { this->swap(another); }
-  return *this;
+  if(this->size() != another.size()) { return false; }
+  for(size_type i = 0; i <= this->size(); i++)
+  {
+    if(this->index[i] != another.index[i]) { return false; }
+  }
+  return (this->characters() == another.characters());
 }
 
-template <typename CharAllocatorType>
-template <typename CharAllocatorTypeOther>
-StringArray<CharAllocatorType>::StringArray(const StringArray<CharAllocatorTypeOther>& another)
-  requires (!StoresCharsInSharedMemory<CharAllocatorType>)
-{
-  this->copy_content_from(another);
-}
-
-template <typename CharAllocatorType>
-template <typename CharAllocatorTypeOther>
-StringArray<CharAllocatorType>& StringArray<CharAllocatorType>::operator=(
-    const StringArray<CharAllocatorTypeOther>& another)
-{
-  this->copy_content_from(another);
-  return *this;
-}
-
-template <typename CharAllocatorType>
-template <typename CharAllocatorTypeOther>
-bool StringArray<CharAllocatorType>::operator==(const StringArray<CharAllocatorTypeOther>& another) const
-{
-  if(this->index != another.index || this->length() != another.length()) { return false; }
-
-  const char* left = (this->strings == nullptr ? nullptr : this->strings->data());
-  const char* right = (another.strings == nullptr ? nullptr : another.strings->data());
-  return std::equal(left, left + this->length(), right);
-}
-
-template <typename CharAllocatorType>
-template <typename CharAllocatorTypeOther>
-bool StringArray<CharAllocatorType>::operator!=(const StringArray<CharAllocatorTypeOther>& another) const
+template <typename Allocator>
+template <typename OtherAllocator>
+bool StringArray<Allocator>::operator!=(const StringArray<OtherAllocator>& another) const
 {
   return !(this->operator==(another));
 }
 
-template <typename CharAllocatorType>
-void StringArray<CharAllocatorType>::sanityChecks() const
+template <typename Allocator>
+void StringArray<Allocator>::sanityChecks() const
 {
   if(this->index.size() == 0 || this->index[0] != 0 || this->index[this->index.size() - 1] != this->length())
   {
@@ -2893,13 +2887,7 @@ void StringArray<CharAllocatorType>::sanityChecks() const
   }
 }
 
-/*
-  StringArray's definitions live here rather than in the header, so every
-  instantiation a caller can reach has to be named below. Instantiating the
-  class covers its ordinary members, including the ones whose constraints it
-  satisfies, but not its member templates: each combination of allocators
-  those are used with needs its own line.
-*/
+// The StringArray instantiations we allow, and their own template methods.
 
 template class StringArray<std::allocator<char>>;
 template bool StringArray<std::allocator<char>>::operator==(const StringArray<std::allocator<char>>&) const;
@@ -3258,9 +3246,9 @@ Tags::simple_sds_size() const
   return linearized.simple_sds_size();
 }
 
-template <typename CharAllocatorType>
+template <typename Allocator>
 void
-Tags::build(const StringArray<CharAllocatorType>& source)
+Tags::build(const StringArray<Allocator>& source)
 {
   if(source.size() % 2 != 0)
   {

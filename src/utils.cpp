@@ -31,7 +31,6 @@
 #include <set>
 #include <string>
 #include <stdexcept>
-#include <ctime>
 
 #include <sys/resource.h>
 #include <unistd.h>
@@ -168,20 +167,12 @@ printTimeLength(const std::string& header, size_type queries, size_type total_le
 }
 
 //------------------------------------------------------------------------------
-/*
+
 double
 readTimer()
 {
   return omp_get_wtime();
 }
-*/
-
-double readTimer()
-{
-    std::clock_t now = std::clock();                // Get current time
-    return static_cast<double>(now)/ CLOCKS_PER_SEC;  // Compute elapsed time
-}
-
 
 size_type
 memoryUsage()
@@ -460,32 +451,6 @@ ZstdDecompressor::ZstdDecompressor(std::vector<char>&& input) :
 ZstdDecompressor::~ZstdDecompressor()
 {
   ZSTD_freeDCtx(this->context); this->context = nullptr;
-}
-
-void
-ZstdDecompressor::decompress(size_t bytes, std::vector<char>& output)
-{
-  size_t decompressed = 0;
-  while(decompressed < bytes)
-  {
-    if(this->cursor < this->out_buffer.pos)
-    {
-      size_t to_copy = std::min(bytes - decompressed, this->out_buffer.pos - this->cursor);
-      const char* start_ptr = static_cast<char*>(this->out_buffer.dst) + this->cursor;
-      output.insert(output.end(), start_ptr, start_ptr + to_copy);
-      this->cursor += to_copy;
-      decompressed += to_copy;
-    }
-    else if(this->in_buffer.pos < this->in_buffer.size)
-    {
-      this->fillOutputBuffer();
-    }
-    else
-    {
-      std::string msg = "ZstdDecompressor: Unexpected end of input data";
-      throw sdsl::simple_sds::InvalidData(msg);
-    }
-  }
 }
 
 bool

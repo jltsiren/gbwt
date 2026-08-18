@@ -539,22 +539,19 @@ struct MergeParameters
   Serialization/deserialization failures throw `std::runtime_error` or its
   subclasses. In particular, sanity checks throw `sdsl::simple_sds::InvalidData`.
 */
-template <typename CharAllocatorType = std::allocator<char>>  // Default type is std::vector<char>
+template <typename Allocator = std::allocator<char>>
 class StringArray
 {
 public:
   typedef gbwt::size_type size_type;
 
-  // Every instantiation may touch another one's representation, for the
-  // cross-allocator comparison and assignment below.
-  template<typename CharAllocatorTypeOther> friend class StringArray;
+  // Make instantiations friends with each other for cross-allocator operations
+  template<typename OtherAllocator> friend class StringArray;
 
   constexpr static int DEFAULT_COMPRESSION_LEVEL = 3;
 
-  // An empty array. An array whose characters would live in shared memory
-  // gets no segment this way, so it can only be filled by assigning to it;
-  // use the segment constructors below for one that can fill itself.
-  StringArray();
+  // An empty array, storing its characters nowhere in particular yet.
+  StringArray() : index(1, 0, 1) {}
 
   /*
     Constructors that build content from a source. Absent when the characters
@@ -564,29 +561,29 @@ public:
   */
 
   StringArray(const std::vector<std::string>& source)
-    requires (!StoresCharsInSharedMemory<CharAllocatorType>);
+    requires (!SharedMemory<Allocator>);
 
   // Create an array of `2 * source.size()` strings from the given map,
   // alternating between keys and values in iteration order.
   StringArray(const std::map<std::string, std::string>& source)
-    requires (!StoresCharsInSharedMemory<CharAllocatorType>);
+    requires (!SharedMemory<Allocator>);
 
   // Create an array of n strings using the given function to get the sequence.
   // This version can be used when the sequences are already stored somewhere else.
   StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence)
-    requires (!StoresCharsInSharedMemory<CharAllocatorType>);
+    requires (!SharedMemory<Allocator>);
 
   // Create an array of up to n strings using the given functions to get the sequence
   // and for choosing which strings to include.
   // This version can be used when the sequences are already stored somewhere else.
   StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence, const std::function<bool(size_type)>& choose)
-    requires (!StoresCharsInSharedMemory<CharAllocatorType>);
+    requires (!SharedMemory<Allocator>);
 
   // Create an array of n strings using the given functions to get the length and the sequence.
   // This version is appropriate when the sequences are created on the fly but their
   // lengths are known in advance.
   StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence)
-    requires (!StoresCharsInSharedMemory<CharAllocatorType>);
+    requires (!SharedMemory<Allocator>);
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
   /*
@@ -600,22 +597,22 @@ public:
     unsatisfied-constraint error where it is named.
   */
 
-  // Always empty: never checks whether something is already published
-  // under this name, even if it is. Use `attach()` for that.
+  // Attaches to the strings already published under this prefix, or stays
+  // empty if there are none yet.
   StringArray(bi::managed_shared_memory* shared_memory, std::string object_prefix_in_shared_memory)
-    requires StoresCharsInSharedMemory<CharAllocatorType>;
+    requires SharedMemory<Allocator>;
 
   StringArray(const std::vector<std::string>& source,
               bi::managed_shared_memory* shared_memory,
               std::string object_prefix_in_shared_memory)
-    requires StoresCharsInSharedMemory<CharAllocatorType>;
+    requires SharedMemory<Allocator>;
 
   // Create an array of `2 * source.size()` strings from the given map,
   // alternating between keys and values in iteration order.
   StringArray(const std::map<std::string, std::string>& source,
               bi::managed_shared_memory* shared_memory,
               std::string object_prefix_in_shared_memory)
-    requires StoresCharsInSharedMemory<CharAllocatorType>;
+    requires SharedMemory<Allocator>;
 
   // Create an array of n strings using the given function to get the sequence.
   // This version can be used when the sequences are already stored somewhere else.
@@ -623,7 +620,7 @@ public:
               const std::function<std::string_view(size_type)>& sequence,
               bi::managed_shared_memory* shared_memory,
               std::string object_prefix_in_shared_memory)
-    requires StoresCharsInSharedMemory<CharAllocatorType>;
+    requires SharedMemory<Allocator>;
 
   // Create an array of up to n strings using the given functions to get the sequence
   // and for choosing which strings to include.
@@ -633,7 +630,7 @@ public:
               const std::function<bool(size_type)>& choose,
               bi::managed_shared_memory* shared_memory,
               std::string object_prefix_in_shared_memory)
-    requires StoresCharsInSharedMemory<CharAllocatorType>;
+    requires SharedMemory<Allocator>;
 
   // Create an array of n strings using the given functions to get the length and the sequence.
   // This version is appropriate when the sequences are created on the fly but their
@@ -643,21 +640,14 @@ public:
               const std::function<std::string(size_type)>& sequence,
               bi::managed_shared_memory* shared_memory,
               std::string object_prefix_in_shared_memory)
-    requires StoresCharsInSharedMemory<CharAllocatorType>;
-
-  // Attaches to strings a prior call (in this process or another) already
-  // published under this name in this segment. Throws `std::runtime_error`
-  // if nothing is published there yet.
-  static StringArray attach(bi::managed_shared_memory* shared_memory, const std::string& object_prefix_in_shared_memory)
-    requires StoresCharsInSharedMemory<CharAllocatorType>;
+    requires SharedMemory<Allocator>;
 #endif
 
   ~StringArray();
 
-  // Exchanges representations without copying any characters. Only between
-  // arrays of the same type: moving a heap pointer into an array whose
-  // destructor does not free it, or a segment pointer into one whose
-  // destructor does, would not be a swap. Assign across allocators instead.
+  // Exchanges content with another array of the same type, without copying it.
+  // Arrays with different allocators cannot exchange the storage the
+  // characters are in, so assign between those instead.
   void swap(StringArray& another);
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
@@ -679,11 +669,7 @@ public:
   void simple_sds_compress_even(std::ostream& out, int compression_level = DEFAULT_COMPRESSION_LEVEL) const;
 
   // Simple-SDS deserialization with zstd-compressed strings.
-  // Absent when the characters live in shared memory: the zstd decompressor
-  // only writes into a plain std::vector<char>, and there is no reason to
-  // stage a whole array through one just to copy it into a segment.
-  void simple_sds_decompress(std::istream& in)
-    requires (!StoresCharsInSharedMemory<CharAllocatorType>);
+  void simple_sds_decompress(std::istream& in);
 
   // Simple-SDS deserialization with zstd-compressed strings.
   // This version loads each string twice and transforms the second copy.
@@ -697,30 +683,29 @@ public:
   // Move assignment operator
   StringArray& operator=(StringArray&& another);
 
-  /*
-    Copying between instantiations with different character allocators. See
-    copy_content_from() for what each combination costs and when it throws;
-    an rvalue source binds here too, since characters cannot be handed over
-    from one allocator to another without copying them.
-  */
+  // Copying between different allocators.
 
-  // Explicit because copying out of shared memory is exactly what this
-  // feature exists to avoid: it should not happen because an array crossed
-  // an interface expecting the other allocator.
-  template<typename CharAllocatorTypeOther>
-  explicit StringArray(const StringArray<CharAllocatorTypeOther>& another)
-    requires (!StoresCharsInSharedMemory<CharAllocatorType>);
+  // Allow copy constructing out of shared memory only explicitly.
+  // Note that we don't allow copy constructing into shared memory from non-shared memory.
+  template<typename OtherAllocator>
+  explicit StringArray(const StringArray<OtherAllocator>& another)
+    requires (!SharedMemory<Allocator> && !std::same_as<OtherAllocator, Allocator>);
 
-  template<typename CharAllocatorTypeOther>
-  StringArray& operator=(const StringArray<CharAllocatorTypeOther>& another);
+  // Copies the characters, since no allocator can hand them to another. Into
+  // shared memory that means publishing them, which needs a segment with
+  // nothing published under this array's prefix yet and throws
+  // `std::runtime_error` otherwise.
+  template<typename OtherAllocator>
+  StringArray& operator=(const StringArray<OtherAllocator>& another)
+    requires (!std::same_as<OtherAllocator, Allocator>);
 
   // Two arrays are equal when they hold the same strings, whatever allocator
   // either of them keeps its characters in.
-  template<typename CharAllocatorTypeOther>
-  bool operator==(const StringArray<CharAllocatorTypeOther>& another) const;
+  template<typename OtherAllocator>
+  bool operator==(const StringArray<OtherAllocator>& another) const;
 
-  template<typename CharAllocatorTypeOther>
-  bool operator!=(const StringArray<CharAllocatorTypeOther>& another) const;
+  template<typename OtherAllocator>
+  bool operator!=(const StringArray<OtherAllocator>& another) const;
 
   size_type size() const { return this->index.size() - 1; }
   bool empty() const { return (this->size() == 0); }
@@ -730,75 +715,77 @@ public:
 
   std::string str(size_type i) const
   {
-    return std::string(this->strings->data() + this->index[i], this->strings->data() + this->index[i + 1]);
+    std::string_view view = this->view(i);
+    return std::string(view.begin(), view.end());
   }
 
-   std::string_view view(size_type i) const
+  std::string_view view(size_type i) const
   {
-    return std::string_view(this->strings->data() + this->index[i], this->length(i));
+    return this->characters().substr(this->index[i], this->length(i));
   }
 
-  // Rewrites the characters and the offsets in place, so it is absent when
-  // they live in shared memory: other processes may be reading them, and the
-  // published offsets would end up describing the old layout.
+  // TODO: We do not let you modify an array in shared memory. Doing so would
+  // need the readers in other processes to be locked out while we work.
   void remove(size_type i)
-    requires (!StoresCharsInSharedMemory<CharAllocatorType>);
+    requires (!SharedMemory<Allocator>);
 
   sdsl::int_vector<0> index;
 
-  // Null only while the characters would live in shared memory but no
-  // segment holds them yet; str() and view() are not usable in that state.
-  // Owned by this object, and deleted by the destructor, unless the
-  // characters live in shared memory, where the segment owns them and they
-  // outlive every handle on purpose.
-  std::vector<char, CharAllocatorType>* strings = nullptr;
+  // Null when there are no characters, which is an empty array. Owned here,
+  // except in shared memory, where the segment owns it.
+  std::vector<char, Allocator>* strings = nullptr;
 
 private:
   // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
   void sanityChecks() const;
 
-  // Throws `std::runtime_error` unless there is a characters vector to work
-  // with, which is what every operation that reads or writes the characters
-  // themselves needs (see `strings`).
-  void require_stored_characters() const;
+  // Fills in an empty array with the keys and values of the map, alternating
+  // between them in iteration order.
+  void set_from(const std::map<std::string, std::string>& source);
 
-  // Replaces this array's content with a copy of `another`'s.
-  //
-  // Two arrays that both keep their characters in shared memory end up as
-  // handles on the same published objects, which costs nothing and copies no
-  // characters. Otherwise the characters are copied, and copying them into
-  // shared memory means publishing them: that needs a segment with nothing
-  // published under this array's prefix yet, and throws `std::runtime_error`
-  // when there is no segment or the prefix is already taken. Replacing what
-  // is published under a prefix is deliberately not possible, since other
-  // processes may be reading it.
-  template<typename CharAllocatorTypeOther>
-  void copy_content_from(const StringArray<CharAllocatorTypeOther>& another);
+  // The stored characters, empty when nothing stores them yet.
+  std::string_view characters() const
+  {
+    return (this->strings == nullptr ? std::string_view() : std::string_view(this->strings->data(), this->strings->size()));
+  }
+
+  // Makes somewhere for the characters to go. Throws `std::runtime_error` if
+  // they belong in shared memory and there is no segment to put them in.
+  void create_strings();
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  // TODO: These three are meaningless for an allocator that does not store
-  // characters in shared memory, but a constraint can only remove member
-  // functions, not member variables, so the plain instantiation carries them
-  // unused. Splitting StringArray so that only the shared-memory
-  // specialization declares them would get rid of that.
+  /*
+    Where the characters go in shared memory, and whether they are there yet.
+
+    The segment holds three objects per array, named after the prefix:
+    "<prefix>_strings" for the characters, "<prefix>_index_data" (with
+    "_index_width" and "_index_size") for the offsets, and "<prefix>_loaded"
+    for a flag saying both are complete. Two processes using the same prefix
+    in the same segment therefore find each other's data.
+
+    TODO: A constraint can only remove member functions, not member
+    variables, so the plain instantiation carries these unused. Splitting
+    StringArray into specializations would get rid of them.
+  */
   bi::managed_shared_memory* shared_memory = nullptr;
   std::string object_prefix_in_shared_memory;
   bool is_data_loaded_into_shared_memory = false;
 
+  // These all do nothing without a segment, leaving `strings` null and
+  // `is_data_loaded_into_shared_memory` false.
   void construct_index_in_shared_memory()
-    requires StoresCharsInSharedMemory<CharAllocatorType>;
+    requires SharedMemory<Allocator>;
   void find_index_from_shared_memory()
-    requires StoresCharsInSharedMemory<CharAllocatorType>;
+    requires SharedMemory<Allocator>;
   void find_strings_from_shared_memory()
-    requires StoresCharsInSharedMemory<CharAllocatorType>;
+    requires SharedMemory<Allocator>;
   void construct_strings_in_shared_memory()
-    requires StoresCharsInSharedMemory<CharAllocatorType>;
+    requires SharedMemory<Allocator>;
   void check_existence_in_shared_memory()
-    requires StoresCharsInSharedMemory<CharAllocatorType>;
-  // Marks the "_loaded" flag check_existence_in_shared_memory() reads as
-  // true; call only after the strings and index have both been published.
+    requires SharedMemory<Allocator>;
+  // Call only once the strings and the index are both in the segment.
   void mark_published_in_shared_memory()
-    requires StoresCharsInSharedMemory<CharAllocatorType>;
+    requires SharedMemory<Allocator>;
 #endif
 };
 
@@ -925,8 +912,8 @@ public:
   bool empty() const { return (this->size() == 0); }
 
 private:
-  template<typename CharAllocatorType>
-  void build(const StringArray<CharAllocatorType>& source);
+  template<typename Allocator>
+  void build(const StringArray<Allocator>& source);
   static std::string normalize(const std::string& key);
 };
 

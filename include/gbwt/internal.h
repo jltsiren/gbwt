@@ -29,10 +29,13 @@
 
 #include <array>
 
+#include "support.h"
+
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <boost/interprocess/shared_memory_object.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
-#include "support.h"
+#endif
 
 namespace gbwt
 {
@@ -82,9 +85,8 @@ struct DiskIO
   }
 };
 
-
 // Serialize an std::vector of integers or simple structs.
-template<class Element, class Allocator = std::allocator<Element>>
+template<class Element, class Allocator>
 size_type
 serializeVector(const std::vector<Element, Allocator>& data, std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "")
 {
