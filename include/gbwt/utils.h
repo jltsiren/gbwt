@@ -37,6 +37,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <concepts>
 #include <limits>
 #include <string_view>
 #include <type_traits>
@@ -79,29 +80,34 @@ inline double omp_get_wtime()
 #include <boost/interprocess/shared_memory_object.hpp>
 #include <boost/interprocess/sync/named_mutex.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
+#endif
+
 namespace gbwt
 {
+
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
 typedef boost::interprocess::allocator<char, boost::interprocess::managed_shared_memory::segment_manager> SharedMemCharAllocatorType;
 
-// Has no conversion from `boost::interprocess::managed_shared_memory*`.
-// Standing in for that pointer type in a constructor parameter list, for any
-// CharAllocatorType other than SharedMemCharAllocatorType, makes passing a
-// real segment to that constructor a compile error instead of a silently
-// ignored argument.
-struct NotSharedMemory {};
-
-// The type a shared-memory-segment constructor parameter should have for a
-// given CharAllocatorType: a real segment pointer for SharedMemCharAllocatorType,
-// or NotSharedMemory (which nothing but NotSharedMemory itself converts to)
-// for every other allocator.
+// Satisfied by the one allocator that places characters in a Boost managed
+// shared memory segment. Constrains the members of a container templated on
+// a character allocator that only mean something for such a segment: the
+// instantiation for any other allocator does not have those members at all,
+// so calling one is an unsatisfied-constraint error at the call site rather
+// than something to be diagnosed at run time.
 template<typename CharAllocatorType>
-using SharedMemoryPointer = typename std::conditional<
-  std::is_same<CharAllocatorType, SharedMemCharAllocatorType>::value,
-  boost::interprocess::managed_shared_memory*,
-  NotSharedMemory
->::type;
-}
+concept StoresCharsInSharedMemory = std::same_as<CharAllocatorType, SharedMemCharAllocatorType>;
+#else
+// Without the feature compiled in there is no such allocator, so this is
+// unsatisfiable and constraints written as its negation hold for every
+// allocator. Members that need Boost types in their signatures are left
+// undeclared entirely instead (see support.h); this exists so the members
+// that merely need to be *absent* for shared memory can be constrained
+// without the declaration itself being conditional.
+template<typename CharAllocatorType>
+concept StoresCharsInSharedMemory = false;
 #endif
+
+}
 
 // Parallel sorting is only available with libstdc++ parallel mode.
 #if defined(__GLIBCXX__) && defined(GBWT_USE_OPENMP)

@@ -1,6 +1,14 @@
 SDSL_DIR=../sdsl-lite
 include $(SDSL_DIR)/Make.helper
 
+# GBWT's headers constrain members with C++20 requires-clauses (see
+# StoresCharsInSharedMemory in include/gbwt/utils.h), so anything that
+# includes them has to be compiled as C++20 or later. sdsl-lite's generated
+# Make.helper picks the standard for its own build and names an older one, so
+# replace whatever it asked for rather than appending to it.
+GBWT_STD_FLAG=-std=c++20
+MY_CXX_FLAGS:=$(filter-out -std=%,$(MY_CXX_FLAGS)) $(GBWT_STD_FLAG)
+
 BUILD_BIN=bin
 BUILD_LIB=lib
 BUILD_OBJ=obj
@@ -18,7 +26,7 @@ GBWT_USE_OPENMP=1
 # which sdsl-lite's CMake build generates). Defaults to on if both are
 # available, off otherwise; set explicitly to override the autodetection
 # either way.
-GBWT_ENABLE_SHARED_MEMORY=$(shell if echo '\#include <boost/interprocess/managed_shared_memory.hpp>' | $(MY_CXX) -std=c++17 -E -x c++ - >/dev/null 2>&1 && [ "$(SDSL_ENABLE_SHARED_MEMORY)" = "ON" ]; then echo 1; else echo 0; fi)
+GBWT_ENABLE_SHARED_MEMORY=$(shell if echo '\#include <boost/interprocess/managed_shared_memory.hpp>' | $(MY_CXX) $(GBWT_STD_FLAG) -E -x c++ - >/dev/null 2>&1 && [ "$(SDSL_ENABLE_SHARED_MEMORY)" = "ON" ]; then echo 1; else echo 0; fi)
 
 ifeq ($(GBWT_ENABLE_SHARED_MEMORY), 1)
     ifneq ($(SDSL_ENABLE_SHARED_MEMORY), ON)

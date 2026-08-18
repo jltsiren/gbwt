@@ -545,28 +545,85 @@ class StringArray
 public:
   typedef gbwt::size_type size_type;
 
+  // Every instantiation may touch another one's representation, for the
+  // cross-allocator comparison and assignment below.
+  template<typename CharAllocatorTypeOther> friend class StringArray;
+
   constexpr static int DEFAULT_COMPRESSION_LEVEL = 3;
 
+  // An empty array. An array whose characters would live in shared memory
+  // gets no segment this way, so it can only be filled by assigning to it;
+  // use the segment constructors below for one that can fill itself.
+  StringArray();
+
+  /*
+    Constructors that build content from a source. Absent when the characters
+    live in shared memory: content there has to be published into a segment
+    under an object name, which only the constructors in the
+    GBWT_ENABLE_SHARED_MEMORY block below take.
+  */
+
+  StringArray(const std::vector<std::string>& source)
+    requires (!StoresCharsInSharedMemory<CharAllocatorType>);
+
+  // Create an array of `2 * source.size()` strings from the given map,
+  // alternating between keys and values in iteration order.
+  StringArray(const std::map<std::string, std::string>& source)
+    requires (!StoresCharsInSharedMemory<CharAllocatorType>);
+
+  // Create an array of n strings using the given function to get the sequence.
+  // This version can be used when the sequences are already stored somewhere else.
+  StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence)
+    requires (!StoresCharsInSharedMemory<CharAllocatorType>);
+
+  // Create an array of up to n strings using the given functions to get the sequence
+  // and for choosing which strings to include.
+  // This version can be used when the sequences are already stored somewhere else.
+  StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence, const std::function<bool(size_type)>& choose)
+    requires (!StoresCharsInSharedMemory<CharAllocatorType>);
+
+  // Create an array of n strings using the given functions to get the length and the sequence.
+  // This version is appropriate when the sequences are created on the fly but their
+  // lengths are known in advance.
+  StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence)
+    requires (!StoresCharsInSharedMemory<CharAllocatorType>);
+
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
+  /*
+    Constructors and attach() for characters that live in a Boost managed
+    shared memory segment. Each takes the segment to work in and the prefix
+    the objects holding the strings are named with inside it, so that a later
+    call, in this process or another, can find the same strings again.
+
+    Only the instantiation for SharedMemCharAllocatorType has these. For any
+    other allocator they are not candidates at all, so naming one is an
+    unsatisfied-constraint error where it is named.
+  */
+
   // Always empty: never checks whether something is already published
   // under this name, even if it is. Use `attach()` for that.
-  StringArray(SharedMemoryPointer<CharAllocatorType> shared_memory = SharedMemoryPointer<CharAllocatorType>(), std::string object_prefix_in_shared_memory = "");
+  StringArray(bi::managed_shared_memory* shared_memory, std::string object_prefix_in_shared_memory)
+    requires StoresCharsInSharedMemory<CharAllocatorType>;
+
   StringArray(const std::vector<std::string>& source,
-              SharedMemoryPointer<CharAllocatorType> shared_memory = SharedMemoryPointer<CharAllocatorType>(),
-              std::string object_prefix_in_shared_memory = "");
+              bi::managed_shared_memory* shared_memory,
+              std::string object_prefix_in_shared_memory)
+    requires StoresCharsInSharedMemory<CharAllocatorType>;
 
   // Create an array of `2 * source.size()` strings from the given map,
   // alternating between keys and values in iteration order.
   StringArray(const std::map<std::string, std::string>& source,
-              SharedMemoryPointer<CharAllocatorType> shared_memory = SharedMemoryPointer<CharAllocatorType>(),
-              std::string object_prefix_in_shared_memory = "");
+              bi::managed_shared_memory* shared_memory,
+              std::string object_prefix_in_shared_memory)
+    requires StoresCharsInSharedMemory<CharAllocatorType>;
 
   // Create an array of n strings using the given function to get the sequence.
   // This version can be used when the sequences are already stored somewhere else.
   StringArray(size_type n,
               const std::function<std::string_view(size_type)>& sequence,
-              SharedMemoryPointer<CharAllocatorType> shared_memory = SharedMemoryPointer<CharAllocatorType>(),
-              std::string object_prefix_in_shared_memory = "");
+              bi::managed_shared_memory* shared_memory,
+              std::string object_prefix_in_shared_memory)
+    requires StoresCharsInSharedMemory<CharAllocatorType>;
 
   // Create an array of up to n strings using the given functions to get the sequence
   // and for choosing which strings to include.
@@ -574,8 +631,9 @@ public:
   StringArray(size_type n,
               const std::function<std::string_view(size_type)>& sequence,
               const std::function<bool(size_type)>& choose,
-              SharedMemoryPointer<CharAllocatorType> shared_memory = SharedMemoryPointer<CharAllocatorType>(),
-              std::string object_prefix_in_shared_memory = "");
+              bi::managed_shared_memory* shared_memory,
+              std::string object_prefix_in_shared_memory)
+    requires StoresCharsInSharedMemory<CharAllocatorType>;
 
   // Create an array of n strings using the given functions to get the length and the sequence.
   // This version is appropriate when the sequences are created on the fly but their
@@ -583,41 +641,24 @@ public:
   StringArray(size_type n,
               const std::function<size_type(size_type)>& length,
               const std::function<std::string(size_type)>& sequence,
-              SharedMemoryPointer<CharAllocatorType> shared_memory = SharedMemoryPointer<CharAllocatorType>(),
-              std::string object_prefix_in_shared_memory = "");
+              bi::managed_shared_memory* shared_memory,
+              std::string object_prefix_in_shared_memory)
+    requires StoresCharsInSharedMemory<CharAllocatorType>;
 
   // Attaches to strings a prior call (in this process or another) already
   // published under this name in this segment. Throws `std::runtime_error`
-  // if nothing is published there yet, or `std::logic_error` for any
-  // CharAllocatorType other than SharedMemCharAllocatorType.
-  static StringArray attach(SharedMemoryPointer<CharAllocatorType> shared_memory, const std::string& object_prefix_in_shared_memory);
-#else
-  StringArray();
-  StringArray(const std::vector<std::string>& source);
-
-  // Create an array of `2 * source.size()` strings from the given map,
-  // alternating between keys and values in iteration order.
-  StringArray(const std::map<std::string, std::string>& source);
-
-  // Create an array of n strings using the given function to get the sequence.
-  // This version can be used when the sequences are already stored somewhere else.
-  StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence);
-
-  // Create an array of up to n strings using the given functions to get the sequence
-  // and for choosing which strings to include.
-  // This version can be used when the sequences are already stored somewhere else.
-  StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence, const std::function<bool(size_type)>& choose);
-
-  // Create an array of n strings using the given functions to get the length and the sequence.
-  // This version is appropriate when the sequences are created on the fly but their
-  // lengths are known in advance.
-  StringArray(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence);
+  // if nothing is published there yet.
+  static StringArray attach(bi::managed_shared_memory* shared_memory, const std::string& object_prefix_in_shared_memory)
+    requires StoresCharsInSharedMemory<CharAllocatorType>;
 #endif
 
   ~StringArray();
 
-  template<typename CharAllocatorTypeOther>
-  void swap(StringArray<CharAllocatorTypeOther>& another);
+  // Exchanges representations without copying any characters. Only between
+  // arrays of the same type: moving a heap pointer into an array whose
+  // destructor does not free it, or a segment pointer into one whose
+  // destructor does, would not be a swap. Assign across allocators instead.
+  void swap(StringArray& another);
 
   size_type serialize(std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "") const;
   void load(std::istream& in);
@@ -638,20 +679,40 @@ public:
   void simple_sds_compress_even(std::ostream& out, int compression_level = DEFAULT_COMPRESSION_LEVEL) const;
 
   // Simple-SDS deserialization with zstd-compressed strings.
-  void simple_sds_decompress(std::istream& in);
+  // Absent when the characters live in shared memory: the zstd decompressor
+  // only writes into a plain std::vector<char>, and there is no reason to
+  // stage a whole array through one just to copy it into a segment.
+  void simple_sds_decompress(std::istream& in)
+    requires (!StoresCharsInSharedMemory<CharAllocatorType>);
 
   // Simple-SDS deserialization with zstd-compressed strings.
   // This version loads each string twice and transforms the second copy.
   // The transform function should not change the length of the string.
   void simple_sds_decompress_duplicate(std::istream& in, const std::function<std::string(std::string_view)>& transform);
 
-  // Copy assignment operator
-  StringArray& operator=(const StringArray& another);
   // Copy constructor
   StringArray(const StringArray& another);
+  // Copy assignment operator
+  StringArray& operator=(const StringArray& another);
   // Move assignment operator
   StringArray& operator=(StringArray&& another);
 
+  /*
+    Copying between instantiations with different character allocators. See
+    copy_content_from() for what each combination costs and when it throws;
+    an rvalue source binds here too, since characters cannot be handed over
+    from one allocator to another without copying them.
+  */
+
+  template<typename CharAllocatorTypeOther>
+  StringArray(const StringArray<CharAllocatorTypeOther>& another)
+    requires (!StoresCharsInSharedMemory<CharAllocatorType>);
+
+  template<typename CharAllocatorTypeOther>
+  StringArray& operator=(const StringArray<CharAllocatorTypeOther>& another);
+
+  // Two arrays are equal when they hold the same strings, whatever allocator
+  // either of them keeps its characters in.
   template<typename CharAllocatorTypeOther>
   bool operator==(const StringArray<CharAllocatorTypeOther>& another) const;
 
@@ -660,7 +721,7 @@ public:
 
   size_type size() const { return this->index.size() - 1; }
   bool empty() const { return (this->size() == 0); }
-  size_type length() const { return this->strings->size(); }
+  size_type length() const { return (this->strings == nullptr ? 0 : this->strings->size()); }
   size_type length(size_type i) const { return (this->index[i + 1] - this->index[i]); }
   size_type length(size_type start, size_t limit) const { return (this->index[limit] - this->index[start]); }
 
@@ -677,26 +738,56 @@ public:
   void remove(size_type i);
 
   sdsl::int_vector<0> index;
-  std::vector<char, CharAllocatorType>* strings = nullptr;  // std::vector<char, SharedMemCharAllocatorType>
-#if defined(GBWT_ENABLE_SHARED_MEMORY)
-  bi::managed_shared_memory* shared_memory = nullptr;
-  SharedMemCharAllocatorType* shared_memory_char_allocator = nullptr;
-  std::string object_prefix_in_shared_memory;
-  bool is_data_loaded_into_shared_memory = false;
 
-  void construct_index_in_shared_memory();
-  void find_index_from_shared_memory();
-  void find_strings_from_shared_memory();
-  void construct_strings_in_shared_memory();
-  void check_existence_in_shared_memory();
-  // Marks the "_loaded" flag check_existence_in_shared_memory() reads as
-  // true; call only after the strings and index have both been published.
-  void mark_published_in_shared_memory();
-#endif
+  // Null only while the characters would live in shared memory but no
+  // segment holds them yet; str() and view() are not usable in that state.
+  // Owned by this object, and deleted by the destructor, unless the
+  // characters live in shared memory, where the segment owns them and they
+  // outlive every handle on purpose.
+  std::vector<char, CharAllocatorType>* strings = nullptr;
 
 private:
   // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
   void sanityChecks() const;
+
+  // Replaces this array's content with a copy of `another`'s.
+  //
+  // Two arrays that both keep their characters in shared memory end up as
+  // handles on the same published objects, which costs nothing and copies no
+  // characters. Otherwise the characters are copied, and copying them into
+  // shared memory means publishing them: that needs a segment with nothing
+  // published under this array's prefix yet, and throws `std::runtime_error`
+  // when there is no segment or the prefix is already taken. Replacing what
+  // is published under a prefix is deliberately not possible, since other
+  // processes may be reading it.
+  template<typename CharAllocatorTypeOther>
+  void copy_content_from(const StringArray<CharAllocatorTypeOther>& another);
+
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
+  // TODO: These three are meaningless for an allocator that does not store
+  // characters in shared memory, but a constraint can only remove member
+  // functions, not member variables, so the plain instantiation carries them
+  // unused. Splitting StringArray so that only the shared-memory
+  // specialization declares them would get rid of that.
+  bi::managed_shared_memory* shared_memory = nullptr;
+  std::string object_prefix_in_shared_memory;
+  bool is_data_loaded_into_shared_memory = false;
+
+  void construct_index_in_shared_memory()
+    requires StoresCharsInSharedMemory<CharAllocatorType>;
+  void find_index_from_shared_memory()
+    requires StoresCharsInSharedMemory<CharAllocatorType>;
+  void find_strings_from_shared_memory()
+    requires StoresCharsInSharedMemory<CharAllocatorType>;
+  void construct_strings_in_shared_memory()
+    requires StoresCharsInSharedMemory<CharAllocatorType>;
+  void check_existence_in_shared_memory()
+    requires StoresCharsInSharedMemory<CharAllocatorType>;
+  // Marks the "_loaded" flag check_existence_in_shared_memory() reads as
+  // true; call only after the strings and index have both been published.
+  void mark_published_in_shared_memory()
+    requires StoresCharsInSharedMemory<CharAllocatorType>;
+#endif
 };
 
 //------------------------------------------------------------------------------

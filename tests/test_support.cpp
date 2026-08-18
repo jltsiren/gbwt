@@ -548,6 +548,51 @@ public:
   }
 };
 
+/*
+  Which members an instantiation has is part of StringArray's interface, so it
+  is checked here rather than left to whatever the rest of the tests happen to
+  name. A segment is only meaningful for the allocator that puts characters in
+  one, and building content from a source is only meaningful for an allocator
+  that does not need to be told where to put it.
+*/
+
+static_assert(std::constructible_from<StringArray<SharedMemCharAllocatorType>, bi::managed_shared_memory*, std::string>,
+              "The shared-memory allocator should accept a segment and a prefix");
+static_assert(!std::constructible_from<StringArray<>, bi::managed_shared_memory*, std::string>,
+              "The plain allocator should not accept a segment and a prefix");
+
+static_assert(std::constructible_from<StringArray<>, std::vector<std::string>>,
+              "The plain allocator should build an array from a vector of strings");
+static_assert(!std::constructible_from<StringArray<SharedMemCharAllocatorType>, std::vector<std::string>>,
+              "The shared-memory allocator should not build an array without being given a segment");
+
+// A requires-expression only turns a failed requirement into `false` while
+// substituting template arguments, so these are written against a parameter
+// rather than naming the instantiations directly.
+template<typename ArrayType>
+concept HasAttach = requires(bi::managed_shared_memory* segment) { ArrayType::attach(segment, "arr"); };
+template<typename ArrayType>
+concept HasSimpleSdsDecompress = requires(ArrayType& array, std::istream& in) { array.simple_sds_decompress(in); };
+template<typename ArrayType, typename OtherArrayType>
+concept HasSwapWith = requires(ArrayType& array, OtherArrayType& another) { array.swap(another); };
+
+static_assert(HasAttach<StringArray<SharedMemCharAllocatorType>>,
+              "The shared-memory allocator should have attach()");
+static_assert(!HasAttach<StringArray<>>,
+              "The plain allocator should not have attach()");
+
+static_assert(HasSimpleSdsDecompress<StringArray<>>,
+              "The plain allocator should have simple_sds_decompress()");
+static_assert(!HasSimpleSdsDecompress<StringArray<SharedMemCharAllocatorType>>,
+              "The shared-memory allocator should not have simple_sds_decompress()");
+
+// Exchanging representations only makes sense between arrays that free their
+// characters the same way.
+static_assert(HasSwapWith<StringArray<>, StringArray<>>,
+              "swap() should work between arrays of the same type");
+static_assert(!HasSwapWith<StringArray<>, StringArray<SharedMemCharAllocatorType>>,
+              "swap() should not cross allocators");
+
 // A second StringArray attaching to a name a prior one already published
 // under, from the same process, should find and reuse that data instead of
 // trying to construct it again under the same name.
@@ -574,15 +619,6 @@ TEST_F(StringArraySharedMemoryTest, AttachToMissingNameFails)
   bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
   ASSERT_THROW(StringArray<SharedMemCharAllocatorType>::attach(&segment, "arr"), std::runtime_error)
     << "Attaching to a name nothing was published under should fail instead of silently succeeding";
-}
-
-// attach() only makes sense for the shared-memory allocator: for any other
-// allocator, there is nothing to attach to, so it must fail loudly rather
-// than silently returning an empty array.
-TEST_F(StringArraySharedMemoryTest, AttachOnPlainAllocatorThrows)
-{
-  ASSERT_THROW(StringArray<>::attach(NotSharedMemory(), "arr"), std::logic_error)
-    << "attach() on the plain allocator should fail instead of silently succeeding";
 }
 
 // Unlike attach(), the lazy (non-attach) shared-memory constructor must
@@ -689,6 +725,140 @@ TEST_F(StringArraySharedMemoryTest, ZstdDecompressDuplicateThenAttach)
   }
 
   TempFile::remove(filename);
+}
+
+//------------------------------------------------------------------------------
+
+// Copying between the two allocators is the only way to get characters from
+// one kind of storage to the other, so the tests below cover each direction
+// and each way it can fail. They are here rather than with the other
+// StringArray tests because two allocators to copy between only exist when
+// shared memory is compiled in.
+
+// Reading a shared-memory array into an ordinary one has to produce an
+// independent heap copy, not a second reference to the segment.
+TEST_F(StringArraySharedMemoryTest, CopyFromSharedToPlain)
+{
+  std::vector<std::string> source { "first", "second", "third" };
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  StringArray<SharedMemCharAllocatorType> shared(source, &segment, "arr");
+
+  StringArray<> constructed(shared);
+  ASSERT_EQ(constructed.size(), source.size()) << "Copy-constructed array has the wrong size";
+  for(size_type i = 0; i < source.size(); i++)
+  {
+    EXPECT_EQ(constructed.str(i), source[i]) << "Copy-constructed array has the wrong string " << i;
+  }
+
+  StringArray<> assigned(std::vector<std::string> { "replaced" });
+  assigned = shared;
+  ASSERT_EQ(assigned.size(), source.size()) << "Assigned array kept its old size";
+  for(size_type i = 0; i < source.size(); i++)
+  {
+    EXPECT_EQ(assigned.str(i), source[i]) << "Assigned array has the wrong string " << i;
+  }
+}
+
+// Assigning into an array that names a prefix nothing is published under yet
+// publishes the characters there, so that another handle can attach to them.
+TEST_F(StringArraySharedMemoryTest, AssignFromPlainToShared)
+{
+  std::vector<std::string> source { "first", "second", "third" };
+  StringArray<> plain(source);
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+
+  StringArray<SharedMemCharAllocatorType> shared(&segment, "arr");
+  shared = plain;
+  ASSERT_EQ(shared.size(), source.size()) << "Assigned shared-memory array has the wrong size";
+  for(size_type i = 0; i < source.size(); i++)
+  {
+    EXPECT_EQ(shared.str(i), source[i]) << "Assigned shared-memory array has the wrong string " << i;
+  }
+
+  StringArray<SharedMemCharAllocatorType> reader = StringArray<SharedMemCharAllocatorType>::attach(&segment, "arr");
+  EXPECT_EQ(reader, plain) << "Assigning into a shared-memory array did not publish the strings";
+}
+
+// Whatever is published under a prefix may be in use by another process, so
+// assignment must refuse to replace it rather than doing so silently.
+TEST_F(StringArraySharedMemoryTest, AssignOverPublishedSharedFails)
+{
+  std::vector<std::string> source { "first", "second" };
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  StringArray<SharedMemCharAllocatorType> writer(source, &segment, "arr");
+
+  StringArray<SharedMemCharAllocatorType> second_handle(&segment, "arr");
+  StringArray<> replacement(std::vector<std::string> { "different" });
+  ASSERT_THROW(second_handle = replacement, std::runtime_error)
+    << "Assigning over already published strings should fail instead of replacing them";
+
+  StringArray<SharedMemCharAllocatorType> reader = StringArray<SharedMemCharAllocatorType>::attach(&segment, "arr");
+  EXPECT_EQ(reader, writer) << "The published strings should be untouched after the failed assignment";
+}
+
+// An array with no segment has nowhere to put the characters.
+TEST_F(StringArraySharedMemoryTest, AssignToSegmentlessSharedFails)
+{
+  StringArray<SharedMemCharAllocatorType> no_segment;
+  StringArray<> plain(std::vector<std::string> { "first", "second" });
+  ASSERT_THROW(no_segment = plain, std::runtime_error)
+    << "Assigning into a shared-memory array with no segment should fail";
+}
+
+// Copying between two shared-memory arrays hands over the published objects
+// instead of duplicating them in the segment.
+TEST_F(StringArraySharedMemoryTest, CopyBetweenSharedArraysShares)
+{
+  std::vector<std::string> source { "first", "second" };
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  StringArray<SharedMemCharAllocatorType> writer(source, &segment, "arr");
+
+  StringArray<SharedMemCharAllocatorType> copy(writer);
+  EXPECT_EQ(copy.strings, writer.strings) << "Copying a shared-memory array should not copy the characters";
+  EXPECT_EQ(copy, writer) << "The copy should hold the same strings";
+}
+
+// An rvalue source cannot hand its characters over to a different allocator,
+// so it is copied and stays readable afterwards.
+TEST_F(StringArraySharedMemoryTest, MoveAcrossAllocatorsCopies)
+{
+  std::vector<std::string> source { "first", "second" };
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  StringArray<SharedMemCharAllocatorType> shared(source, &segment, "arr");
+
+  StringArray<> plain;
+  plain = std::move(shared);
+  ASSERT_EQ(plain.size(), source.size()) << "Moving from a shared-memory array gave the wrong size";
+  EXPECT_EQ(plain, shared) << "The moved-from array should still hold the same strings";
+}
+
+// Comparison works whichever allocator either side keeps its characters in.
+TEST_F(StringArraySharedMemoryTest, ComparisonAcrossAllocators)
+{
+  std::vector<std::string> source { "first", "second", "third" };
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  StringArray<SharedMemCharAllocatorType> shared(source, &segment, "arr");
+  StringArray<> same(source);
+  StringArray<> shorter(std::vector<std::string> { "first", "second" });
+  StringArray<> different(std::vector<std::string> { "first", "second", "fourth" });
+
+  EXPECT_TRUE(shared == same) << "Equal arrays with different allocators should compare equal";
+  EXPECT_TRUE(same == shared) << "Comparison should not depend on which side is which";
+  EXPECT_TRUE(shared != shorter) << "Arrays of different sizes should not compare equal";
+  EXPECT_TRUE(shorter != shared) << "Arrays of different sizes should not compare equal either way";
+  EXPECT_TRUE(shared != different) << "Arrays with different characters should not compare equal";
+  EXPECT_TRUE(different != shared) << "Arrays with different characters should not compare equal either way";
+}
+
+// Two arrays with the same characters but different string boundaries hold
+// different strings, so the index has to be part of the comparison.
+TEST_F(StringArraySharedMemoryTest, ComparisonAcrossAllocatorsUsesIndex)
+{
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  StringArray<SharedMemCharAllocatorType> shared(std::vector<std::string> { "ab", "c" }, &segment, "arr");
+  StringArray<> regrouped(std::vector<std::string> { "a", "bc" });
+
+  EXPECT_TRUE(shared != regrouped) << "Arrays splitting the same characters differently should not compare equal";
 }
 
 #endif
