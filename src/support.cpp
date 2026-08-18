@@ -1814,22 +1814,15 @@ MergeParameters::setMergeJobs(size_type n)
 }
 
 //------------------------------------------------------------------------------
-template <typename Allocator>
-StringArray<Allocator>::StringArray(const std::vector<std::string>& source)
-  requires (!SharedMemory<Allocator>)
-{
-  *this = StringArray(source.size(), [&source](size_type i) -> std::string_view
-  {
-    return std::string_view(source[i]);
-  },
-  [](size_type) -> bool
-  {
-    return true;
-  });
-}
+
+/*
+  The bodies shared by the ordinary constructors and the shared-memory ones.
+  They fill in an empty array; a shared-memory constructor runs one of them
+  between attaching to an existing publication and publishing its own.
+*/
 
 template <typename Allocator>
-void StringArray<Allocator>::set_from(const std::map<std::string, std::string>& source)
+void StringArray<Allocator>::build_from(const std::map<std::string, std::string>& source)
 {
   size_type total_length = 0;
   for(auto iter = source.begin(); iter != source.end(); ++iter)
@@ -1841,7 +1834,7 @@ void StringArray<Allocator>::set_from(const std::map<std::string, std::string>& 
   this->index = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
   if(total_length == 0) { return; }
 
-  this->create_strings();
+  this->ensure_strings();
   this->strings->reserve(total_length);
 
   size_type offset = 0, total = 0;
@@ -1861,29 +1854,10 @@ void StringArray<Allocator>::set_from(const std::map<std::string, std::string>& 
 }
 
 template <typename Allocator>
-StringArray<Allocator>::StringArray(const std::map<std::string, std::string>& source)
-  requires (!SharedMemory<Allocator>)
-{
-  this->set_from(source);
-}
-
-template <typename Allocator>
-StringArray<Allocator>::StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence)
-  requires (!SharedMemory<Allocator>)
-{
-  *this = StringArray(n, sequence,
-  [](size_type) -> bool
-  {
-    return true;
-  });
-}
-
-template <typename Allocator>
-StringArray<Allocator>::StringArray(
+void StringArray<Allocator>::build_from(
     size_type n,
     const std::function<std::string_view(size_type)>& sequence,
     const std::function<bool(size_type)>& choose)
-  requires (!SharedMemory<Allocator>)
 {
   size_type chosen = 0, total_length = 0;
   for(size_type i = 0; i < n; i++)
@@ -1893,7 +1867,7 @@ StringArray<Allocator>::StringArray(
   this->index = sdsl::int_vector<0>(chosen + 1, 0, sdsl::bits::length(total_length));
   if(total_length == 0) { return; }
 
-  this->create_strings();
+  this->ensure_strings();
   this->strings->reserve(total_length);
 
   size_type curr = 0, total = 0;
@@ -1910,18 +1884,17 @@ StringArray<Allocator>::StringArray(
 
 // This has a separate implementation, because we cannot take a view of a temporary string.
 template <typename Allocator>
-StringArray<Allocator>::StringArray(
+void StringArray<Allocator>::build_from(
     size_type n,
     const std::function<size_type(size_type)>& length,
     const std::function<std::string(size_type)>& sequence)
-  requires (!SharedMemory<Allocator>)
 {
   size_type total_length = 0;
   for(size_type i = 0; i < n; i++) { total_length += length(i); }
   this->index = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
   if(total_length == 0) { return; }
 
-  this->create_strings();
+  this->ensure_strings();
   this->strings->reserve(total_length);
 
   size_type total = 0;
@@ -1937,7 +1910,77 @@ StringArray<Allocator>::StringArray(
 
 //------------------------------------------------------------------------------
 
+template <typename Allocator>
+StringArray<Allocator>::StringArray(const std::vector<std::string>& source)
+  requires (!SharedMemory<Allocator>)
+{
+  this->build_from(source.size(), [&source](size_type i) -> std::string_view
+  {
+    return std::string_view(source[i]);
+  },
+  [](size_type) -> bool
+  {
+    return true;
+  });
+}
+
+template <typename Allocator>
+StringArray<Allocator>::StringArray(const std::map<std::string, std::string>& source)
+  requires (!SharedMemory<Allocator>)
+{
+  this->build_from(source);
+}
+
+template <typename Allocator>
+StringArray<Allocator>::StringArray(size_type n, const std::function<std::string_view(size_type)>& sequence)
+  requires (!SharedMemory<Allocator>)
+{
+  this->build_from(n, sequence, [](size_type) -> bool { return true; });
+}
+
+template <typename Allocator>
+StringArray<Allocator>::StringArray(
+    size_type n,
+    const std::function<std::string_view(size_type)>& sequence,
+    const std::function<bool(size_type)>& choose)
+  requires (!SharedMemory<Allocator>)
+{
+  this->build_from(n, sequence, choose);
+}
+
+template <typename Allocator>
+StringArray<Allocator>::StringArray(
+    size_type n,
+    const std::function<size_type(size_type)>& length,
+    const std::function<std::string(size_type)>& sequence)
+  requires (!SharedMemory<Allocator>)
+{
+  this->build_from(n, length, sequence);
+}
+
+//------------------------------------------------------------------------------
+
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
+
+template <typename Allocator>
+bool StringArray<Allocator>::attach_if_published()
+  requires SharedMemory<Allocator>
+{
+  this->check_existence_in_shared_memory();
+  if(!this->is_data_loaded_into_shared_memory) { return false; }
+
+  this->find_strings_from_shared_memory();
+  this->find_index_from_shared_memory();
+  return true;
+}
+
+template <typename Allocator>
+void StringArray<Allocator>::publish()
+  requires SharedMemory<Allocator>
+{
+  this->construct_index_in_shared_memory();
+  this->mark_published_in_shared_memory();
+}
 
 template <typename Allocator>
 StringArray<Allocator>::StringArray(
@@ -1948,12 +1991,7 @@ StringArray<Allocator>::StringArray(
     shared_memory(shared_memory),
     object_prefix_in_shared_memory(object_prefix_in_shared_memory)
 {
-  this->check_existence_in_shared_memory();
-  if(this->is_data_loaded_into_shared_memory)
-  {
-    this->find_strings_from_shared_memory();
-    this->find_index_from_shared_memory();
-  }
+  this->attach_if_published();
 }
 
 template <typename Allocator>
@@ -1962,15 +2000,20 @@ StringArray<Allocator>::StringArray(
     bi::managed_shared_memory* shared_memory,
     std::string object_prefix_in_shared_memory)
   requires SharedMemory<Allocator>
+  : shared_memory(shared_memory),
+    object_prefix_in_shared_memory(object_prefix_in_shared_memory)
 {
-  *this = StringArray(source.size(), [&source](size_type i) -> std::string_view
+  if(this->attach_if_published()) { return; }
+
+  this->build_from(source.size(), [&source](size_type i) -> std::string_view
   {
     return std::string_view(source[i]);
   },
   [](size_type) -> bool
   {
     return true;
-  }, shared_memory, object_prefix_in_shared_memory);
+  });
+  this->publish();
 }
 
 template <typename Allocator>
@@ -1982,19 +2025,10 @@ StringArray<Allocator>::StringArray(
   : shared_memory(shared_memory),
     object_prefix_in_shared_memory(object_prefix_in_shared_memory)
 {
-  this->check_existence_in_shared_memory();
-  if(this->is_data_loaded_into_shared_memory)
-  {
-    // Somebody already published these strings under this name, so use
-    // theirs rather than building our own copy.
-    this->find_strings_from_shared_memory();
-    this->find_index_from_shared_memory();
-    return;
-  }
+  if(this->attach_if_published()) { return; }
 
-  this->set_from(source);
-  this->construct_index_in_shared_memory();
-  this->mark_published_in_shared_memory();
+  this->build_from(source);
+  this->publish();
 }
 
 template <typename Allocator>
@@ -2004,12 +2038,13 @@ StringArray<Allocator>::StringArray(
     bi::managed_shared_memory* shared_memory,
     std::string object_prefix_in_shared_memory)
   requires SharedMemory<Allocator>
+  : shared_memory(shared_memory),
+    object_prefix_in_shared_memory(object_prefix_in_shared_memory)
 {
-  *this = StringArray(n, sequence,
-  [](size_type) -> bool
-  {
-    return true;
-  }, shared_memory, object_prefix_in_shared_memory);
+  if(this->attach_if_published()) { return; }
+
+  this->build_from(n, sequence, [](size_type) -> bool { return true; });
+  this->publish();
 }
 
 template <typename Allocator>
@@ -2023,43 +2058,12 @@ StringArray<Allocator>::StringArray(
   : shared_memory(shared_memory),
     object_prefix_in_shared_memory(object_prefix_in_shared_memory)
 {
-  this->check_existence_in_shared_memory();
-  if(this->is_data_loaded_into_shared_memory)
-  {
-    // Somebody already published these strings under this name, so use
-    // theirs rather than building our own copy.
-    this->find_strings_from_shared_memory();
-    this->find_index_from_shared_memory();
-    return;
-  }
-  size_type chosen = 0, total_length = 0;
-  for(size_type i = 0; i < n; i++)
-  {
-    if(choose(i)) { chosen++; total_length += sequence(i).size(); }
-  }
-  this->index = sdsl::int_vector<0>(chosen + 1, 0, sdsl::bits::length(total_length));
-  if(total_length > 0)
-  {
-    this->create_strings();
-    this->strings->reserve(total_length);
+  if(this->attach_if_published()) { return; }
 
-    size_type curr = 0, total = 0;
-    for(size_type i = 0; i < n; i++)
-    {
-      if(!choose(i)) { continue; }
-      std::string_view view = sequence(i);
-      this->index[curr] = total; curr++;
-      this->strings->insert(this->strings->end(), view.data(), view.data() + view.size());
-      total += view.size();
-    }
-    this->index[chosen] = total;
-  }
-
-  this->construct_index_in_shared_memory();
-  this->mark_published_in_shared_memory();
+  this->build_from(n, sequence, choose);
+  this->publish();
 }
 
-// This has a separate implementation, because we cannot take a view of a temporary string.
 template <typename Allocator>
 StringArray<Allocator>::StringArray(
     size_type n,
@@ -2071,36 +2075,10 @@ StringArray<Allocator>::StringArray(
   : shared_memory(shared_memory),
     object_prefix_in_shared_memory(object_prefix_in_shared_memory)
 {
-  this->check_existence_in_shared_memory();
-  if(this->is_data_loaded_into_shared_memory)
-  {
-    // Somebody already published these strings under this name, so use
-    // theirs rather than building our own copy.
-    this->find_strings_from_shared_memory();
-    this->find_index_from_shared_memory();
-    return;
-  }
-  size_type total_length = 0;
-  for(size_type i = 0; i < n; i++) { total_length += length(i); }
-  this->index = sdsl::int_vector<0>(n + 1, 0, sdsl::bits::length(total_length));
-  if(total_length > 0)
-  {
-    this->create_strings();
-    this->strings->reserve(total_length);
+  if(this->attach_if_published()) { return; }
 
-    size_type total = 0;
-    for(size_type i = 0; i < n; i++)
-    {
-      std::string str = sequence(i);
-      this->index[i] = total;
-      this->strings->insert(this->strings->end(), str.begin(), str.end());
-      total += str.size();
-    }
-    this->index[n] = total;
-  }
-
-  this->construct_index_in_shared_memory();
-  this->mark_published_in_shared_memory();
+  this->build_from(n, length, sequence);
+  this->publish();
 }
 
 #endif // GBWT_ENABLE_SHARED_MEMORY
@@ -2133,7 +2111,7 @@ void StringArray<Allocator>::swap(StringArray& another)
 }
 
 template <typename Allocator>
-void StringArray<Allocator>::create_strings()
+void StringArray<Allocator>::ensure_strings()
 {
   if(this->strings != nullptr) { return; }
 
@@ -2182,43 +2160,28 @@ void StringArray<Allocator>::load(std::istream& in)
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
   if constexpr(SharedMemory<Allocator>)
   {
-    this->check_existence_in_shared_memory();
-    if(this->is_data_loaded_into_shared_memory)
+    // Somebody already published these strings, so use theirs and just skip
+    // over the serialized copy in the stream.
+    // TODO: This wants a simple_sds_skip() (and equivalents) so we can pass
+    // over the data without storing it.
+    if(this->attach_if_published())
     {
-      // Somebody already published these strings, so use theirs and just
-      // consume the bytes they were built from off the stream.
-      // TODO: This wants a simple_sds_skip() (and equivalents) so we can pass
-      // over the data without building it.
-      this->find_strings_from_shared_memory();
-      this->find_index_from_shared_memory();
       {std::vector<char> characters; loadVector(characters, in);}
       {sdsl::int_vector<0> offsets; offsets.load(in);}
       this->sanityChecks();
       return;
     }
-    this->construct_strings_in_shared_memory();
-    if(this->strings == nullptr)
-    {
-      throw std::runtime_error("StringArray: Cannot load strings into shared memory without a real segment");
-    }
   }
-  else
 #endif
-  {
-    if(this->strings == nullptr) { this->strings = new std::vector<char, Allocator>(); }
-  }
 
-  this->create_strings();
+  // Loading replaces the old content.
+  this->ensure_strings();
   loadVector(*this->strings, in);
   this->index.load(in);
   this->sanityChecks();
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  if constexpr(SharedMemory<Allocator>)
-  {
-    this->construct_index_in_shared_memory();
-    this->mark_published_in_shared_memory();
-  }
+  if constexpr(SharedMemory<Allocator>) { this->publish(); }
 #endif
 }
 
@@ -2279,15 +2242,12 @@ void StringArray<Allocator>::simple_sds_load(std::istream& in)
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
   if constexpr(SharedMemory<Allocator>)
   {
-    this->check_existence_in_shared_memory();
-    if(this->is_data_loaded_into_shared_memory)
+    // Somebody already published these strings, so use theirs and just skip
+    // over the serialized copy in the stream.
+    // TODO: This wants a simple_sds_skip() (and equivalents) so we can pass
+    // over the data without storing it.
+    if(this->attach_if_published())
     {
-      // Somebody already published these strings, so use theirs and just
-      // consume the bytes they were built from off the stream.
-      // TODO: This wants a simple_sds_skip() (and equivalents) so we can pass
-      // over the data without building it.
-      this->find_strings_from_shared_memory();
-      this->find_index_from_shared_memory();
       {sdsl::sd_vector<> v; v.simple_sds_load(in);}
       {sdsl::int_vector<8> comp_to_char; comp_to_char.simple_sds_load(in);}
       {sdsl::int_vector<> compressed; compressed.simple_sds_load(in);}
@@ -2297,7 +2257,7 @@ void StringArray<Allocator>::simple_sds_load(std::istream& in)
 #endif
 
   // Loading replaces the old content.
-  this->create_strings();
+  this->ensure_strings();
   this->strings->clear();
 
   // Load the index. We cannot decompress it yet because we do not know the width of the sentinel
@@ -2324,14 +2284,7 @@ void StringArray<Allocator>::simple_sds_load(std::istream& in)
   this->sanityChecks();
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  if constexpr(SharedMemory<Allocator>)
-  {
-    if(!this->is_data_loaded_into_shared_memory)
-    {
-      this->construct_index_in_shared_memory();
-      this->mark_published_in_shared_memory();
-    }
-  }
+  if constexpr(SharedMemory<Allocator>) { this->publish(); }
 #endif
 }
 
@@ -2364,15 +2317,12 @@ void StringArray<Allocator>::simple_sds_load_duplicate(std::istream& in, const s
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
   if constexpr(SharedMemory<Allocator>)
   {
-    this->check_existence_in_shared_memory();
-    if(this->is_data_loaded_into_shared_memory)
+    // Somebody already published these strings, so use theirs and just skip
+    // over the serialized copy in the stream.
+    // TODO: This wants a simple_sds_skip() (and equivalents) so we can pass
+    // over the data without storing it.
+    if(this->attach_if_published())
     {
-      // Somebody already published these strings, so use theirs and just
-      // consume the bytes they were built from off the stream.
-      // TODO: This wants a simple_sds_skip() (and equivalents) so we can pass
-      // over the data without building it.
-      this->find_strings_from_shared_memory();
-      this->find_index_from_shared_memory();
       {sdsl::sd_vector<> v; v.simple_sds_load(in);}
       {sdsl::int_vector<8> comp_to_char; comp_to_char.simple_sds_load(in);}
       {sdsl::int_vector<> compressed; compressed.simple_sds_load(in);}
@@ -2383,7 +2333,7 @@ void StringArray<Allocator>::simple_sds_load_duplicate(std::istream& in, const s
 
   // Loading replaces the old content, and loading twice must not leak the
   // vector the first load left behind.
-  this->create_strings();
+  this->ensure_strings();
   this->strings->clear();
 
   // Load the data.
@@ -2419,14 +2369,7 @@ void StringArray<Allocator>::simple_sds_load_duplicate(std::istream& in, const s
   this->sanityChecks();
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  if constexpr(SharedMemory<Allocator>)
-  {
-    if(!this->is_data_loaded_into_shared_memory)
-    {
-      this->construct_index_in_shared_memory();
-      this->mark_published_in_shared_memory();
-    }
-  }
+  if constexpr(SharedMemory<Allocator>) { this->publish(); }
 #endif
 }
 
@@ -2492,6 +2435,23 @@ void StringArray<Allocator>::simple_sds_compress_even(std::ostream& out, int com
 template <typename Allocator>
 void StringArray<Allocator>::simple_sds_decompress(std::istream& in)
 {
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
+  if constexpr(SharedMemory<Allocator>)
+  {
+    // Somebody already published these strings, so use theirs and just skip
+    // over the serialized copy in the stream.
+    // TODO: This wants a simple_sds_skip() (and equivalents) so we can pass
+    // over the data without storing it.
+    if(this->attach_if_published())
+    {
+      {sdsl::sd_vector<> v; v.simple_sds_load(in);}
+      sdsl::simple_sds::load_value<size_t>(in);
+      {std::vector<char> compressed = sdsl::simple_sds::load_vector<char>(in);}
+      return;
+    }
+  }
+#endif
+
   // Load the index.
   size_t string_size = 0;
   {
@@ -2507,7 +2467,7 @@ void StringArray<Allocator>::simple_sds_decompress(std::istream& in)
   {
     std::vector<char> compressed = sdsl::simple_sds::load_vector<char>(in);
     ZstdDecompressor decompressor(std::move(compressed));
-    this->create_strings();
+    this->ensure_strings();
     this->strings->clear();
     this->strings->reserve(string_size);
     decompressor.decompress(string_size, *this->strings);
@@ -2521,6 +2481,10 @@ void StringArray<Allocator>::simple_sds_decompress(std::istream& in)
   }
 
   this->sanityChecks();
+
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
+  if constexpr(SharedMemory<Allocator>) { this->publish(); }
+#endif
 }
 
 template <typename Allocator>
@@ -2529,15 +2493,12 @@ void StringArray<Allocator>::simple_sds_decompress_duplicate(std::istream& in, c
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
   if constexpr(SharedMemory<Allocator>)
   {
-    this->check_existence_in_shared_memory();
-    if(this->is_data_loaded_into_shared_memory)
+    // Somebody already published these strings, so use theirs and just skip
+    // over the serialized copy in the stream.
+    // TODO: This wants a simple_sds_skip() (and equivalents) so we can pass
+    // over the data without storing it.
+    if(this->attach_if_published())
     {
-      // Somebody already published these strings, so use theirs and just
-      // consume the bytes they were built from off the stream.
-      // TODO: This wants a simple_sds_skip() (and equivalents) so we can pass
-      // over the data without building it.
-      this->find_strings_from_shared_memory();
-      this->find_index_from_shared_memory();
       {sdsl::sd_vector<> v; v.simple_sds_load(in);}
       sdsl::simple_sds::load_value<size_t>(in);
       {std::vector<char> compressed = sdsl::simple_sds::load_vector<char>(in);}
@@ -2548,7 +2509,7 @@ void StringArray<Allocator>::simple_sds_decompress_duplicate(std::istream& in, c
 
   // Loading replaces the old content, and loading twice must not leak the
   // vector the first load left behind.
-  this->create_strings();
+  this->ensure_strings();
   this->strings->clear();
 
   // Load the index and allocate space for the members.
@@ -2598,14 +2559,7 @@ void StringArray<Allocator>::simple_sds_decompress_duplicate(std::istream& in, c
   this->sanityChecks();
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
-  if constexpr(SharedMemory<Allocator>)
-  {
-    if(!this->is_data_loaded_into_shared_memory)
-    {
-      this->construct_index_in_shared_memory();
-      this->mark_published_in_shared_memory();
-    }
-  }
+  if constexpr(SharedMemory<Allocator>) { this->publish(); }
 #endif
 }
 
@@ -2765,7 +2719,7 @@ StringArray<Allocator>& StringArray<Allocator>::operator=(
   std::string_view source = another.characters();
   if(!source.empty())
   {
-    this->create_strings();
+    this->ensure_strings();
     this->strings->assign(source.begin(), source.end());
   }
   else if(this->strings != nullptr) { this->strings->clear(); }
@@ -2796,8 +2750,7 @@ StringArray<Allocator>& StringArray<Allocator>::operator=(
     const StringArray<OtherAllocator>& another)
   requires (!std::same_as<OtherAllocator, Allocator>)
 {
-  // Two different allocators cannot hand characters over, so they get copied
-  // out of the source's own storage.
+  // Two different allocators. We have to copy
   std::string_view source = another.characters();
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
@@ -2814,7 +2767,7 @@ StringArray<Allocator>& StringArray<Allocator>::operator=(
     }
     if(!source.empty())
     {
-      this->create_strings();
+      this->ensure_strings();
       this->strings->assign(source.begin(), source.end());
     }
     this->index = another.index;
@@ -2826,7 +2779,7 @@ StringArray<Allocator>& StringArray<Allocator>::operator=(
 
   if(!source.empty())
   {
-    this->create_strings();
+    this->ensure_strings();
     this->strings->assign(source.begin(), source.end());
   }
   else if(this->strings != nullptr) { this->strings->clear(); }

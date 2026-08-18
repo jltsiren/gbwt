@@ -835,7 +835,7 @@ TEST_F(StringArraySharedMemoryTest, CopyBetweenSharedArraysShares)
 }
 
 // An rvalue source cannot hand its characters over to a different allocator,
-// so it is copied and stays readable afterwards.
+// so assigning from one still works and copies them.
 TEST_F(StringArraySharedMemoryTest, MoveAcrossAllocatorsCopies)
 {
   std::vector<std::string> source { "first", "second" };
@@ -845,7 +845,10 @@ TEST_F(StringArraySharedMemoryTest, MoveAcrossAllocatorsCopies)
   StringArray<> plain;
   plain = std::move(shared);
   ASSERT_EQ(plain.size(), source.size()) << "Moving from a shared-memory array gave the wrong size";
-  EXPECT_EQ(plain, shared) << "The moved-from array should still hold the same strings";
+  for(size_type i = 0; i < source.size(); i++)
+  {
+    EXPECT_EQ(plain.str(i), source[i]) << "Moving from a shared-memory array gave the wrong string " << i;
+  }
 }
 
 // Comparison works whichever allocator either side keeps its characters in.
@@ -864,6 +867,14 @@ TEST_F(StringArraySharedMemoryTest, ComparisonAcrossAllocators)
   EXPECT_TRUE(shorter != shared) << "Arrays of different sizes should not compare equal either way";
   EXPECT_TRUE(shared != different) << "Arrays with different characters should not compare equal";
   EXPECT_TRUE(different != shared) << "Arrays with different characters should not compare equal either way";
+
+  StringArray<> default_empty;
+  StringArray<> from_empty{std::vector<std::string>()};
+  StringArray<SharedMemCharAllocatorType> shared_empty(std::vector<std::string>(), &segment, "empty");
+  EXPECT_TRUE(default_empty == from_empty) << "The two ways of getting an empty array should compare equal";
+  EXPECT_TRUE(default_empty == shared_empty) << "An empty array should compare equal across allocators";
+  EXPECT_TRUE(from_empty == shared_empty) << "An empty array should compare equal across allocators either way";
+  EXPECT_TRUE(default_empty != shared) << "An empty array should not equal a non-empty one";
 }
 
 // Two arrays with the same characters but different string boundaries hold

@@ -714,9 +714,14 @@ private:
   // Throws `sdsl::simple_sds::InvalidData` if the checks fail.
   void sanityChecks() const;
 
-  // Fills in an empty array with the keys and values of the map, alternating
-  // between them in iteration order.
-  void set_from(const std::map<std::string, std::string>& source);
+  /*
+    Fill in an empty array from a source. The map version alternates between
+    keys and values in iteration order; the others are the constructors of the
+    same shape.
+  */
+  void build_from(const std::map<std::string, std::string>& source);
+  void build_from(size_type n, const std::function<std::string_view(size_type)>& sequence, const std::function<bool(size_type)>& choose);
+  void build_from(size_type n, const std::function<size_type(size_type)>& length, const std::function<std::string(size_type)>& sequence);
 
   // The stored characters, empty when nothing stores them yet.
   std::string_view characters() const
@@ -724,9 +729,10 @@ private:
     return (this->strings == nullptr ? std::string_view() : std::string_view(this->strings->data(), this->strings->size()));
   }
 
-  // Makes somewhere for the characters to go. Throws `std::runtime_error` if
-  // they belong in shared memory and there is no segment to put them in.
-  void create_strings();
+  // Makes somewhere for the characters to go if there isn't one. Throws
+  // `std::runtime_error` if they belong in shared memory and there is no
+  // segment to put them in.
+  void ensure_strings();
 
 #if defined(GBWT_ENABLE_SHARED_MEMORY)
   /*
@@ -745,6 +751,16 @@ private:
   bi::managed_shared_memory* shared_memory = nullptr;
   std::string object_prefix_in_shared_memory;
   bool is_data_loaded_into_shared_memory = false;
+
+  // Takes the strings already published under our prefix, if there are any,
+  // and says whether there were.
+  bool attach_if_published()
+    requires SharedMemory<Allocator>;
+
+  // Puts the index in the segment and marks the strings complete. Call once
+  // the characters are in there.
+  void publish()
+    requires SharedMemory<Allocator>;
 
   // These all do nothing without a segment, leaving `strings` null and
   // `is_data_loaded_into_shared_memory` false.
