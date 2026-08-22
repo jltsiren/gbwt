@@ -1,8 +1,8 @@
 #ifndef GBWT_METADATA_H
 #define GBWT_METADATA_H
 
-#include <gbwt/files.h>
-#include <gbwt/support.h>
+#include "files.h"
+#include "support.h"
 
 #include <unordered_map>
 

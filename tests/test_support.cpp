@@ -14,7 +14,7 @@ namespace
 class StringArrayTest : public ::testing::Test
 {
 public:
-  void check_array(const StringArray& array, const std::vector<std::string>& truth) const
+  void check_array(const StringArray<>& array, const std::vector<std::string>& truth) const
   {
     ASSERT_EQ(array.size(), truth.size()) << "Incorrect array size";
     ASSERT_EQ(array.empty(), truth.empty()) << "Incorrect emptiness";
@@ -37,21 +37,21 @@ public:
   {
     std::vector<std::string> copy = original;
     if(i < original.size()) { copy.erase(copy.begin() + i); }
-    StringArray truth(copy);
+    StringArray<> truth(copy);
 
-    StringArray removed(original);
+    StringArray<> removed(original);
     removed.remove(i);
     EXPECT_EQ(removed, truth) << "Remove failed for " << i << " / " << original.size();
   }
 
-  void check_file_size(const StringArray& original, std::ifstream& in) const
+  void check_file_size(const StringArray<>& original, std::ifstream& in) const
   {
     size_type expected_size = original.simple_sds_size() * sizeof(sdsl::simple_sds::element_type);
     size_type file_size = fileSize(in);
     ASSERT_EQ(expected_size, file_size) << "Incorrect file size";
   }
 
-  void simple_sds_even_to(const StringArray& array, const std::string& filename) const
+  void simple_sds_even_to(const StringArray<>& array, const std::string& filename) const
   {
     std::ofstream out(filename, std::ios_base::binary);
     ASSERT_TRUE(out) << "Cannot open output file " << filename;
@@ -60,7 +60,7 @@ public:
     out.close();
   }
 
-  void simple_sds_duplicate_from(StringArray& array, const std::string& filename, const std::function<std::string(std::string_view)>& transform) const
+  void simple_sds_duplicate_from(StringArray<>& array, const std::string& filename, const std::function<std::string(std::string_view)>& transform) const
   {
     std::ifstream in(filename, std::ios_base::binary);
     ASSERT_TRUE(in) << "Cannot open input file " << filename;
@@ -69,7 +69,7 @@ public:
     in.close();
   }
 
-  void zstd_compress_to(const StringArray& array, const std::string& filename) const
+  void zstd_compress_to(const StringArray<>& array, const std::string& filename) const
   {
     std::ofstream out(filename, std::ios_base::binary);
     ASSERT_TRUE(out) << "Cannot open output file " << filename;
@@ -78,7 +78,7 @@ public:
     out.close();
   }
 
-  void zstd_decompress_from(StringArray& array, const std::string& filename) const
+  void zstd_decompress_from(StringArray<>& array, const std::string& filename) const
   {
     std::ifstream in(filename, std::ios_base::binary);
     ASSERT_TRUE(in) << "Cannot open input file " << filename;
@@ -87,7 +87,7 @@ public:
     in.close();
   }
 
-  void zstd_compress_even_to(const StringArray& array, const std::string& filename) const
+  void zstd_compress_even_to(const StringArray<>& array, const std::string& filename) const
   {
     std::ofstream out(filename, std::ios_base::binary);
     ASSERT_TRUE(out) << "Cannot open output file " << filename;
@@ -96,7 +96,7 @@ public:
     out.close();
   }
 
-  void zstd_decompress_duplicate_from(StringArray& array, const std::string& filename, const std::function<std::string(std::string_view)>& transform) const
+  void zstd_decompress_duplicate_from(StringArray<>& array, const std::string& filename, const std::function<std::string(std::string_view)>& transform) const
   {
     std::ifstream in(filename, std::ios_base::binary);
     ASSERT_TRUE(in) << "Cannot open input file " << filename;
@@ -109,14 +109,14 @@ public:
 TEST_F(StringArrayTest, DefaultEmptyArray)
 {
   std::vector<std::string> truth;
-  StringArray array;
+  StringArray<> array;
   this->check_array(array, truth);
 }
 
 TEST_F(StringArrayTest, FromEmptyArray)
 {
   std::vector<std::string> truth;
-  StringArray array(truth);
+  StringArray<> array(truth);
   this->check_array(array, truth);
 }
 
@@ -126,7 +126,7 @@ TEST_F(StringArrayTest, NonEmptyArray)
   {
     "first", "second", "third", "fourth"
   };
-  StringArray array(truth);
+  StringArray<> array(truth);
   this->check_array(array, truth);
 }
 
@@ -142,7 +142,7 @@ TEST_F(StringArrayTest, FromMap)
   {
     "A-key", "A-value", "B-key", "B-value", "C-key", "C-value"
   };
-  StringArray array(source);
+  StringArray<> array(source);
   this->check_array(array, truth);
 }
 
@@ -158,7 +158,7 @@ TEST_F(StringArrayTest, Choose)
   };
 
   // Choose odd positions (that contain even numbers).
-  StringArray array(original.size(),
+  StringArray<> array(original.size(),
   [&original](size_type i) -> std::string_view
   {
     return std::string_view(original[i]);
@@ -193,12 +193,12 @@ TEST_F(StringArrayTest, Remove)
 TEST_F(StringArrayTest, SDSLEmpty)
 {
   std::vector<std::string> truth;
-  StringArray original(truth);
+  StringArray<> original(truth);
 
   std::string filename = TempFile::getName("string-array");
   sdsl::store_to_file(original, filename);
 
-  StringArray copy; sdsl::load_from_file(copy, filename);
+  StringArray<> copy; sdsl::load_from_file(copy, filename);
   ASSERT_EQ(copy, original) << "SDSL serialization changed the empty array";
 
   TempFile::remove(filename);
@@ -207,12 +207,12 @@ TEST_F(StringArrayTest, SDSLEmpty)
 TEST_F(StringArrayTest, SimpleSDSEmpty)
 {
   std::vector<std::string> truth;
-  StringArray original(truth);
+  StringArray<> original(truth);
 
   std::string filename = TempFile::getName("string-array");
   sdsl::simple_sds::serialize_to(original, filename);
 
-  StringArray copy;
+  StringArray<> copy;
   std::ifstream in(filename, std::ios_base::binary);
   this->check_file_size(original, in);
   copy.simple_sds_load(in);
@@ -225,12 +225,12 @@ TEST_F(StringArrayTest, SimpleSDSEmpty)
 TEST_F(StringArrayTest, ZstdEmpty)
 {
   std::vector<std::string> truth;
-  StringArray original(truth);
+  StringArray<> original(truth);
 
   std::string filename = TempFile::getName("string-array");
   this->zstd_compress_to(original, filename);
 
-  StringArray copy;
+  StringArray<> copy;
   this->zstd_decompress_from(copy, filename);
   ASSERT_EQ(copy, original) << "Zstd compression changed the empty array";
 
@@ -245,10 +245,10 @@ reverse_string(std::string_view s)
   return str;
 }
 
-StringArray
+StringArray<>
 duplicate_array(const std::vector<std::string>& source)
 {
-  return StringArray(2 * source.size(),
+  return StringArray<>(2 * source.size(),
   [&](size_type i) -> size_type
   {
     return source[i / 2].length();
@@ -264,12 +264,12 @@ duplicate_array(const std::vector<std::string>& source)
 TEST_F(StringArrayTest, DuplicateEmpty)
 {
   std::vector<std::string> source;
-  StringArray original = duplicate_array(source);
+  StringArray<> original = duplicate_array(source);
 
   std::string filename = TempFile::getName("string-array");
   this->simple_sds_even_to(original, filename);
 
-  StringArray copy;
+  StringArray<> copy;
   this->simple_sds_duplicate_from(copy, filename, reverse_string);
   ASSERT_EQ(copy, original) << "Simple-SDS serialization changed the empty array";
 
@@ -279,12 +279,12 @@ TEST_F(StringArrayTest, DuplicateEmpty)
 TEST_F(StringArrayTest, ZstdDuplicateEmpty)
 {
   std::vector<std::string> source;
-  StringArray original = duplicate_array(source);
+  StringArray<> original = duplicate_array(source);
 
   std::string filename = TempFile::getName("string-array");
   this->zstd_compress_even_to(original, filename);
 
-  StringArray copy;
+  StringArray<> copy;
   this->zstd_decompress_duplicate_from(copy, filename, reverse_string);
   ASSERT_EQ(copy, original) << "Zstd compression changed the empty array";
 
@@ -297,12 +297,12 @@ TEST_F(StringArrayTest, ZstdDuplicateEmptyStrings)
   {
     "", "", ""
   };
-  StringArray original = duplicate_array(source);
+  StringArray<> original = duplicate_array(source);
 
   std::string filename = TempFile::getName("string-array");
   this->zstd_compress_even_to(original, filename);
 
-  StringArray copy;
+  StringArray<> copy;
   this->zstd_decompress_duplicate_from(copy, filename, reverse_string);
   ASSERT_EQ(copy, original) << "Zstd compression changed the array with empty strings";
 
@@ -318,12 +318,12 @@ TEST_F(StringArrayTest, SDSLNonEmpty)
     "third",
     "fourth"
   };
-  StringArray original(truth);
+  StringArray<> original(truth);
 
   std::string filename = TempFile::getName("string-array");
   sdsl::store_to_file(original, filename);
 
-  StringArray copy; sdsl::load_from_file(copy, filename);
+  StringArray<> copy; sdsl::load_from_file(copy, filename);
   ASSERT_EQ(copy, original) << "SDSL serialization changed the non-empty array";
 
   TempFile::remove(filename);
@@ -338,12 +338,12 @@ TEST_F(StringArrayTest, SimpleSDSNonEmpty)
     "third",
     "fourth"
   };
-  StringArray original(truth);
+  StringArray<> original(truth);
 
   std::string filename = TempFile::getName("string-array");
   sdsl::simple_sds::serialize_to(original, filename);
 
-  StringArray copy;
+  StringArray<> copy;
   std::ifstream in(filename, std::ios_base::binary);
   this->check_file_size(original, in);
   copy.simple_sds_load(in);
@@ -362,12 +362,12 @@ TEST_F(StringArrayTest, ZstdNonEmpty)
     "third",
     "fourth"
   };
-  StringArray original(truth);
+  StringArray<> original(truth);
 
   std::string filename = TempFile::getName("string-array");
   this->zstd_compress_to(original, filename);
 
-  StringArray copy;
+  StringArray<> copy;
   this->zstd_decompress_from(copy, filename);
   ASSERT_EQ(copy, original) << "Zstd compression changed the non-empty array";
 
@@ -383,12 +383,12 @@ TEST_F(StringArrayTest, DuplicateNonEmpty)
     "third",
     "fourth"
   };
-  StringArray original = duplicate_array(source);
+  StringArray<> original = duplicate_array(source);
 
   std::string filename = TempFile::getName("string-array");
   this->simple_sds_even_to(original, filename);
 
-  StringArray copy;
+  StringArray<> copy;
   this->simple_sds_duplicate_from(copy, filename, reverse_string);
   ASSERT_EQ(copy, original) << "Simple-SDS serialization changed the non-empty array";
 
@@ -404,12 +404,12 @@ TEST_F(StringArrayTest, ZstdDuplicateNonEmpty)
     "third",
     "fourth"
   };
-  StringArray original = duplicate_array(source);
+  StringArray<> original = duplicate_array(source);
 
   std::string filename = TempFile::getName("string-array");
   this->zstd_compress_even_to(original, filename);
 
-  StringArray copy;
+  StringArray<> copy;
   this->zstd_decompress_duplicate_from(copy, filename, reverse_string);
   ASSERT_EQ(copy, original) << "Zstd compression changed the non-empty array";
 
@@ -430,12 +430,12 @@ TEST_F(StringArrayTest, SimpleSDSWithEmptyStrings)
     "fourth",
     ""
   };
-  StringArray original(truth);
+  StringArray<> original(truth);
 
   std::string filename = TempFile::getName("string-array");
   sdsl::simple_sds::serialize_to(original, filename);
 
-  StringArray copy;
+  StringArray<> copy;
   std::ifstream in(filename, std::ios_base::binary);
   this->check_file_size(original, in);
   copy.simple_sds_load(in);
@@ -455,12 +455,12 @@ TEST_F(StringArrayTest, ZstdWithEmptyStrings)
     "fourth",
     ""
   };
-  StringArray original(truth);
+  StringArray<> original(truth);
 
   std::string filename = TempFile::getName("string-array");
   this->zstd_compress_to(original, filename);
 
-  StringArray copy;
+  StringArray<> copy;
   this->zstd_decompress_from(copy, filename);
   ASSERT_EQ(copy, original) << "Zstd compression changed the array with empty strings";
 
@@ -477,12 +477,12 @@ TEST_F(StringArrayTest, DuplicateWithEmptyStrings)
     "fourth",
     ""
   };
-  StringArray original = duplicate_array(source);
+  StringArray<> original = duplicate_array(source);
 
   std::string filename = TempFile::getName("string-array");
   this->simple_sds_even_to(original, filename);
 
-  StringArray copy;
+  StringArray<> copy;
   this->simple_sds_duplicate_from(copy, filename, reverse_string);
   ASSERT_EQ(copy, original) << "Simple-SDS serialization changed the array with empty strings";
 
@@ -499,12 +499,12 @@ TEST_F(StringArrayTest, ZstdDuplicateWithEmptyStrings)
     "fourth",
     ""
   };
-  StringArray original = duplicate_array(source);
+  StringArray<> original = duplicate_array(source);
 
   std::string filename = TempFile::getName("string-array");
   this->zstd_compress_even_to(original, filename);
 
-  StringArray copy;
+  StringArray<> copy;
   this->zstd_decompress_duplicate_from(copy, filename, reverse_string);
   ASSERT_EQ(copy, original) << "Zstd compression changed the array with empty strings";
 
@@ -521,17 +521,380 @@ TEST_F(StringArrayTest, ZstdDuplicateWithShortOrEmptyStrings)
     "f",
     ""
   };
-  StringArray original = duplicate_array(source);
+  StringArray<> original = duplicate_array(source);
 
   std::string filename = TempFile::getName("string-array");
   this->zstd_compress_even_to(original, filename);
 
-  StringArray copy;
+  StringArray<> copy;
   this->zstd_decompress_duplicate_from(copy, filename, reverse_string);
   ASSERT_EQ(copy, original) << "Zstd compression changed the array with empty strings";
 
   TempFile::remove(filename);
 }
+
+//------------------------------------------------------------------------------
+
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
+
+class StringArraySharedMemoryTest : public ::testing::Test
+{
+public:
+  std::string segment_name;
+
+  void SetUp() override
+  {
+    this->segment_name = "gbwt_test_string_array_" + std::to_string(sdsl::util::pid());
+    bi::shared_memory_object::remove(this->segment_name.c_str());
+  }
+
+  void TearDown() override
+  {
+    bi::shared_memory_object::remove(this->segment_name.c_str());
+  }
+};
+
+// A second handle to the segment finds the strings the first one published,
+// instead of building its own copy under the same name.
+TEST_F(StringArraySharedMemoryTest, SecondHandleFindsPublishedStrings)
+{
+  std::vector<std::string> source { "first", "second", "third" };
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+
+  StringArray<SharedMemCharAllocatorType> writer(source, &segment, "arr");
+  ASSERT_EQ(writer.size(), source.size()) << "Writer has the wrong size";
+
+  StringArray<SharedMemCharAllocatorType> reader(&segment, "arr");
+  ASSERT_EQ(reader.size(), source.size()) << "Reader did not find the published strings";
+  for(size_type i = 0; i < source.size(); i++)
+  {
+    EXPECT_EQ(reader.str(i), source[i]) << "Reader has the wrong string " << i;
+  }
+}
+
+// A prefix nothing has been published under gives an empty array, not an error.
+TEST_F(StringArraySharedMemoryTest, UnpublishedPrefixIsEmpty)
+{
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  StringArray<SharedMemCharAllocatorType> array(&segment, "never_published");
+  EXPECT_TRUE(array.empty()) << "An array naming an unpublished prefix should be empty";
+  EXPECT_EQ(array.length(), size_type(0)) << "An empty array should hold no characters";
+}
+
+// An array with no segment stores its characters nowhere, which is just an
+// empty array, and has to behave like one throughout.
+TEST_F(StringArraySharedMemoryTest, NoSegmentIsAnEmptyArray)
+{
+  StringArray<SharedMemCharAllocatorType> no_segment;
+  EXPECT_TRUE(no_segment.empty()) << "An array with no segment should be empty";
+  EXPECT_EQ(no_segment.length(), size_type(0)) << "An array with no segment should hold no characters";
+
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  StringArray<SharedMemCharAllocatorType> in_segment(std::vector<std::string>(), &segment, "arr");
+  EXPECT_EQ(no_segment, in_segment) << "An array with no segment should equal an empty array built in one";
+  EXPECT_EQ(no_segment, StringArray<>()) << "An array with no segment should equal an empty plain array";
+
+  std::string filename = TempFile::getName("string-array");
+  {
+    std::ofstream out(filename, std::ios_base::binary);
+    no_segment.simple_sds_serialize(out);
+  }
+  StringArray<> loaded;
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    loaded.simple_sds_load(in);
+  }
+  EXPECT_TRUE(loaded.empty()) << "An array with no segment should serialize as an empty array";
+
+  TempFile::remove(filename);
+}
+
+
+// Two independent handles to the same segment stand in for two separate
+// processes: the second must end up with the strings the first published
+// rather than a second copy of them.
+TEST_F(StringArraySharedMemoryTest, SimpleSDSLoadDuplicateThenAttach)
+{
+  std::vector<std::string> source { "first", "second", "third", "fourth" };
+  StringArray<> truth = duplicate_array(source);
+
+  std::string filename = TempFile::getName("string-array");
+  sdsl::simple_sds::serialize_to(StringArray<>(source), filename);
+
+  bi::managed_shared_memory writer_segment(bi::create_only, this->segment_name.c_str(), 1024 * 1024);
+  StringArray<SharedMemCharAllocatorType> writer(&writer_segment, "arr");
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    writer.simple_sds_load_duplicate(in, reverse_string);
+  }
+  ASSERT_EQ(writer.size(), truth.size()) << "Writer has the wrong size after loading";
+  for(size_type i = 0; i < truth.size(); i++)
+  {
+    EXPECT_EQ(writer.str(i), truth.str(i)) << "Writer has the wrong string " << i << " after loading";
+  }
+
+  bi::managed_shared_memory reader_segment(bi::open_only, this->segment_name.c_str());
+  StringArray<SharedMemCharAllocatorType> reader(&reader_segment, "arr");
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    reader.simple_sds_load_duplicate(in, reverse_string);
+  }
+  ASSERT_EQ(reader.size(), truth.size()) << "Reader did not attach to the published data";
+  for(size_type i = 0; i < truth.size(); i++)
+  {
+    EXPECT_EQ(reader.str(i), truth.str(i)) << "Reader has the wrong string " << i << " after attaching";
+  }
+
+  TempFile::remove(filename);
+}
+
+// As SimpleSDSLoadDuplicateThenAttach, but for the zstd-compressed format
+// and simple_sds_decompress_duplicate().
+TEST_F(StringArraySharedMemoryTest, ZstdDecompressDuplicateThenAttach)
+{
+  std::vector<std::string> source { "first", "second", "third", "fourth" };
+  StringArray<> truth = duplicate_array(source);
+
+  std::string filename = TempFile::getName("string-array");
+  {
+    std::ofstream out(filename, std::ios_base::binary);
+    truth.simple_sds_compress_even(out);
+  }
+
+  bi::managed_shared_memory writer_segment(bi::create_only, this->segment_name.c_str(), 1024 * 1024);
+  StringArray<SharedMemCharAllocatorType> writer(&writer_segment, "arr");
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    writer.simple_sds_decompress_duplicate(in, reverse_string);
+  }
+  ASSERT_EQ(writer.size(), truth.size()) << "Writer has the wrong size after decompressing";
+  for(size_type i = 0; i < truth.size(); i++)
+  {
+    EXPECT_EQ(writer.str(i), truth.str(i)) << "Writer has the wrong string " << i << " after decompressing";
+  }
+
+  bi::managed_shared_memory reader_segment(bi::open_only, this->segment_name.c_str());
+  StringArray<SharedMemCharAllocatorType> reader(&reader_segment, "arr");
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    reader.simple_sds_decompress_duplicate(in, reverse_string);
+  }
+  ASSERT_EQ(reader.size(), truth.size()) << "Reader did not attach to the published data";
+  for(size_type i = 0; i < truth.size(); i++)
+  {
+    EXPECT_EQ(reader.str(i), truth.str(i)) << "Reader has the wrong string " << i << " after attaching";
+  }
+
+  TempFile::remove(filename);
+}
+
+//------------------------------------------------------------------------------
+
+// The SDSL format's loader publishes into the segment like the Simple-SDS one
+// does, so a second handle finds the strings instead of loading its own copy.
+TEST_F(StringArraySharedMemoryTest, SDSLLoadThenAttach)
+{
+  std::vector<std::string> source { "first", "second", "third" };
+  StringArray<> truth(source);
+
+  std::string filename = TempFile::getName("string-array");
+  {
+    std::ofstream out(filename, std::ios_base::binary);
+    truth.serialize(out);
+  }
+
+  bi::managed_shared_memory writer_segment(bi::create_only, this->segment_name.c_str(), 1024 * 1024);
+  StringArray<SharedMemCharAllocatorType> writer(&writer_segment, "arr");
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    writer.load(in);
+  }
+  EXPECT_EQ(writer, truth) << "Writer did not load the strings into shared memory";
+
+  bi::managed_shared_memory reader_segment(bi::open_only, this->segment_name.c_str());
+  StringArray<SharedMemCharAllocatorType> reader(&reader_segment, "arr");
+  {
+    std::ifstream in(filename, std::ios_base::binary);
+    reader.load(in);
+    EXPECT_TRUE(in.good() || in.eof()) << "Attaching should still have consumed the serialized bytes";
+  }
+  EXPECT_EQ(reader, truth) << "Reader did not attach to the published strings";
+
+  // The two handles map the same segment at different addresses, so the
+  // strings are the same object only if they sit at the same offset in it.
+  auto offset_in = [](const void* pointer, const bi::managed_shared_memory& segment) -> std::ptrdiff_t
+  {
+    return static_cast<const char*>(pointer) - static_cast<const char*>(segment.get_address());
+  };
+  EXPECT_EQ(offset_in(reader.strings, reader_segment), offset_in(writer.strings, writer_segment))
+    << "Reader loaded its own copy instead of attaching";
+
+  TempFile::remove(filename);
+}
+
+//------------------------------------------------------------------------------
+
+// An array with no segment has nowhere to put loaded characters either, so
+// loading into one must say so instead of dereferencing a null vector.
+TEST_F(StringArraySharedMemoryTest, LoadIntoSegmentlessSharedFails)
+{
+  std::string filename = TempFile::getName("string-array");
+  sdsl::simple_sds::serialize_to(StringArray<>(std::vector<std::string> { "first", "second" }), filename);
+
+  StringArray<SharedMemCharAllocatorType> no_segment;
+  std::ifstream in(filename, std::ios_base::binary);
+  ASSERT_THROW(no_segment.simple_sds_load(in), std::runtime_error)
+    << "Loading into a shared-memory array with no segment should fail";
+
+  TempFile::remove(filename);
+}
+
+//------------------------------------------------------------------------------
+
+// Copying between the two allocators is the only way to get characters from
+// one kind of storage to the other, so the tests below cover each direction
+// and each way it can fail. They are here rather than with the other
+// StringArray tests because two allocators to copy between only exist when
+// shared memory is compiled in.
+
+// Reading a shared-memory array into an ordinary one has to produce an
+// independent heap copy, not a second reference to the segment.
+TEST_F(StringArraySharedMemoryTest, CopyFromSharedToPlain)
+{
+  std::vector<std::string> source { "first", "second", "third" };
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  StringArray<SharedMemCharAllocatorType> shared(source, &segment, "arr");
+
+  StringArray<> constructed(shared);
+  ASSERT_EQ(constructed.size(), source.size()) << "Copy-constructed array has the wrong size";
+  for(size_type i = 0; i < source.size(); i++)
+  {
+    EXPECT_EQ(constructed.str(i), source[i]) << "Copy-constructed array has the wrong string " << i;
+  }
+
+  StringArray<> assigned(std::vector<std::string> { "replaced" });
+  assigned = shared;
+  ASSERT_EQ(assigned.size(), source.size()) << "Assigned array kept its old size";
+  for(size_type i = 0; i < source.size(); i++)
+  {
+    EXPECT_EQ(assigned.str(i), source[i]) << "Assigned array has the wrong string " << i;
+  }
+}
+
+// Assigning into an array that names a prefix nothing is published under yet
+// publishes the characters there, so that another handle can attach to them.
+TEST_F(StringArraySharedMemoryTest, AssignFromPlainToShared)
+{
+  std::vector<std::string> source { "first", "second", "third" };
+  StringArray<> plain(source);
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+
+  StringArray<SharedMemCharAllocatorType> shared(&segment, "arr");
+  shared = plain;
+  ASSERT_EQ(shared.size(), source.size()) << "Assigned shared-memory array has the wrong size";
+  for(size_type i = 0; i < source.size(); i++)
+  {
+    EXPECT_EQ(shared.str(i), source[i]) << "Assigned shared-memory array has the wrong string " << i;
+  }
+
+  StringArray<SharedMemCharAllocatorType> reader(&segment, "arr");
+  EXPECT_EQ(reader, plain) << "Assigning into a shared-memory array did not publish the strings";
+}
+
+// Whatever is published under a prefix may be in use by another process, so
+// assignment must refuse to replace it rather than doing so silently.
+TEST_F(StringArraySharedMemoryTest, AssignOverPublishedSharedFails)
+{
+  std::vector<std::string> source { "first", "second" };
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  StringArray<SharedMemCharAllocatorType> writer(source, &segment, "arr");
+
+  StringArray<SharedMemCharAllocatorType> second_handle(&segment, "arr");
+  StringArray<> replacement(std::vector<std::string> { "different" });
+  ASSERT_THROW(second_handle = replacement, std::runtime_error)
+    << "Assigning over already published strings should fail instead of replacing them";
+
+  StringArray<SharedMemCharAllocatorType> reader(&segment, "arr");
+  EXPECT_EQ(reader, writer) << "The published strings should be untouched after the failed assignment";
+}
+
+// An array with no segment has nowhere to put the characters.
+TEST_F(StringArraySharedMemoryTest, AssignToSegmentlessSharedFails)
+{
+  StringArray<SharedMemCharAllocatorType> no_segment;
+  StringArray<> plain(std::vector<std::string> { "first", "second" });
+  ASSERT_THROW(no_segment = plain, std::runtime_error)
+    << "Assigning into a shared-memory array with no segment should fail";
+}
+
+// Copying between two shared-memory arrays hands over the published objects
+// instead of duplicating them in the segment.
+TEST_F(StringArraySharedMemoryTest, CopyBetweenSharedArraysShares)
+{
+  std::vector<std::string> source { "first", "second" };
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  StringArray<SharedMemCharAllocatorType> writer(source, &segment, "arr");
+
+  StringArray<SharedMemCharAllocatorType> copy(writer);
+  EXPECT_EQ(copy.strings, writer.strings) << "Copying a shared-memory array should not copy the characters";
+  EXPECT_EQ(copy, writer) << "The copy should hold the same strings";
+}
+
+// An rvalue source cannot hand its characters over to a different allocator,
+// so assigning from one still works and copies them.
+TEST_F(StringArraySharedMemoryTest, MoveAcrossAllocatorsCopies)
+{
+  std::vector<std::string> source { "first", "second" };
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  StringArray<SharedMemCharAllocatorType> shared(source, &segment, "arr");
+
+  StringArray<> plain;
+  plain = std::move(shared);
+  ASSERT_EQ(plain.size(), source.size()) << "Moving from a shared-memory array gave the wrong size";
+  for(size_type i = 0; i < source.size(); i++)
+  {
+    EXPECT_EQ(plain.str(i), source[i]) << "Moving from a shared-memory array gave the wrong string " << i;
+  }
+}
+
+// Comparison works whichever allocator either side keeps its characters in.
+TEST_F(StringArraySharedMemoryTest, ComparisonAcrossAllocators)
+{
+  std::vector<std::string> source { "first", "second", "third" };
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  StringArray<SharedMemCharAllocatorType> shared(source, &segment, "arr");
+  StringArray<> same(source);
+  StringArray<> shorter(std::vector<std::string> { "first", "second" });
+  StringArray<> different(std::vector<std::string> { "first", "second", "fourth" });
+
+  EXPECT_TRUE(shared == same) << "Equal arrays with different allocators should compare equal";
+  EXPECT_TRUE(same == shared) << "Comparison should not depend on which side is which";
+  EXPECT_TRUE(shared != shorter) << "Arrays of different sizes should not compare equal";
+  EXPECT_TRUE(shorter != shared) << "Arrays of different sizes should not compare equal either way";
+  EXPECT_TRUE(shared != different) << "Arrays with different characters should not compare equal";
+  EXPECT_TRUE(different != shared) << "Arrays with different characters should not compare equal either way";
+
+  StringArray<> default_empty;
+  StringArray<> from_empty{std::vector<std::string>()};
+  StringArray<SharedMemCharAllocatorType> shared_empty(std::vector<std::string>(), &segment, "empty");
+  EXPECT_TRUE(default_empty == from_empty) << "The two ways of getting an empty array should compare equal";
+  EXPECT_TRUE(default_empty == shared_empty) << "An empty array should compare equal across allocators";
+  EXPECT_TRUE(from_empty == shared_empty) << "An empty array should compare equal across allocators either way";
+  EXPECT_TRUE(default_empty != shared) << "An empty array should not equal a non-empty one";
+}
+
+// Two arrays with the same characters but different string boundaries hold
+// different strings, so the index has to be part of the comparison.
+TEST_F(StringArraySharedMemoryTest, ComparisonAcrossAllocatorsUsesIndex)
+{
+  bi::managed_shared_memory segment(bi::create_only, this->segment_name.c_str(), 65536);
+  StringArray<SharedMemCharAllocatorType> shared(std::vector<std::string> { "ab", "c" }, &segment, "arr");
+  StringArray<> regrouped(std::vector<std::string> { "a", "bc" });
+
+  EXPECT_TRUE(shared != regrouped) << "Arrays splitting the same characters differently should not compare equal";
+}
+
+#endif
 
 //------------------------------------------------------------------------------
 

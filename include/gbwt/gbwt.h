@@ -1,9 +1,9 @@
 #ifndef GBWT_GBWT_H
 #define GBWT_GBWT_H
 
-#include <gbwt/algorithms.h>
-#include <gbwt/files.h>
-#include <gbwt/metadata.h>
+#include "algorithms.h"
+#include "files.h"
+#include "metadata.h"
 
 namespace gbwt
 {

@@ -1,9 +1,16 @@
 #ifndef GBWT_INTERNAL_H
 #define GBWT_INTERNAL_H
 
+
 #include <array>
 
-#include <gbwt/support.h>
+#include "support.h"
+
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
+#include <boost/interprocess/managed_shared_memory.hpp>
+#include <boost/interprocess/shared_memory_object.hpp>
+#include <boost/interprocess/allocators/allocator.hpp>
+#endif
 
 namespace gbwt
 {
@@ -54,9 +61,9 @@ struct DiskIO
 };
 
 // Serialize an std::vector of integers or simple structs.
-template<class Element>
+template<class Element, class Allocator>
 size_type
-serializeVector(const std::vector<Element>& data, std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "")
+serializeVector(const std::vector<Element, Allocator>& data, std::ostream& out, sdsl::structure_tree_node* v = nullptr, std::string name = "")
 {
   sdsl::structure_tree_node* child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(data));
   size_type written_bytes = 0;
@@ -77,10 +84,11 @@ serializeVector(const std::vector<Element>& data, std::ostream& out, sdsl::struc
   return written_bytes;
 }
 
+
 // Load an std::vector of integers.
-template<class Element>
+template<class Element, class Allocator>
 void
-loadVector(std::vector<Element>& data, std::istream& in)
+loadVector(std::vector<Element, Allocator>& data, std::istream& in)
 {
   size_type data_size = 0;
   sdsl::read_member(data_size, in);
@@ -91,6 +99,7 @@ loadVector(std::vector<Element>& data, std::istream& in)
     DiskIO::read(in, data.data(), data_size);
   }
 }
+
 
 //------------------------------------------------------------------------------
 

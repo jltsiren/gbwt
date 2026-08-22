@@ -24,6 +24,7 @@
 */
 
 #include <string>
+#include <gbwt/utils.h>
 #include <unistd.h>
 
 #include <gbwt/fast_locate.h>

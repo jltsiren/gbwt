@@ -428,58 +428,6 @@ ZstdDecompressor::~ZstdDecompressor()
   ZSTD_freeDCtx(this->context); this->context = nullptr;
 }
 
-void
-ZstdDecompressor::decompress(size_t bytes, std::vector<char>& output)
-{
-  size_t decompressed = 0;
-  while(decompressed < bytes)
-  {
-    if(this->cursor < this->out_buffer.pos)
-    {
-      size_t to_copy = std::min(bytes - decompressed, this->out_buffer.pos - this->cursor);
-      const char* start_ptr = static_cast<const char*>(this->out_buffer.dst) + this->cursor;
-      output.insert(output.end(), start_ptr, start_ptr + to_copy);
-      this->cursor += to_copy;
-      decompressed += to_copy;
-    }
-    else if(this->in_buffer.pos < this->in_buffer.size)
-    {
-      this->fillOutputBuffer();
-    }
-    else
-    {
-      std::string msg = "ZstdDecompressor: Unexpected end of input data";
-      throw sdsl::simple_sds::InvalidData(msg);
-    }
-  }
-}
-
-void
-ZstdDecompressor::decompress(size_t bytes, std::vector<byte_type>& output)
-{
-  size_t decompressed = 0;
-  while(decompressed < bytes)
-  {
-    if(this->cursor < this->out_buffer.pos)
-    {
-      size_t to_copy = std::min(bytes - decompressed, this->out_buffer.pos - this->cursor);
-      const byte_type* start_ptr = static_cast<const byte_type*>(this->out_buffer.dst) + this->cursor;
-      output.insert(output.end(), start_ptr, start_ptr + to_copy);
-      this->cursor += to_copy;
-      decompressed += to_copy;
-    }
-    else if(this->in_buffer.pos < this->in_buffer.size)
-    {
-      this->fillOutputBuffer();
-    }
-    else
-    {
-      std::string msg = "ZstdDecompressor: Unexpected end of input data";
-      throw sdsl::simple_sds::InvalidData(msg);
-    }
-  }
-}
-
 bool
 ZstdDecompressor::finished()
 {

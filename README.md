@@ -42,7 +42,7 @@ These dependencies should be installed separately (the latest master should alwa
 
 ## Compiling GBWT
 
-This library is designed to take the compiler options from the [vgteam fork](https://github.com/vgteam/sdsl-lite) of the Succinct Data Structures Library 2.0 (SDSL). It currently requires a recent C++ compiler supporting C++17 and OpenMP. GCC is recommended, as the multithreaded `std::sort` from libstdc++ parallel mode speeds up some algorithms. On Apple systems, GBWT can be built with Apple Clang, but libomp must be installed via Macports or Homebrew.
+This library is designed to take the compiler options from the [vgteam fork](https://github.com/vgteam/sdsl-lite) of the Succinct Data Structures Library 2.0 (SDSL). It currently requires a recent C++ compiler supporting C++20 and OpenMP. GCC is recommended, as the multithreaded `std::sort` from libstdc++ parallel mode speeds up some algorithms. On Apple systems, GBWT can be built with Apple Clang, but libomp must be installed via Macports or Homebrew.
 
 The GBWT is frequently tested in the following environments:
 

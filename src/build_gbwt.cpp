@@ -2,6 +2,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <gbwt/utils.h>
 
 #include <gbwt/dynamic_gbwt.h>
 #include <gbwt/test.h>

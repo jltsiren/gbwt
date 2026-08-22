@@ -1,7 +1,7 @@
 #ifndef GBWT_CACHED_GBWT_H
 #define GBWT_CACHED_GBWT_H
 
-#include <gbwt/gbwt.h>
+#include "gbwt.h"
 
 namespace gbwt
 {

@@ -5,7 +5,7 @@
 #include <mutex>
 #include <thread>
 
-#include <gbwt/internal.h>
+#include "internal.h"
 
 namespace gbwt
 {

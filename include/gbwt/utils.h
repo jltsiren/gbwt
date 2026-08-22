@@ -1,23 +1,67 @@
 #ifndef GBWT_UTILS_H
 #define GBWT_UTILS_H
 
+#include <gbwt/config.h>
+
 #include <algorithm>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <concepts>
 #include <limits>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include <sdsl/int_vector.hpp>
 #include <sdsl/sd_vector.hpp>
 #include <sdsl/simple_sds.hpp>
 
+// When we build without OpenMP, use these stubs instead of the real runtime
+// calls.
+#ifdef GBWT_USE_OPENMP
 #include <omp.h>
+#else
+#include <chrono>
+inline int omp_get_max_threads() { return 1; }
+inline int omp_get_thread_num() { return 0; }
+inline void omp_set_num_threads(int) { }
+inline double omp_get_wtime()
+{
+  return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+#endif
+
 #include <zstd.h>
 
+// Boost is only a dependency when StringArray's shared-memory-backed storage
+// is enabled.
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
+#include <boost/interprocess/managed_shared_memory.hpp>
+#include <boost/interprocess/shared_memory_object.hpp>
+#include <boost/interprocess/sync/named_mutex.hpp>
+#include <boost/interprocess/allocators/allocator.hpp>
+#endif
+
+namespace gbwt
+{
+
+#if defined(GBWT_ENABLE_SHARED_MEMORY)
+typedef boost::interprocess::allocator<char, boost::interprocess::managed_shared_memory::segment_manager> SharedMemCharAllocatorType;
+
+// Concept to determine if an allocator is the Boost shared-memory one or not.
+template<typename Allocator>
+concept SharedMemory = std::same_as<Allocator, SharedMemCharAllocatorType>;
+#else
+// Nothing is in shared memory when we build without it.
+template<typename Allocator>
+concept SharedMemory = false;
+#endif
+
+}
+
 // Parallel sorting is only available with libstdc++ parallel mode.
-#ifdef __GLIBCXX__
+#if defined(__GLIBCXX__) && defined(GBWT_USE_OPENMP)
 #include <parallel/algorithm>
 #endif
 
@@ -327,7 +371,7 @@ template<class Iterator, class Comparator>
 void
 parallelQuickSort(Iterator first, Iterator last, const Comparator& comp)
 {
-#ifdef __GLIBCXX__
+#if defined(__GLIBCXX__) && defined(GBWT_USE_OPENMP)
   int nested = omp_get_nested();
   omp_set_nested(1);
   __gnu_parallel::sort(first, last, comp, __gnu_parallel::balanced_quicksort_tag());
@@ -341,7 +385,7 @@ template<class Iterator>
 void
 parallelQuickSort(Iterator first, Iterator last)
 {
-#ifdef __GLIBCXX__
+#if defined(__GLIBCXX__) && defined(GBWT_USE_OPENMP)
   int nested = omp_get_nested();
   omp_set_nested(1);
   __gnu_parallel::sort(first, last, __gnu_parallel::balanced_quicksort_tag());
@@ -355,7 +399,7 @@ template<class Iterator, class Comparator>
 void
 parallelMergeSort(Iterator first, Iterator last, const Comparator& comp)
 {
-#ifdef __GLIBCXX__
+#if defined(__GLIBCXX__) && defined(GBWT_USE_OPENMP)
   __gnu_parallel::sort(first, last, comp, __gnu_parallel::multiway_mergesort_tag());
 #else
   std::sort(first, last, comp);
@@ -366,7 +410,7 @@ template<class Iterator>
 void
 parallelMergeSort(Iterator first, Iterator last)
 {
-#ifdef __GLIBCXX__
+#if defined(__GLIBCXX__) && defined(GBWT_USE_OPENMP)
   __gnu_parallel::sort(first, last, __gnu_parallel::multiway_mergesort_tag());
 #else
   std::sort(first, last);
@@ -377,7 +421,7 @@ template<class Iterator, class Comparator>
 void
 sequentialSort(Iterator first, Iterator last, const Comparator& comp)
 {
-#ifdef __GLIBCXX__
+#if defined(__GLIBCXX__) && defined(GBWT_USE_OPENMP)
   __gnu_parallel::sort(first, last, comp, __gnu_parallel::sequential_tag());
 #else
   std::sort(first, last, comp);
@@ -388,7 +432,7 @@ template<class Iterator>
 void
 sequentialSort(Iterator first, Iterator last)
 {
-#ifdef __GLIBCXX__
+#if defined(__GLIBCXX__) && defined(GBWT_USE_OPENMP)
   __gnu_parallel::sort(first, last, __gnu_parallel::sequential_tag());
 #else
   std::sort(first, last);
@@ -463,11 +507,10 @@ public:
   ZstdDecompressor(const ZstdDecompressor&) = delete;
   ZstdDecompressor& operator=(const ZstdDecompressor&) = delete;
 
-  // Decompresses the given number of bytes and appends them to the output vector.
-  void decompress(size_t bytes, std::vector<char>& output);
-
-  // Decompresses the given number of bytes and appends them to the output vector.
-  void decompress(size_t bytes, std::vector<byte_type>& output);
+  // Decompresses the given number of bytes and appends them to the output
+  // vector, whatever byte type and allocator it uses.
+  template<typename Element, typename Allocator>
+  void decompress(size_t bytes, std::vector<Element, Allocator>& output);
 
   // Returns `true` if all input data has been consumed.
   bool finished();
@@ -485,6 +528,35 @@ private:
   ZSTD_outBuffer out_buffer;
   size_t cursor; // Next unread byte in `out_buffer`.
 };
+
+template<typename Element, typename Allocator>
+void
+ZstdDecompressor::decompress(size_t bytes, std::vector<Element, Allocator>& output)
+{
+  static_assert(sizeof(Element) == 1, "ZstdDecompressor decompresses into a vector of bytes");
+
+  size_t decompressed = 0;
+  while(decompressed < bytes)
+  {
+    if(this->cursor < this->out_buffer.pos)
+    {
+      size_t to_copy = std::min(bytes - decompressed, this->out_buffer.pos - this->cursor);
+      const Element* start_ptr = static_cast<const Element*>(this->out_buffer.dst) + this->cursor;
+      output.insert(output.end(), start_ptr, start_ptr + to_copy);
+      this->cursor += to_copy;
+      decompressed += to_copy;
+    }
+    else if(this->in_buffer.pos < this->in_buffer.size)
+    {
+      this->fillOutputBuffer();
+    }
+    else
+    {
+      std::string msg = "ZstdDecompressor: Unexpected end of input data";
+      throw sdsl::simple_sds::InvalidData(msg);
+    }
+  }
+}
 
 //------------------------------------------------------------------------------
 
