@@ -105,7 +105,7 @@ SequenceLocate::swap(SequenceLocate& another) noexcept
   if(this != &another)
   {
     std::swap(this->index, another.index);
-    std::swap(this->length, another.length);
+    this->length.swap(another.length);
     std::swap(this->header, another.header);
     this->samples.swap(another.samples);
     this->last.swap(another.last);

@@ -17,8 +17,8 @@ namespace gbwt
 /*
   A variant of FastLocate where sequence offsets are measured in base pairs instead
   of nodes. Node lengths come from a user-provided function, which must return the
-  same length (>= 1) for both orientations of a node. If the source GBWT or the node
-  lengths change, this structure must be rebuilt.
+  same length (>= 1) for both orientations of a node and be thread-safe. If the source
+  GBWT or the node lengths change, this structure must be rebuilt.
 
   The sequence offset of a visit is the distance in bp from the end of the node to
   the end of the sequence. The last node has offset 0, and the endmarker has offset
@@ -74,7 +74,7 @@ public:
     std::uint64_t max_length; // Length of the longest sequence in bp + 1.
     std::uint64_t flags;
 
-    constexpr static std::uint32_t TAG = 0x5E9B10C8;
+    constexpr static std::uint32_t TAG = 0x6B3751CA;
     constexpr static std::uint32_t VERSION = Version::SEQUENCE_LOCATE_VERSION;
 
     Header();
@@ -178,8 +178,8 @@ public:
 
   /*
     Low-level interface. The interface assumes that the arguments are valid. This
-    be checked with index->contains(node) and seq_id < index->sequences(). There is
-    no check for the offset.
+    can be checked with index->contains(node) and seq_id < index->sequences(). There
+    is no check for the offset.
   */
 
   size_type pack(size_type seq_id, size_type seq_offset) const

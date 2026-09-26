@@ -237,6 +237,38 @@ randomPaths(std::mt19937_64& rng)
   return paths;
 }
 
+TEST(SequenceLocateTest, EmptyPaths)
+{
+  std::vector<vector_type> paths { {}, { Node::encode(1, false), Node::encode(2, false) }, {} };
+  GBWT index = buildGBWT(paths, true);
+  SequenceLocate r_index(index, [](node_type) -> size_type { return 3; });
+  std::vector<size_type> all { 0, 1, 2, 3, 4, 5 };
+  EXPECT_EQ(r_index.locate(ENDMARKER, range_type(0, index.sequences() - 1)), all) << "Invalid locate() at the endmarker";
+  for(size_type i = 0; i < index.sequences(); i++)
+  {
+    size_type expected = (Path::id(i) == 1 ? 6 : 0);
+    EXPECT_EQ(r_index.sequenceLength(i), expected) << "Invalid length for sequence " << i;
+    EXPECT_EQ(r_index.locateSequence(i, expected), invalid_edge()) << "Position past the end for " << i;
+  }
+  EXPECT_EQ(r_index.locateSequence(2, 4), edge_type(Node::encode(2, false), 1)) << "Invalid position in the non-empty path";
+  EXPECT_EQ(r_index.locateSequence(3, 4), edge_type(Node::encode(1, true), 1)) << "Invalid position in the reverse path";
+}
+
+TEST(SequenceLocateTest, OnlyEmptyPaths)
+{
+  std::vector<vector_type> paths { {}, {}, {} };
+  GBWT index = buildGBWT(paths, true);
+  SequenceLocate r_index(index, [](node_type) -> size_type { return 1; });
+  std::vector<size_type> all { 0, 1, 2, 3, 4, 5 };
+  EXPECT_EQ(r_index.locate(ENDMARKER, range_type(0, index.sequences() - 1)), all) << "Invalid locate() at the endmarker";
+  EXPECT_EQ(r_index.header.max_length, size_type(1)) << "Invalid max_length";
+  for(size_type i = 0; i < index.sequences(); i++)
+  {
+    EXPECT_EQ(r_index.sequenceLength(i), size_type(0)) << "Invalid length for sequence " << i;
+    EXPECT_EQ(r_index.locateSequence(i, 0), invalid_edge()) << "Position in an empty sequence " << i;
+  }
+}
+
 TEST(SequenceLocateTest, Random)
 {
   std::mt19937_64 rng(0xDEADBEEF);
