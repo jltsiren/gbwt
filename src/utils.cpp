@@ -30,6 +30,7 @@ constexpr size_type Version::GBWT_VERSION;
 constexpr size_type Version::METADATA_VERSION;
 constexpr size_type Version::VARIANT_VERSION;
 constexpr size_type Version::R_INDEX_VERSION;
+constexpr size_type Version::SEQUENCE_LOCATE_VERSION;
 
 constexpr int ZstdCompressor::DEFAULT_COMPRESSION_LEVEL;
 

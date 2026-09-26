@@ -208,6 +208,7 @@ struct Version
   constexpr static size_type METADATA_VERSION = 2;
   constexpr static size_type VARIANT_VERSION  = 1;
   constexpr static size_type R_INDEX_VERSION  = 1;
+  constexpr static size_type SEQUENCE_LOCATE_VERSION = 1;
 
   const static std::string SOURCE_KEY; // source
   const static std::string SOURCE_VALUE; // jltsiren/gbwt

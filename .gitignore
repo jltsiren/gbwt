@@ -22,6 +22,7 @@ test_bwtmerge
 test_gbwt
 test_metadata
 test_queries
+test_sequence_locate
 test_support
 test_utils
 test_variants
