@@ -239,7 +239,7 @@ randomPaths(std::mt19937_64& rng)
 
 TEST(SequenceLocateTest, EmptyPaths)
 {
-  std::vector<vector_type> paths { {}, { Node::encode(1, false), Node::encode(2, false) }, {} };
+  std::vector<vector_type> paths { {}, { static_cast<vector_type::value_type>(Node::encode(1, false)), static_cast<vector_type::value_type>(Node::encode(2, false)) }, {} };
   GBWT index = buildGBWT(paths, true);
   SequenceLocate r_index(index, [](node_type) -> size_type { return 3; });
   std::vector<size_type> all { 0, 1, 2, 3, 4, 5 };

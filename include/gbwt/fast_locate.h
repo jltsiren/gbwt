@@ -13,6 +13,18 @@ namespace gbwt
 //------------------------------------------------------------------------------
 
 /*
+  TODO: Version 2
+
+  * Option to build either the current FastLocate or the equivalent of SequenceLocate.
+
+  * Simple-SDS serialization instead of SDSL serialization to allow sharing the
+    structures with the Rust implementation of GBWT.
+
+  * A Tags structure for marking the equivalent of SequenceLocate with the stable
+    name of the underlying graph.
+*/
+
+/*
   An optional locate() structure based on the r-index. If the source GBWT is changed
   in any way, this structure must be rebuilt. The implementation is based on the
   simplified version in:

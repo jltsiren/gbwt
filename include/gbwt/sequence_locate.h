@@ -156,6 +156,7 @@ public:
   // As locatePositions(), but returns (sequence id, forward start of state.node).
   std::vector<std::pair<size_type, size_type>> locateForward(SearchState state, size_type first = NO_POSITION) const;
 
+  // TODO: Version 2: This should be something like inverseLocate().
   /*
     Returns (node, offset in node) for the base at forward position `forward_bp`
     in sequence `seq_id`, or invalid_edge() if the position is invalid.

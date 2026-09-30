@@ -47,7 +47,7 @@ This library is designed to take the compiler options from the [vgteam fork](htt
 The GBWT is frequently tested in the following environments:
 
 * Intel Linux (Ubuntu) with GCC.
-* Intel macOS with GCC and Apple Clang.
+* ARM Linux (Ubuntu) with GCC.
 * ARM macOS with Apple Clang.
 
 Before compiling, set `SDSL_DIR` in the Makefile to point to your SDSL directory. The default is `../sdsl-lite`, which is usually appropriate. The makefile reads `$SDSL_DIR/Make.helper` to determine compilers and compiler options.
