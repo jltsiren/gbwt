@@ -645,7 +645,8 @@ PhasingInformation::PhasingInformation(const VariantPaths& variants, size_type f
   this->phasings = std::vector<Phasing>(this->sample_count);
 }
 
-PhasingInformation::PhasingInformation(PhasingInformation&& source) noexcept
+PhasingInformation::PhasingInformation(PhasingInformation&& source) noexcept :
+  PhasingInformation()
 {
   *this = std::move(source);
 }
@@ -661,7 +662,10 @@ PhasingInformation::operator=(PhasingInformation&& source) noexcept
 {
   if(this != &source)
   {
+    // Release the file we currently own.
     this->close();
+    if(this->temp_file) { TempFile::remove(this->filename); }
+
     bool open_file = source.isOpen();
     source.close();
 
@@ -670,7 +674,7 @@ PhasingInformation::operator=(PhasingInformation&& source) noexcept
     this->site_count = source.site_count;
 
     // Transfer the ownership of the file.
-    this->filename = source.filename;
+    this->filename = std::move(source.filename);
     this->temp_file = source.temp_file;
     source.filename.clear();
     source.temp_file = false;
@@ -678,7 +682,7 @@ PhasingInformation::operator=(PhasingInformation&& source) noexcept
 
     this->site = source.site;
     this->data_offset = source.data_offset;
-    this->phasings = source.phasings;
+    this->phasings = std::move(source.phasings);
   }
   return *this;
 }

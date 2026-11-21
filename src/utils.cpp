@@ -415,7 +415,7 @@ ZstdCompressor::flushOutput()
 
 ZstdDecompressor::ZstdDecompressor(std::vector<char>&& input) :
   context(ZSTD_createDCtx()),
-  input(input),
+  input(std::move(input)),
   in_buffer({ this->input.data(), this->input.size(), 0 }),
   output_buffer(ZSTD_DStreamOutSize()),
   out_buffer({ this->output_buffer.data(), this->output_buffer.size(), 0 }),
